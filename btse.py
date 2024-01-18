@@ -649,7 +649,7 @@ class BtseClient(BaseClient):
         self.orderbook[symbol] = new_ob
         if self.market_finder and flag_market:
             coin = symbol.split('PFC')[0]
-            await self.market_finder.count_one_coin(coin, self.EXCHANGE_NAME, side)
+            await self.market_finder.count_one_coin(coin, self.EXCHANGE_NAME)
         if flag and ts_ms - ts_ob < 0.035 and self.finder:
             coin = symbol.split('PFC')[0]
             if self.state == 'Bot':
