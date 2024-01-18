@@ -1,0 +1,8 @@
+.idea/
+*.pyc
+venv
+.env
+.ini
+__init__.py
+__pycache__
+temp
