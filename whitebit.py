@@ -48,27 +48,18 @@ class WhiteBitClient(BaseClient):
         self.ob_len = ob_len
         self.leverage = leverage
         self.max_pos_part = max_pos_part
-        self.price = 0
-        self.amount = 0
-        self.side = None
-        self.symbol = None
         self.error_info = None
         self._loop = asyncio.new_event_loop()
         self._connected = asyncio.Event()
         self._wst_ = threading.Thread(target=self._run_ws_forever)
         self.order_loop = asyncio.new_event_loop()
         self.orders_thread = threading.Thread(target=self.deals_thread_func)
-        self.last_price = {}
         self.LAST_ORDER_ID = 'default'
         self.taker_fee = float(keys['TAKER_FEE']) * 0.6
         self.maker_fee = 0.0001 * 0.6
-        self.subs = {}
-        self.ob_push_limit = 0.1
         self.last_keep_alive = 0
-        self.deal = False
-        self.response = None
-        self.side = 'buy'
-        self.last_symbol = None
+        self.async_tasks = []
+        self.responses = {}
 
     @try_exc_regular
     def deals_thread_func(self):
@@ -90,17 +81,32 @@ class WhiteBitClient(BaseClient):
         async with aiohttp.ClientSession() as self.async_session:
             self.async_session.headers.update(self.headers)
             while True:
-                if self.deal:
-                    # print(f"{self.EXCHANGE_NAME} GOT DEAL {time.time()}")
-                    self.order_loop.create_task(self.create_fast_order(self.symbol, self.side))
-                    self.deal = False
-                else:
-                    ts_ms = time.time()
-                    if ts_ms - self.last_keep_alive > 5:
-                        self.last_keep_alive = ts_ms
-                        self.order_loop.create_task(self.get_position_async())
+                for task in self.async_tasks:
+                    if task[0] == 'create_order':
+                        price = task[1]['price']
+                        size = task[1]['size']
+                        side = task[1]['side']
+                        market = task[1]['market']
+                        client_id = task[1].get('client_id')
+                        self.order_loop.create_task(self.create_fast_order(price, size, side, market, client_id))
+                    elif task[0] == 'cancel_order':
+                        self.order_loop.create_task(self.cancel_order(task[1]['market'], task[1]['order_id']))
+                    elif task[0] == 'amend_order':
+                        price = task[1]['price']
+                        size = task[1]['size']
+                        order_id = task[1]['order_id']
+                        market = task[1]['market']
+                        self.order_loop.create_task(self.amend_order(price, size, order_id, market))
+                    self.async_tasks.remove(task)
+                ts_ms = time.time()
+                if ts_ms - self.last_keep_alive > 5:
+                    self.last_keep_alive = ts_ms
+                    self.order_loop.create_task(self.get_position_async())
                 await asyncio.sleep(0.0001)
 
+    @try_exc_async
+    async def amend_order(self, price, sz, order_id, market):
+        pass
 
     @try_exc_regular
     def get_markets(self):
@@ -139,14 +145,13 @@ class WhiteBitClient(BaseClient):
         return res.json()
 
     @try_exc_async
-    async def cancel_order(self, symbol: str, order_id: int, session: aiohttp.ClientSession):
+    async def cancel_order(self, symbol: str, order_id: int):
         path = '/api/v4/order/cancel'
         params = {"market": symbol,
                   "orderId": order_id}
         params = self.get_auth_for_request(params, path)
-        async with session.post(url=self.BASE_URL + path, headers=self.session.headers, json=params) as resp:
-            resp = await resp.json()
-            return resp
+        async with self.async_session.post(url=self.BASE_URL + path, headers=self.session.headers, json=params) as resp:
+            print(f'ORDER CANCELED {self.EXCHANGE_NAME}', await resp.json())
 
     def get_auth_for_request(self, params, uri):
         params['request'] = uri
@@ -368,8 +373,6 @@ class WhiteBitClient(BaseClient):
                 continue
             if order['deal_stock'] != '0':
                 factual_price = float(order['deal_money']) / float(order['deal_stock'])
-                side = 'sell' if order['side'] == 1 else 'buy'
-                self.last_price.update({side: factual_price})
                 self.get_position()
             else:
                 factual_price = 0
@@ -410,15 +413,16 @@ class WhiteBitClient(BaseClient):
             return OrderStatus.NOT_EXECUTED
 
     @try_exc_regular
-    def fit_sizes(self, price, symbol):
+    def fit_sizes(self, price, amount, symbol):
         # NECESSARY
         instr = self.instruments[symbol]
         tick_size = instr['tick_size']
         quantity_precision = instr['quantity_precision']
         price_precision = instr['price_precision']
-        self.amount = round(self.amount, quantity_precision)
+        amount = round(amount, quantity_precision)
         rounded_price = round(price / tick_size) * tick_size
-        self.price = round(rounded_price, price_precision)
+        price = round(rounded_price, price_precision)
+        return price, amount
 
     @try_exc_regular
     def get_available_balance(self):
@@ -427,10 +431,6 @@ class WhiteBitClient(BaseClient):
             max_pos_part=self.max_pos_part,
             positions=self.positions,
             balance=self.balance)
-
-    @try_exc_regular
-    def get_last_price(self, side):
-        return self.last_price.get(side, 0)
 
     @try_exc_regular
     def get_positions(self):
@@ -501,15 +501,17 @@ class WhiteBitClient(BaseClient):
                     'status': status}
 
     @try_exc_async
-    async def create_fast_order(self, symbol, side, expire=10000, client_id=None, mode='Order'):
+    async def create_fast_order(self, price, sz, side, market, client_id=None):
         path = "/api/v4/order/collateral/limit"
-        params = {"market": symbol,
+        body = {"market": market,
                   "side": side,
-                  "amount": self.amount,
-                  "price": self.price}
-        params = self.get_auth_for_request(params, path)
-        path += self._create_uri(params)
-        async with self.async_session.post(url=self.BASE_URL + path, headers=self.session.headers, json=params) as resp:
+                  "amount": sz,
+                  "price": price}
+        if client_id:
+            body.update({'clientOrderId': client_id})
+        body = self.get_auth_for_request(body, path)
+        path += self._create_uri(body)
+        async with self.async_session.post(url=self.BASE_URL + path, headers=self.session.headers, json=body) as resp:
             response = await resp.json()
             print(f"{self.EXCHANGE_NAME} ORDER CREATE RESPONSE: {response}")
             self.update_order_after_deal(response)
@@ -518,10 +520,13 @@ class WhiteBitClient(BaseClient):
             order_res = {'exchange_name': self.EXCHANGE_NAME,
                          'exchange_order_id': response.get('orderId'),
                          'timestamp': response.get('timestamp', time.time()),
-                         'status': status}
-            self.response = order_res
+                         'status': status,
+                         'api_response': response}
+            if response.get("clientOrderId"):
+                self.responses.update({response["clientOrderId"]: order_res})
+            else:
+                self.responses.update({response['orderId']: order_res})
             self.last_keep_alive = order_res['timestamp']
-            return order_res
             # example_executed = {'orderId': 395248275015, 'clientOrderId': '', 'market': 'BTC_PERP', 'side': 'buy',
             # 'type': 'margin limit',
             #  'timestamp': 1703664697.619855, 'dealMoney': '42.509', 'dealStock': '0.001', 'amount': '0.001',
@@ -595,7 +600,6 @@ class WhiteBitClient(BaseClient):
         flag = False
         flag_market = False
         symbol = data['params'][2]
-        self.last_symbol = symbol
         new_ob = self.orderbook[symbol].copy()
         ts_ms = time.time()
         new_ob['ts_ms'] = ts_ms

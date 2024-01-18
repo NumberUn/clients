@@ -61,22 +61,15 @@ class BtseClient(BaseClient):
         self.wst_public = threading.Thread(target=self._run_ws_forever)
         self.order_loop = asyncio.new_event_loop()
         self.orders_thread = threading.Thread(target=self.deals_thread_func)
-        self.price = 0
-        self.amount = 0
         self.orderbook = {}
         self.orders = {}
-        self.last_price = {}
         self.taker_fee = float(keys['TAKER_FEE']) * 0.75
         self.maker_fee = 0.0001 * 0.75
         self.orig_sizes = {}
         self.LAST_ORDER_ID = 'default'
-        self.ob_push_limit = None
         self.last_keep_alive = 0
-        self.deal = False
-        self.response = None
-        self.side = 'buy'
-        self.symbol = None
-        self.last_symbol = None
+        self.async_tasks = []
+        self.responses = {}
 
     @try_exc_regular
     def deals_thread_func(self):
@@ -98,14 +91,27 @@ class BtseClient(BaseClient):
         async with aiohttp.ClientSession() as self.async_session:
             self.async_session.headers.update(self.headers)
             while True:
-                if self.deal:
-                    self.order_loop.create_task(self.create_fast_order(self.symbol, self.side))
-                    self.deal = False
-                else:
-                    ts_ms = time.time()
-                    if ts_ms - self.last_keep_alive > 5:
-                        self.last_keep_alive = ts_ms
-                        self.order_loop.create_task(self.get_position_async())
+                for task in self.async_tasks:
+                    if task[0] == 'create_order':
+                        price = task[1]['price']
+                        size = task[1]['size']
+                        side = task[1]['side']
+                        market = task[1]['market']
+                        client_id = task[1].get('client_id')
+                        self.order_loop.create_task(self.create_fast_order(price, size, side, market, client_id))
+                    elif task[0] == 'cancel_order':
+                        self.order_loop.create_task(self.cancel_order(task[1]['market'], task[1]['order_id']))
+                    elif task[0] == 'amend_order':
+                        price = task[1]['price']
+                        size = task[1]['size']
+                        order_id = task[1]['order_id']
+                        market = task[1]['market']
+                        self.order_loop.create_task(self.amend_order(price, size, order_id, market))
+                    self.async_tasks.remove(task)
+                ts_ms = time.time()
+                if ts_ms - self.last_keep_alive > 5:
+                    self.last_keep_alive = ts_ms
+                    self.order_loop.create_task(self.get_position_async())
                 await asyncio.sleep(0.0001)
 
     @staticmethod
@@ -177,7 +183,7 @@ class BtseClient(BaseClient):
         return signature
 
     @try_exc_regular
-    def get_private_headers(self, path, data={}):
+    def get_private_headers(self, path, data=dict()):
         json_data = json.dumps(data) if data else ''
         nonce = str(int(time.time() * 1000))
         signature = self.generate_signature(path, nonce, json_data)
@@ -274,40 +280,73 @@ class BtseClient(BaseClient):
         return status
 
     @try_exc_regular
-    def fit_sizes(self, price, symbol):
+    def fit_sizes(self, price, amount, symbol):
         # NECESSARY
         instr = self.instruments[symbol]
         tick_size = instr['tick_size']
         quantity_precision = instr['quantity_precision']
         price_precision = instr['price_precision']
-        self.amount = round(self.amount, quantity_precision)
+        amount = round(amount, quantity_precision)
         rounded_price = round(price / tick_size) * tick_size
-        self.price = round(rounded_price, price_precision)
+        price = round(rounded_price, price_precision)
+        return price, amount
 
     @try_exc_async
-    async def create_fast_order(self, symbol, side, expire=10000, client_id=None, expiration=None):
+    async def amend_order(self, price, sz, order_id, market):
         path = '/api/v2.1/order'
-        contract_value = self.instruments[symbol]['contract_value']
-        body = {"symbol": symbol,
-                "side": side.upper(),
-                "price": self.price,
-                "type": "LIMIT",
-                'size': int(self.amount / contract_value)}
-        print(f"{self.EXCHANGE_NAME} SENDING ORDER: {body}")
+        contract_value = self.instruments[market]['contract_value']
+        body = {"symbol": market,
+                "orderID": order_id,
+                "type": "ALL",
+                "orderPrice": price,
+                "orderSize": int(sz / contract_value)}
         self.get_private_headers(path, body)
-        async with self.async_session.post(url=self.BASE_URL + path, headers=self.session.headers, json=body) as resp:
-            res = await resp.json()
-            print(f"{self.EXCHANGE_NAME} ORDER CREATE RESPONSE: {res}")
-            status = self.get_order_response_status(res)
-            self.LAST_ORDER_ID = res[0].get('orderID', 'default')
-            self.orig_sizes.update({self.LAST_ORDER_ID: res[0].get('originalSize')})
+        async with self.async_session.put(url=self.BASE_URL + path, headers=self.session.headers, json=body) as resp:
+            response = await resp.json()
+            print(f"{self.EXCHANGE_NAME} ORDER AMEND RESPONSE: {response}")
+            status = self.get_order_response_status(response)
+            self.LAST_ORDER_ID = response[0].get('orderID', 'default')
+            self.orig_sizes.update({self.LAST_ORDER_ID: response[0].get('originalSize')})
             order_res = {'exchange_name': self.EXCHANGE_NAME,
                          'exchange_order_id': self.LAST_ORDER_ID,
-                         'timestamp': res[0]['timestamp'] / 1000 if res[0].get('timestamp') else time.time(),
-                         'status': status}
-            self.response = order_res
+                         'timestamp': response[0]['timestamp'] / 1000 if response[0].get('timestamp') else time.time(),
+                         'status': status,
+                         'api_response': response}
+            if response.get("clOrderID"):
+                self.responses.update({response["clOrderID"]: order_res})
+            else:
+                self.responses.update({response['orderId']: order_res})
             self.last_keep_alive = order_res['timestamp']
-            return order_res
+
+    @try_exc_async
+    async def create_fast_order(self, price, sz, side, market, client_id=None):
+        path = '/api/v2.1/order'
+        contract_value = self.instruments[market]['contract_value']
+        body = {"symbol": market,
+                "side": side.upper(),
+                "price": price,
+                "type": "LIMIT",
+                'size': int(sz / contract_value)}
+        if client_id:
+            body.update({'clOrderID': client_id})
+        # print(f"{self.EXCHANGE_NAME} SENDING ORDER: {body}")
+        self.get_private_headers(path, body)
+        async with self.async_session.post(url=self.BASE_URL + path, headers=self.session.headers, json=body) as resp:
+            response = await resp.json()
+            print(f"{self.EXCHANGE_NAME} ORDER CREATE RESPONSE: {response}")
+            status = self.get_order_response_status(response)
+            self.LAST_ORDER_ID = response[0].get('orderID', 'default')
+            self.orig_sizes.update({self.LAST_ORDER_ID: response[0].get('originalSize')})
+            order_res = {'exchange_name': self.EXCHANGE_NAME,
+                         'exchange_order_id': self.LAST_ORDER_ID,
+                         'timestamp': response[0]['timestamp'] / 1000 if response[0].get('timestamp') else time.time(),
+                         'status': status,
+                         'api_response': response}
+            if response.get("clOrderID"):
+                self.responses.update({response["clOrderID"]: order_res})
+            else:
+                self.responses.update({response['orderId']: order_res})
+            self.last_keep_alive = order_res['timestamp']
             # res_example = [{'status': 2, 'symbol': 'BTCPFC', 'orderType': 76, 'price': 43490, 'side': 'BUY', 'size': 1,
             #             'orderID': '13a82711-f6e2-4228-bf9f-3755cd8d7885', 'timestamp': 1703535543583,
             #             'triggerPrice': 0, 'trigger': False, 'deviation': 100, 'stealth': 100, 'message': '',
@@ -441,15 +480,15 @@ class BtseClient(BaseClient):
             await ws.close()
 
     @try_exc_async
-    async def cancel_order(self, symbol: str, order_id: str, session: aiohttp.ClientSession):
+    async def cancel_order(self, symbol: str, order_id: str):
         path = '/api/v2.1/order'
         params = {'symbol': symbol,
                   'orderID': order_id}
         self.get_private_headers(path, params)
         path += '?' + "&".join([f"{key}={params[key]}" for key in sorted(params)])
-        async with session.delete(url=self.BASE_URL + path, headers=self.session.headers, json=params) as resp:
-            resp = await resp.json()
-            return resp
+        async with self.async_session.delete(url=self.BASE_URL + path, headers=self.session.headers, json=params) as resp:
+            print(f'ORDER CANCELED {self.EXCHANGE_NAME}', await resp.json())
+
 
     @try_exc_regular
     def get_order_status_by_fill(self, order_id, size):
@@ -464,16 +503,16 @@ class BtseClient(BaseClient):
 
     @try_exc_async
     async def update_fills(self, data):
-        print(f'FILLS UPDATE: {data}')
         for fill in data['data']:
-            start_time = time.time()
-            self.last_price.update({fill['side'].lower(): float(fill['price'])})
             order_id = fill['orderId']
-            while order_id != self.LAST_ORDER_ID:
-                time.sleep(0.1)
-                if time.time() - start_time > 2:
-                    break
             size = float(fill['size']) * self.instruments[fill['symbol']]['contract_value']
+            if 'maker' in fill.get('clOrderId', ''):
+                deal = {'side': fill['side'].lower(),
+                        'size': size,
+                        'coin': fill['symbol'].split('PFC')[0],
+                        'price': float(fill['price'])}
+                loop = asyncio.get_event_loop()
+                loop.create_task(self.multibot.hedge_maker_position(deal))
             size_usd = size * float(fill['price'])
             if order := self.orders.get(order_id):
                 avg_price = (order['factual_amount_usd'] + size_usd) / (size + order['factual_amount_coin'])
@@ -566,7 +605,6 @@ class BtseClient(BaseClient):
         flag = False
         flag_market = False
         symbol = data['data']['symbol']
-        self.last_symbol = symbol
         new_ob = self.orderbook[symbol].copy()
         ts_ms = time.time()
         new_ob['ts_ms'] = ts_ms
@@ -631,9 +669,6 @@ class BtseClient(BaseClient):
                                   'top_bid_timestamp': data['data']['timestamp'],
                                   'ts_ms': time.time()}
 
-    @try_exc_regular
-    def get_last_price(self, side: str) -> float:
-        return self.last_price[side]
 
     @try_exc_regular
     def get_orderbook(self, symbol) -> dict:
