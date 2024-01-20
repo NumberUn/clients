@@ -151,6 +151,8 @@ class WhiteBitClient(BaseClient):
                   "orderId": order_id}
         params = self.get_auth_for_request(params, path)
         async with self.async_session.post(url=self.BASE_URL + path, headers=self.session.headers, json=params) as resp:
+            if order_id in self.multibot.deleted_orders:
+                self.multibot.deleted_orders.remove(order_id)
             print(f'ORDER CANCELED {self.EXCHANGE_NAME}', await resp.json())
 
     def get_auth_for_request(self, params, uri):

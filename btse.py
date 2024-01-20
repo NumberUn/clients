@@ -504,6 +504,8 @@ class BtseClient(BaseClient):
         self.get_private_headers(path, params)
         path += '?' + "&".join([f"{key}={params[key]}" for key in sorted(params)])
         async with self.async_session.delete(url=self.BASE_URL + path, headers=self.session.headers, json=params) as resp:
+            if order_id in self.multibot.deleted_orders:
+                self.multibot.deleted_orders.remove(order_id)
             print(f'ORDER CANCELED {self.EXCHANGE_NAME}', await resp.json())
 
 
