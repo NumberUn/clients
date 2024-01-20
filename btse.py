@@ -702,8 +702,8 @@ class BtseClient(BaseClient):
             return {}
         c_v = self.instruments[symbol]['contract_value']
         ob = {'timestamp': self.orderbook[symbol]['timestamp'],
-              'asks': [[float(x), float(snap['asks'][x]) * c_v] for x in sorted(snap['asks'])[:self.ob_len]],
-              'bids': [[float(x), float(snap['bids'][x]) * c_v] for x in sorted(snap['bids'])[::-1][:self.ob_len]],
+              'asks': sorted([[float(x), float(snap['asks'][x]) * c_v] for x in snap['asks']])[:self.ob_len],
+              'bids': sorted([[float(x), float(snap['bids'][x]) * c_v] for x in snap['bids']], reverse=True)[:self.ob_len],
               'top_ask_timestamp': self.orderbook[symbol]['top_ask_timestamp'],
               'top_bid_timestamp': self.orderbook[symbol]['top_bid_timestamp'],
               'ts_ms': self.orderbook[symbol]['ts_ms']}
@@ -759,15 +759,17 @@ if __name__ == '__main__':
     client = BtseClient(keys=config['BTSE'],
                         leverage=float(config['SETTINGS']['LEVERAGE']),
                         max_pos_part=int(config['SETTINGS']['PERCENT_PER_MARKET']),
-                        markets_list=['MANA'])
+                        markets_list=['ATOM'])
 
     client.run_updater()
     time.sleep(3)
-    ob = client.get_orderbook('MANAPFC')
-    client.amount = client.instruments['MANAPFC']['min_size']
-    client.fit_sizes(ob['asks'][2][0], 'MANAPFC')
-    client.order_loop.create_task(client.create_fast_order('MANAPFC', 'buy'))
+    # ob = client.get_orderbook('MANAPFC')
+    # client.amount = client.instruments['MANAPFC']['min_size']
+    # client.fit_sizes(ob['asks'][2][0], 'MANAPFC')
+    # client.order_loop.create_task(client.create_fast_order('MANAPFC', 'buy'))
     while True:
         time.sleep(1)
+        print(client.get_orderbook('ATOMPFC'))
+        print()
 
 
