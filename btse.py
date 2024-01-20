@@ -293,6 +293,7 @@ class BtseClient(BaseClient):
 
     @try_exc_async
     async def amend_order(self, price, sz, order_id, market):
+        time_start = time.time()
         path = '/api/v2.1/order'
         contract_value = self.instruments[market]['contract_value']
         body = {"symbol": market,
@@ -303,6 +304,7 @@ class BtseClient(BaseClient):
         self.get_private_headers(path, body)
         async with self.async_session.put(url=self.BASE_URL + path, headers=self.session.headers, json=body) as resp:
             response = await resp.json()
+            print(f"{self.EXCHANGE_NAME} ORDER AMEND PING: {response[0]['timestamp'] / 1000 - time_start}")
             print(f"{self.EXCHANGE_NAME} ORDER AMEND RESPONSE: {response}")
             status = self.get_order_response_status(response)
             self.LAST_ORDER_ID = response[0].get('orderID', 'default')
@@ -353,7 +355,8 @@ class BtseClient(BaseClient):
                          'api_response': response,
                          'size': response[0]['fillSize'],
                          'price': response[0]['avgFillPrice'],
-                         'create_order_time': time_start - response[0]['timestamp'] / 1000}
+                         'time_order_sent': time_start,
+                         'create_order_time': response[0]['timestamp'] / 1000 - time_start}
             if response.get("clOrderID"):
                 self.responses.update({response["clOrderID"]: order_res})
             else:
@@ -519,11 +522,13 @@ class BtseClient(BaseClient):
             order_id = fill['orderId']
             size = float(fill['size']) * self.instruments[fill['symbol']]['contract_value']
             if 'maker' in fill.get('clOrderId', ''):
+                own_ts = time.time()
                 deal = {'side': fill['side'].lower(),
                         'size': size,
                         'coin': fill['symbol'].split('PFC')[0],
                         'price': float(fill['price']),
-                        'timestamp': fill['timestamp'] / 1000}
+                        'timestamp': fill['timestamp'] / 1000,
+                        'ts_ms': own_ts}
                 loop = asyncio.get_event_loop()
                 loop.create_task(self.multibot.hedge_maker_position(deal))
             size_usd = size * float(fill['price'])

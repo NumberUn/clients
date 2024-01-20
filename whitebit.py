@@ -526,6 +526,7 @@ class WhiteBitClient(BaseClient):
                          'api_response': response,
                          'size': float(response['dealStock']),
                          'price': price,
+                         'time_order_sent': time_start,
                          'create_order_time': time_start - response['timestamp']}
             if response.get("clientOrderId"):
                 self.responses.update({response["clientOrderId"]: order_res})
