@@ -333,10 +333,6 @@ class BtseClient(BaseClient):
         time_start = time.time()
         path = '/api/v2.1/order'
         contract_value = self.instruments[market]['contract_value']
-        print(f"{market=}")
-        print(f"{contract_value=}")
-        print(f"{sz=}")
-        print(f"{self.instruments[market]=}")
         body = {"symbol": market,
                 "side": side.upper(),
                 "price": price,
