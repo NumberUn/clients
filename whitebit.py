@@ -515,6 +515,7 @@ class WhiteBitClient(BaseClient):
         async with self.async_session.post(url=self.BASE_URL + path, headers=self.session.headers, json=body) as resp:
             response = await resp.json()
             print(f"{self.EXCHANGE_NAME} ORDER CREATE RESPONSE: {response}")
+            print(f"{self.EXCHANGE_NAME} ORDER CREATE PING: {response['timestamp'] - time_start}")
             self.update_order_after_deal(response)
             status = self.get_order_response_status(response)
             self.LAST_ORDER_ID = response.get('orderId', 'default')
