@@ -315,7 +315,8 @@ class BtseClient(BaseClient):
                          'status': status,
                          'api_response': response,
                          'size': response[0]['fillSize'],
-                         'price': response[0]['avgFillPrice']}
+                         'price': response[0]['avgFillPrice'],
+                         'create_order_time': response[0]['timestamp'] / 1000 - time_start}
             if response[0].get("clOrderID"):
                 self.responses.update({response[0]["clOrderID"]: order_res})
             else:
