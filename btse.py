@@ -352,12 +352,12 @@ class BtseClient(BaseClient):
                          'exchange_order_id': self.LAST_ORDER_ID,
                          'timestamp': response[0]['timestamp'] / 1000 if response[0].get('timestamp') else time.time(),
                          'status': status,
-                         'api_response': response,
+                         'api_response': response[0],
                          'size': response[0]['fillSize'],
                          'price': response[0]['avgFillPrice'],
                          'time_order_sent': time_start,
                          'create_order_time': response[0]['timestamp'] / 1000 - time_start}
-            if response.get("clOrderID"):
+            if response[0].get("clOrderID"):
                 self.responses.update({response["clOrderID"]: order_res})
             else:
                 self.responses.update({response['orderId']: order_res})
