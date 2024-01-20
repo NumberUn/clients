@@ -304,8 +304,8 @@ class BtseClient(BaseClient):
         self.get_private_headers(path, body)
         async with self.async_session.put(url=self.BASE_URL + path, headers=self.session.headers, json=body) as resp:
             response = await resp.json()
-            print(f"{self.EXCHANGE_NAME} ORDER AMEND PING: {response[0]['timestamp'] / 1000 - time_start}")
             print(f"{self.EXCHANGE_NAME} ORDER AMEND RESPONSE: {response}")
+            print(f"{self.EXCHANGE_NAME} ORDER AMEND PING: {response[0]['timestamp'] / 1000 - time_start}")
             status = self.get_order_response_status(response)
             self.LAST_ORDER_ID = response[0].get('orderID', 'default')
             self.orig_sizes.update({self.LAST_ORDER_ID: response[0].get('originalSize')})
@@ -316,10 +316,10 @@ class BtseClient(BaseClient):
                          'api_response': response,
                          'size': response[0]['fillSize'],
                          'price': response[0]['avgFillPrice']}
-            if response.get("clOrderID"):
-                self.responses.update({response["clOrderID"]: order_res})
+            if response[0].get("clOrderID"):
+                self.responses.update({response[0]["clOrderID"]: order_res})
             else:
-                self.responses.update({response['orderId']: order_res})
+                self.responses.update({response[0]['orderId']: order_res})
             self.last_keep_alive = order_res['timestamp']
             # res_example = [{'status': 2, 'symbol': 'BTCPFC', 'orderType': 76, 'price': 43490, 'side': 'BUY', 'size': 1,
             #             'orderID': '13a82711-f6e2-4228-bf9f-3755cd8d7885', 'timestamp': 1703535543583,
