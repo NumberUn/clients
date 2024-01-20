@@ -311,15 +311,24 @@ class BtseClient(BaseClient):
                          'exchange_order_id': self.LAST_ORDER_ID,
                          'timestamp': response[0]['timestamp'] / 1000 if response[0].get('timestamp') else time.time(),
                          'status': status,
-                         'api_response': response}
+                         'api_response': response,
+                         'size': response[0]['fillSize'],
+                         'price': response[0]['avgFillPrice']}
             if response.get("clOrderID"):
                 self.responses.update({response["clOrderID"]: order_res})
             else:
                 self.responses.update({response['orderId']: order_res})
             self.last_keep_alive = order_res['timestamp']
+            # res_example = [{'status': 2, 'symbol': 'BTCPFC', 'orderType': 76, 'price': 43490, 'side': 'BUY', 'size': 1,
+            #             'orderID': '13a82711-f6e2-4228-bf9f-3755cd8d7885', 'timestamp': 1703535543583,
+            #             'triggerPrice': 0, 'trigger': False, 'deviation': 100, 'stealth': 100, 'message': '',
+            #             'avgFillPrice': 0, 'fillSize': 0, 'clOrderID': '', 'originalSize': 1, 'postOnly': False,
+            #             'remainingSize': 1, 'orderDetailType': None, 'positionMode': 'ONE_WAY',
+            #             'positionDirection': None, 'positionId': 'BTCPFC-USD', 'time_in_force': 'GTC'}]
 
     @try_exc_async
     async def create_fast_order(self, price, sz, side, market, client_id=None):
+        time_start = time.time()
         path = '/api/v2.1/order'
         contract_value = self.instruments[market]['contract_value']
         body = {"symbol": market,
@@ -341,7 +350,10 @@ class BtseClient(BaseClient):
                          'exchange_order_id': self.LAST_ORDER_ID,
                          'timestamp': response[0]['timestamp'] / 1000 if response[0].get('timestamp') else time.time(),
                          'status': status,
-                         'api_response': response}
+                         'api_response': response,
+                         'size': response[0]['fillSize'],
+                         'price': response[0]['avgFillPrice'],
+                         'create_order_time': time_start - response[0]['timestamp'] / 1000}
             if response.get("clOrderID"):
                 self.responses.update({response["clOrderID"]: order_res})
             else:
@@ -510,7 +522,8 @@ class BtseClient(BaseClient):
                 deal = {'side': fill['side'].lower(),
                         'size': size,
                         'coin': fill['symbol'].split('PFC')[0],
-                        'price': float(fill['price'])}
+                        'price': float(fill['price']),
+                        'timestamp': fill['timestamp'] / 1000}
                 loop = asyncio.get_event_loop()
                 loop.create_task(self.multibot.hedge_maker_position(deal))
             size_usd = size * float(fill['price'])

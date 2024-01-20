@@ -502,6 +502,7 @@ class WhiteBitClient(BaseClient):
 
     @try_exc_async
     async def create_fast_order(self, price, sz, side, market, client_id=None):
+        time_start = time.time()
         path = "/api/v4/order/collateral/limit"
         body = {"market": market,
                   "side": side,
@@ -517,11 +518,15 @@ class WhiteBitClient(BaseClient):
             self.update_order_after_deal(response)
             status = self.get_order_response_status(response)
             self.LAST_ORDER_ID = response.get('orderId', 'default')
+            price = float(response['dealMoney']) / float(response['dealStock']) if response['dealStock'] != '0' else 0
             order_res = {'exchange_name': self.EXCHANGE_NAME,
                          'exchange_order_id': response.get('orderId'),
                          'timestamp': response.get('timestamp', time.time()),
                          'status': status,
-                         'api_response': response}
+                         'api_response': response,
+                         'size': float(response['dealStock']),
+                         'price': price,
+                         'create_order_time': time_start - response['timestamp']}
             if response.get("clientOrderId"):
                 self.responses.update({response["clientOrderId"]: order_res})
             else:
