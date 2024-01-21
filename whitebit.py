@@ -396,7 +396,7 @@ class WhiteBitClient(BaseClient):
                 continue
             if order['deal_stock'] != '0':
                 factual_price = float(order['deal_money']) / float(order['deal_stock'])
-                if 'maker' in order.get('client_order_id', ''):
+                if 'maker' in order.get('client_order_id', '') and self.multibot.mm_exchange == self.EXCHANGE_NAME:
                     own_ts = time.time()
                     deal = {'side': 'sell' if order['side'] == 2 else 'buy',
                             'size': float(order['deal_stock']),
