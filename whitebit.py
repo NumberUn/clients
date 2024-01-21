@@ -53,7 +53,7 @@ class WhiteBitClient(BaseClient):
         self._connected = asyncio.Event()
         self._wst_ = threading.Thread(target=self._run_ws_forever, args=[self._loop])
         self.order_loop = asyncio.new_event_loop()
-        self.orders_thread = threading.Thread(target=self.deals_thread_func)
+        self.orders_thread = threading.Thread(target=self.deals_thread_func, args=[self.order_loop])
         self.LAST_ORDER_ID = 'default'
         self.taker_fee = float(keys['TAKER_FEE']) * 0.6
         self.maker_fee = 0.0001 * 0.6
@@ -63,9 +63,9 @@ class WhiteBitClient(BaseClient):
         self.deleted_orders = []
 
     @try_exc_regular
-    def deals_thread_func(self):
+    def deals_thread_func(self, loop):
         while True:
-            self.order_loop.run_until_complete(self._run_order_loop())
+            loop.run_until_complete(self._run_order_loop(loop))
 
     @try_exc_async
     async def cancel_all_tasks(self, loop):
@@ -78,7 +78,7 @@ class WhiteBitClient(BaseClient):
                 pass
 
     @try_exc_async
-    async def _run_order_loop(self):
+    async def _run_order_loop(self, loop):
         async with aiohttp.ClientSession() as self.async_session:
             self.async_session.headers.update(self.headers)
             while True:
@@ -89,21 +89,22 @@ class WhiteBitClient(BaseClient):
                         side = task[1]['side']
                         market = task[1]['market']
                         client_id = task[1].get('client_id')
-                        self.order_loop.create_task(self.create_fast_order(price, size, side, market, client_id))
+                        loop.create_task(self.create_fast_order(price, size, side, market, client_id))
                     elif task[0] == 'cancel_order':
-                        self.order_loop.create_task(self.cancel_order(task[1]['market'], task[1]['order_id']))
+                        loop.create_task(self.cancel_order(task[1]['market'], task[1]['order_id']))
                     elif task[0] == 'amend_order':
+                        market = task[1]['market']
+                        loop.create_task(self.cancel_order(market, task[1]['order_id']))
                         price = task[1]['price']
                         size = task[1]['size']
-                        order_id = task[1]['order_id']
-                        market = task[1]['market']
-                        self.order_loop.create_task(self.cancel_order(market, order_id))
-                        self.order_loop.create_task(self.create_fast_order(price, size, order_id, market))
+                        client_id = task[1]['client_id']
+                        side = self.multibot.open_orders[market.split('_')[0] + '-' + self.EXCHANGE_NAME][1]['side']
+                        loop.create_task(self.create_fast_order(price, size, side, market, client_id))
                     self.async_tasks.remove(task)
                 ts_ms = time.time()
                 if ts_ms - self.last_keep_alive > 5:
                     self.last_keep_alive = ts_ms
-                    self.order_loop.create_task(self.get_position_async())
+                    loop.create_task(self.get_position_async())
                 await asyncio.sleep(0.0001)
 
     @try_exc_async
@@ -531,9 +532,9 @@ class WhiteBitClient(BaseClient):
         time_start = time.time()
         path = "/api/v4/order/collateral/limit"
         body = {"market": market,
-                  "side": side,
-                  "amount": sz,
-                  "price": price}
+                "side": side,
+                "amount": sz,
+                "price": price}
         if client_id:
             body.update({'clientOrderId': client_id})
         body = self.get_auth_for_request(body, path)
