@@ -678,7 +678,7 @@ class WhiteBitClient(BaseClient):
         if self.market_finder and flag_market:
             coin = symbol.split('_')[0]
             await self.market_finder.count_one_coin(coin, self.EXCHANGE_NAME)
-        if flag and ts_ms - ts_ob < 0.035:
+        if flag and ts_ms - ts_ob < 0.035 and self.finder:
             coin = symbol.split('_')[0]
             if self.state == 'Bot':
                 await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, self.multibot.run_arbitrage)
