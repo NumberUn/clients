@@ -303,7 +303,7 @@ class BtseClient(BaseClient):
         async with self.async_session.put(url=self.BASE_URL + path, headers=self.session.headers, json=body) as resp:
             response = await resp.json()
             print(f"{self.EXCHANGE_NAME} ORDER AMEND RESPONSE: {response}")
-            if response['status'] == 400:
+            if isinstance(response, dict):
                 print(f"ERROR BODY: {body}")
                 return
             print(f"{self.EXCHANGE_NAME} ORDER AMEND PING: {response[0]['timestamp'] / 1000 - time_start}")
@@ -492,6 +492,7 @@ class BtseClient(BaseClient):
                         elif data.get('data') and data['data']['type'] == 'snapshot':
                             loop.create_task(update_ob_snapshot(data))
                     elif data.get('topic') == 'allPosition':
+                        # print('GOT POSITIONS UPDATE')
                         loop.create_task(update_positions(data))
                         loop.create_task(self.ping_websocket(ws))
                     elif data.get('topic') == 'fills':
@@ -521,7 +522,6 @@ class BtseClient(BaseClient):
             if order_id in self.multibot.deleted_orders:
                 self.multibot.deleted_orders.remove(order_id)
             print(f'ORDER CANCELED {self.EXCHANGE_NAME}', await resp.json())
-
 
     @try_exc_regular
     def get_order_status_by_fill(self, order_id, size):
