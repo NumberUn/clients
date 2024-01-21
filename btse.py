@@ -58,7 +58,9 @@ class BtseClient(BaseClient):
         self.error_info = None
         self._connected = asyncio.Event()
         self._loop = asyncio.new_event_loop()
-        self.wst_public = threading.Thread(target=self._run_ws_forever)
+        self._loop_private = asyncio.new_event_loop()
+        self.wst_public = threading.Thread(target=self._run_ws_forever, args=['public', self._loop])
+        self.wst_private = threading.Thread(target=self._run_ws_forever, args=['private', self._loop_private])
         self.order_loop = asyncio.new_event_loop()
         self.orders_thread = threading.Thread(target=self.deals_thread_func)
         self.orderbook = {}
@@ -160,19 +162,14 @@ class BtseClient(BaseClient):
         return tops
 
     @try_exc_regular
-    def _run_ws_forever(self):
+    def _run_ws_forever(self, ws_type, loop):
         while True:
-            if self.state == 'Bot':
-                self._loop.create_task(self._run_ws_loop('private',
-                                                         self.update_orderbook_snapshot,
-                                                         self.update_orderbook,
-                                                         self.update_positions,
-                                                         self.update_fills))
-            self._loop.run_until_complete(self._run_ws_loop('public',
-                                                            self.update_orderbook_snapshot,
-                                                            self.update_orderbook,
-                                                            self.update_positions,
-                                                            self.update_fills))
+            loop.run_until_complete(self._run_ws_loop(ws_type,
+                                                      self.update_orderbook_snapshot,
+                                                      self.update_orderbook,
+                                                      self.update_positions,
+                                                      self.update_fills,
+                                                      loop))
 
     @try_exc_regular
     def generate_signature(self, path, nonce, data=''):
@@ -306,6 +303,9 @@ class BtseClient(BaseClient):
         async with self.async_session.put(url=self.BASE_URL + path, headers=self.session.headers, json=body) as resp:
             response = await resp.json()
             print(f"{self.EXCHANGE_NAME} ORDER AMEND RESPONSE: {response}")
+            if response['status'] == 400:
+                print(f"ERROR BODY: {body}")
+                return
             print(f"{self.EXCHANGE_NAME} ORDER AMEND PING: {response[0]['timestamp'] / 1000 - time_start}")
             status = self.get_order_response_status(response)
             self.LAST_ORDER_ID = response[0].get('orderID', 'default')
@@ -469,7 +469,7 @@ class BtseClient(BaseClient):
             balance=self.balance)
 
     @try_exc_async
-    async def _run_ws_loop(self, ws_type, update_orderbook_snapshot, update_orderbook, update_positions, update_fills):
+    async def _run_ws_loop(self, ws_type, update_ob_snapshot, update_ob, update_positions, update_fills, loop):
         async with aiohttp.ClientSession() as s:
             if ws_type == 'private':
                 endpoint = self.PRIVATE_WS_ENDPOINT
@@ -480,22 +480,32 @@ class BtseClient(BaseClient):
                 self._connected.set()
                 if ws_type == 'private':
                     self._ws_private = ws
-                    await self._loop.create_task(self.subscribe_privates())
+                    await loop.create_task(self.subscribe_privates())
                 else:
                     self._ws_public = ws
-                    await self._loop.create_task(self.subscribe_orderbooks())
+                    await loop.create_task(self.subscribe_orderbooks())
                 async for msg in ws:
                     data = json.loads(msg.data)
                     if 'update' in data.get('topic', ''):
                         if data.get('data') and data['data']['type'] == 'delta':
-                            self._loop.create_task(update_orderbook(data))
+                            loop.create_task(update_ob(data))
                         elif data.get('data') and data['data']['type'] == 'snapshot':
-                            self._loop.create_task(update_orderbook_snapshot(data))
+                            loop.create_task(update_ob_snapshot(data))
                     elif data.get('topic') == 'allPosition':
-                        self._loop.create_task(update_positions(data))
+                        loop.create_task(update_positions(data))
+                        loop.create_task(self.ping_websocket(ws))
                     elif data.get('topic') == 'fills':
-                        self._loop.create_task(update_fills(data))
+                        print(f'FILLS {self.EXCHANGE_NAME} WS MESSAGE {datetime.utcnow()}:', data)
+                        loop.create_task(update_fills(data))
+                        loop.create_task(self.ping_websocket(ws))
+                    else:
+                        print(data)
             await ws.close()
+
+    @try_exc_async
+    async def ping_websocket(self, ws):
+        await ws.ping()
+        # print(f'PING SENT: {datetime.utcnow()}')
 
     @try_exc_async
     async def cancel_order(self, symbol: str, order_id: str):
@@ -526,6 +536,7 @@ class BtseClient(BaseClient):
 
     @try_exc_async
     async def update_fills(self, data):
+        print(f"GOT FILL {datetime.utcnow()}")
         for fill in data['data']:
             order_id = fill['orderId']
             size = float(fill['size']) * self.instruments[fill['symbol']]['contract_value']
@@ -742,6 +753,8 @@ class BtseClient(BaseClient):
         if self.state == 'Bot':
             self.orders_thread.daemon = True
             self.orders_thread.start()
+            self.wst_private.daemon = True
+            self.wst_private.start()
 
     @try_exc_regular
     def get_fills(self, symbol: str, order_id: str):
@@ -776,7 +789,7 @@ if __name__ == '__main__':
     # client.order_loop.create_task(client.create_fast_order('MANAPFC', 'buy'))
     while True:
         time.sleep(1)
-        print(client.get_orderbook('ATOMPFC'))
-        print()
+        # print(client.get_orderbook('ATOMPFC'))
+        # print()
 
 
