@@ -695,7 +695,6 @@ class BtseClient(BaseClient):
                                   'top_bid_timestamp': data['data']['timestamp'],
                                   'ts_ms': time.time()}
 
-
     @try_exc_regular
     def get_orderbook(self, symbol) -> dict:
         if not self.orderbook.get(symbol):
@@ -708,11 +707,13 @@ class BtseClient(BaseClient):
             return {}
         c_v = self.instruments[symbol]['contract_value']
         ob = {'timestamp': self.orderbook[symbol]['timestamp'],
-              'asks': sorted([[float(x), float(snap['asks'][x]) * c_v] for x in snap['asks']])[:self.ob_len],
-              'bids': sorted([[float(x), float(snap['bids'][x]) * c_v] for x in snap['bids']], reverse=True)[:self.ob_len],
+              'asks': sorted([[float(x), y] for x, y in snap['asks'].items()])[:self.ob_len],
+              'bids': sorted([[float(x), y] for x, y in snap['bids'].items()], reverse=True)[:self.ob_len],
               'top_ask_timestamp': self.orderbook[symbol]['top_ask_timestamp'],
               'top_bid_timestamp': self.orderbook[symbol]['top_bid_timestamp'],
               'ts_ms': self.orderbook[symbol]['ts_ms']}
+        ob['asks'] = [[x, float(y) * c_v] for x, y in ob['asks']]
+        ob['bids'] = [[x, float(y) * c_v] for x, y in ob['bids']]
         return ob
 
     @try_exc_async
