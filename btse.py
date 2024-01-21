@@ -718,7 +718,7 @@ class BtseClient(BaseClient):
         c_v = self.instruments[symbol]['contract_value']
         ob = {'timestamp': self.orderbook[symbol]['timestamp'],
               'asks': sorted([[float(x), y] for x, y in snap['asks'].items()])[:self.ob_len],
-              'bids': sorted([[float(x), y] for x, y in snap['bids'].items()], reverse=True)[:self.ob_len],
+              'bids': sorted([[float(x), y] for x, y in snap['bids'].items()])[::-1][:self.ob_len],
               'top_ask_timestamp': self.orderbook[symbol]['top_ask_timestamp'],
               'top_bid_timestamp': self.orderbook[symbol]['top_bid_timestamp'],
               'ts_ms': self.orderbook[symbol]['ts_ms']}

@@ -755,13 +755,11 @@ class WhiteBitClient(BaseClient):
         if snap['top_ask'][0] <= snap['top_bid'][0]:
             return {}
         ob = {'timestamp': self.orderbook[symbol]['timestamp'],
-              'asks': sorted([[float(x), float(snap['asks'][x])] for x in list(snap['asks'])]),
-              'bids': sorted([[float(x), float(snap['bids'][x])] for x in list(snap['bids'])], reverse=True),
+              'asks': sorted([[float(x), float(y)] for x, y in snap['asks'].copy().items()])[:self.ob_len],
+              'bids': sorted([[float(x), float(y)] for x, y in snap['bids'].copy().items()])[::-1][:self.ob_len],
               'top_ask_timestamp': snap['top_ask_timestamp'],
               'top_bid_timestamp': snap['top_bid_timestamp'],
               'ts_ms': snap['ts_ms']}
-        ob['asks'] = ob['asks'][:self.ob_len]
-        ob['bids'] = ob['bids'][:self.ob_len]
         return ob
 
     @try_exc_regular
