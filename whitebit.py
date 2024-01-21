@@ -60,6 +60,7 @@ class WhiteBitClient(BaseClient):
         self.last_keep_alive = 0
         self.async_tasks = []
         self.responses = {}
+        self.deleted_orders = []
 
     @try_exc_regular
     def deals_thread_func(self):
@@ -149,6 +150,9 @@ class WhiteBitClient(BaseClient):
         path = '/api/v4/order/cancel'
         params = {"market": symbol,
                   "orderId": order_id}
+        if order_id in self.deleted_orders:
+            return
+        self.deleted_orders.append(order_id)
         params = self.get_auth_for_request(params, path)
         async with self.async_session.post(url=self.BASE_URL + path, headers=self.session.headers, json=params) as resp:
             if order_id in self.multibot.deleted_orders:
