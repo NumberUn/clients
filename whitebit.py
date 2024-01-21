@@ -98,7 +98,7 @@ class WhiteBitClient(BaseClient):
                         price = task[1]['price']
                         size = task[1]['size']
                         client_id = task[1]['client_id']
-                        side = self.multibot.open_orders[market.split('_')[0] + '-' + self.EXCHANGE_NAME][1]['side']
+                        side = task[1]['side']
                         loop.create_task(self.create_fast_order(price, size, side, market, client_id, amend=True))
                     self.async_tasks.remove(task)
                 ts_ms = time.time()
@@ -540,8 +540,13 @@ class WhiteBitClient(BaseClient):
         body = self.get_auth_for_request(body, path)
         path += self._create_uri(body)
         async with self.async_session.post(url=self.BASE_URL + path, headers=self.session.headers, json=body) as resp:
-            response = await resp.json()
+            try:
+                response = await resp.json()
+            except:
+                response = resp.text
             print(f"{self.EXCHANGE_NAME} ORDER CREATE RESPONSE: {response}")
+            if not response.get('timestamp'):
+                print(f"{self.EXCHANGE_NAME} ORDER CREATE FAILURE\nBODY: {body}")
             print(f"{self.EXCHANGE_NAME} ORDER CREATE PING: {response['timestamp'] - time_start}")
             self.update_order_after_deal(response)
             status = self.get_order_response_status(response)
