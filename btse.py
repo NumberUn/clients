@@ -62,7 +62,7 @@ class BtseClient(BaseClient):
         self.wst_public = threading.Thread(target=self._run_ws_forever, args=['public', self._loop])
         self.wst_private = threading.Thread(target=self._run_ws_forever, args=['private', self._loop_private])
         self.order_loop = asyncio.new_event_loop()
-        self.orders_thread = threading.Thread(target=self.deals_thread_func)
+        self.orders_thread = threading.Thread(target=self.deals_thread_func, args=[self.order_loop])
         self.orderbook = {}
         self.orders = {}
         self.taker_fee = float(keys['TAKER_FEE']) * 0.75
@@ -75,9 +75,9 @@ class BtseClient(BaseClient):
         self.deleted_orders = []
 
     @try_exc_regular
-    def deals_thread_func(self):
+    def deals_thread_func(self, loop):
         while True:
-            self.order_loop.run_until_complete(self._run_order_loop())
+            loop.run_until_complete(self._run_order_loop(loop))
 
     @try_exc_async
     async def cancel_all_tasks(self, loop):
@@ -90,7 +90,7 @@ class BtseClient(BaseClient):
                 pass
 
     @try_exc_async
-    async def _run_order_loop(self):
+    async def _run_order_loop(self, loop):
         async with aiohttp.ClientSession() as self.async_session:
             self.async_session.headers.update(self.headers)
             while True:
@@ -101,20 +101,20 @@ class BtseClient(BaseClient):
                         side = task[1]['side']
                         market = task[1]['market']
                         client_id = task[1].get('client_id')
-                        self.order_loop.create_task(self.create_fast_order(price, size, side, market, client_id))
+                        loop.create_task(self.create_fast_order(price, size, side, market, client_id))
                     elif task[0] == 'cancel_order':
-                        self.order_loop.create_task(self.cancel_order(task[1]['market'], task[1]['order_id']))
+                        loop.create_task(self.cancel_order(task[1]['market'], task[1]['order_id']))
                     elif task[0] == 'amend_order':
                         price = task[1]['price']
                         size = task[1]['size']
                         order_id = task[1]['order_id']
                         market = task[1]['market']
-                        self.order_loop.create_task(self.amend_order(price, size, order_id, market))
+                        loop.create_task(self.amend_order(price, size, order_id, market))
                     self.async_tasks.remove(task)
                 ts_ms = time.time()
                 if ts_ms - self.last_keep_alive > 5:
                     self.last_keep_alive = ts_ms
-                    self.order_loop.create_task(self.get_position_async())
+                    loop.create_task(self.get_position_async())
                 await asyncio.sleep(0.0001)
 
     @staticmethod
@@ -164,12 +164,8 @@ class BtseClient(BaseClient):
     @try_exc_regular
     def _run_ws_forever(self, ws_type, loop):
         while True:
-            loop.run_until_complete(self._run_ws_loop(ws_type,
-                                                      self.update_orderbook_snapshot,
-                                                      self.update_orderbook,
-                                                      self.update_positions,
-                                                      self.update_fills,
-                                                      loop))
+            loop.run_until_complete(self._run_ws_loop(ws_type, self.upd_ob_snapshot, self.upd_ob,
+                                                      self.upd_positions, self.upd_fills, loop))
 
     @try_exc_regular
     def generate_signature(self, path, nonce, data=''):
@@ -469,7 +465,7 @@ class BtseClient(BaseClient):
             balance=self.balance)
 
     @try_exc_async
-    async def _run_ws_loop(self, ws_type, update_ob_snapshot, update_ob, update_positions, update_fills, loop):
+    async def _run_ws_loop(self, ws_type, upd_ob_snapshot, upd_ob, upd_positions, upd_fills, loop):
         async with aiohttp.ClientSession() as s:
             if ws_type == 'private':
                 endpoint = self.PRIVATE_WS_ENDPOINT
@@ -488,16 +484,16 @@ class BtseClient(BaseClient):
                     data = json.loads(msg.data)
                     if 'update' in data.get('topic', ''):
                         if data.get('data') and data['data']['type'] == 'delta':
-                            loop.create_task(update_ob(data))
+                            loop.create_task(upd_ob(data))
                         elif data.get('data') and data['data']['type'] == 'snapshot':
-                            loop.create_task(update_ob_snapshot(data))
+                            loop.create_task(upd_ob_snapshot(data))
                     elif data.get('topic') == 'allPosition':
                         # print('GOT POSITIONS UPDATE')
-                        loop.create_task(update_positions(data))
+                        loop.create_task(upd_positions(data))
                         loop.create_task(self.ping_websocket(ws))
                     elif data.get('topic') == 'fills':
                         print(f'FILLS {self.EXCHANGE_NAME} WS MESSAGE {datetime.utcnow()}:', data)
-                        loop.create_task(update_fills(data))
+                        loop.create_task(upd_fills(data))
                         loop.create_task(self.ping_websocket(ws))
                     else:
                         print(data)
@@ -535,7 +531,7 @@ class BtseClient(BaseClient):
             return OrderStatus.PARTIALLY_EXECUTED
 
     @try_exc_async
-    async def update_fills(self, data):
+    async def upd_fills(self, data):
         print(f"GOT FILL {datetime.utcnow()}")
         for fill in data['data']:
             order_id = fill['orderId']
@@ -578,7 +574,7 @@ class BtseClient(BaseClient):
         #      'tradeId': 'd6201931-446d-4a1c-ab83-e3ebdcf2f077'}]}
 
     @try_exc_async
-    async def update_positions(self, data):
+    async def upd_positions(self, data):
         for pos in data['data']:
             market = pos['marketName'].split('-')[0]
             contract_value = self.instruments[market]['contract_value']
@@ -638,7 +634,7 @@ class BtseClient(BaseClient):
         await self._ws_private.send_json(method_fills)
 
     @try_exc_async
-    async def update_orderbook(self, data):
+    async def upd_ob(self, data):
         flag = False
         flag_market = False
         symbol = data['data']['symbol']
@@ -695,7 +691,7 @@ class BtseClient(BaseClient):
                 await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side)
 
     @try_exc_async
-    async def update_orderbook_snapshot(self, data):
+    async def upd_ob_snapshot(self, data):
         symbol = data['data']['symbol']
         self.orderbook[symbol] = {'asks': {x[0]: x[1] for x in data['data']['asks']},
                                   'bids': {x[0]: x[1] for x in data['data']['bids']},

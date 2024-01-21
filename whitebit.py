@@ -51,7 +51,7 @@ class WhiteBitClient(BaseClient):
         self.error_info = None
         self._loop = asyncio.new_event_loop()
         self._connected = asyncio.Event()
-        self._wst_ = threading.Thread(target=self._run_ws_forever)
+        self._wst_ = threading.Thread(target=self._run_ws_forever, args=[self._loop])
         self.order_loop = asyncio.new_event_loop()
         self.orders_thread = threading.Thread(target=self.deals_thread_func)
         self.LAST_ORDER_ID = 'default'
@@ -97,7 +97,8 @@ class WhiteBitClient(BaseClient):
                         size = task[1]['size']
                         order_id = task[1]['order_id']
                         market = task[1]['market']
-                        self.order_loop.create_task(self.amend_order(price, size, order_id, market))
+                        self.order_loop.create_task(self.cancel_order(market, order_id))
+                        self.order_loop.create_task(self.create_fast_order(price, size, order_id, market))
                     self.async_tasks.remove(task)
                 ts_ms = time.time()
                 if ts_ms - self.last_keep_alive > 5:
@@ -308,12 +309,13 @@ class WhiteBitClient(BaseClient):
         return f'?{data}'.replace(' ', '%20')
 
     @try_exc_regular
-    def _run_ws_forever(self):
+    def _run_ws_forever(self, loop):
         while True:
             self._loop.run_until_complete(self._run_ws_loop(self.update_orders,
                                                             self.update_orderbook,
                                                             self.update_balances,
-                                                            self.update_orderbook_snapshot))
+                                                            self.update_orderbook_snapshot,
+                                                            loop))
 
     @try_exc_regular
     def run_updater(self):
@@ -337,28 +339,35 @@ class WhiteBitClient(BaseClient):
         return self.balance['total']
 
     @try_exc_async
-    async def _run_ws_loop(self, update_orders, update_orderbook, update_balances, update_orderbook_snapshot):
+    async def _run_ws_loop(self, update_orders, update_orderbook, update_balances, update_orderbook_snapshot, loop):
         async with aiohttp.ClientSession() as session:
             async with session.ws_connect(self.PUBLIC_WS_ENDPOINT) as ws:
                 self._connected.set()
                 self._ws = ws
                 if self.state == 'Bot':
-                    await self._loop.create_task(self.subscribe_privates())
+                    await loop.create_task(self.subscribe_privates())
                 for symbol in self.markets_list:
                     if market := self.markets.get(symbol):
-                        await self._loop.create_task(self.subscribe_orderbooks(market))
+                        await loop.create_task(self.subscribe_orderbooks(market))
                 async for msg in ws:
                     data = json.loads(msg.data)
                     if data.get('method') == 'depth_update':
                         if data['params'][0]:
-                            self._loop.create_task(update_orderbook_snapshot(data))
+                            loop.create_task(update_orderbook_snapshot(data))
                         else:
-                            self._loop.create_task(update_orderbook(data))
+                            loop.create_task(update_orderbook(data))
                     elif data.get('method') == 'balanceMargin_update':
-                        self._loop.create_task(update_balances(data))
+                        loop.create_task(update_balances(data))
+                        loop.create_task(self.ping_websocket(ws))
                     elif data.get('method') in ['ordersExecuted_update', 'ordersPending_update']:
-                        self._loop.create_task(update_orders(data))
+                        loop.create_task(update_orders(data))
+                        loop.create_task(self.ping_websocket(ws))
                 await ws.close()
+
+    @try_exc_async
+    async def ping_websocket(self, ws):
+        await ws.ping()
+        # print(f'PING SENT: {datetime.utcnow()}')
 
     @try_exc_async
     async def update_balances(self, data):
@@ -371,7 +380,8 @@ class WhiteBitClient(BaseClient):
 
     @try_exc_async
     async def update_orders(self, data):
-        print(f'ORDERS UPDATE {self.EXCHANGE_NAME}', data)
+        print(f'ORDERS UPDATE {self.EXCHANGE_NAME} {datetime.utcnow()}', data)
+        print()
         status_id = 0
         for order in data['params']:
             if isinstance(order, int):
@@ -379,7 +389,17 @@ class WhiteBitClient(BaseClient):
                 continue
             if order['deal_stock'] != '0':
                 factual_price = float(order['deal_money']) / float(order['deal_stock'])
-                self.get_position()
+                if 'maker' in order.get('client_order_id', ''):
+                    own_ts = time.time()
+                    deal = {'side': 'sell' if order['side'] == 2 else 'buy',
+                            'size': float(order['deal_stock']),
+                            'coin': order['market'].split('_')[0],
+                            'price': factual_price,
+                            'timestamp': order['mtime'],
+                            'ts_ms': own_ts}
+                    loop = asyncio.get_event_loop()
+                    loop.create_task(self.multibot.hedge_maker_position(deal))
+                # self.get_position()
             else:
                 factual_price = 0
             result = {'exchange_order_id': order['id'],
