@@ -544,10 +544,11 @@ class WhiteBitClient(BaseClient):
             try:
                 response = await resp.json()
             except:
-                response = await resp.text
-            print(f"{self.EXCHANGE_NAME} ORDER CREATE RESPONSE: {response}")
-            if not response.get('timestamp'):
+                response = resp.text
                 print(f"{self.EXCHANGE_NAME} ORDER CREATE FAILURE\nBODY: {body}")
+                print(response)
+                return
+            print(f"{self.EXCHANGE_NAME} ORDER CREATE RESPONSE: {response}")
             print(f"{self.EXCHANGE_NAME} ORDER CREATE PING: {response['timestamp'] - time_start}")
             self.update_order_after_deal(response)
             status = self.get_order_response_status(response)
