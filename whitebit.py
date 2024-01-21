@@ -99,7 +99,7 @@ class WhiteBitClient(BaseClient):
                         size = task[1]['size']
                         client_id = task[1]['client_id']
                         side = self.multibot.open_orders[market.split('_')[0] + '-' + self.EXCHANGE_NAME][1]['side']
-                        loop.create_task(self.create_fast_order(price, size, side, market, client_id))
+                        loop.create_task(self.create_fast_order(price, size, side, market, client_id, amend=True))
                     self.async_tasks.remove(task)
                 ts_ms = time.time()
                 if ts_ms - self.last_keep_alive > 5:
@@ -528,14 +528,14 @@ class WhiteBitClient(BaseClient):
                     'status': status}
 
     @try_exc_async
-    async def create_fast_order(self, price, sz, side, market, client_id=None):
+    async def create_fast_order(self, price, sz, side, market, client_id=None, amend=False):
         time_start = time.time()
         path = "/api/v4/order/collateral/limit"
         body = {"market": market,
                 "side": side,
                 "amount": sz,
                 "price": price}
-        if client_id:
+        if client_id and not amend:
             body.update({'clientOrderId': client_id})
         body = self.get_auth_for_request(body, path)
         path += self._create_uri(body)
@@ -558,6 +558,8 @@ class WhiteBitClient(BaseClient):
                          'create_order_time': response['timestamp'] - time_start}
             if response.get("clientOrderId"):
                 self.responses.update({response["clientOrderId"]: order_res})
+            elif amend:
+                self.responses.update({client_id: order_res})
             else:
                 self.responses.update({response['orderId']: order_res})
             self.last_keep_alive = order_res['timestamp']
