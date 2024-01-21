@@ -109,7 +109,8 @@ class BtseClient(BaseClient):
                         size = task[1]['size']
                         order_id = task[1]['order_id']
                         market = task[1]['market']
-                        loop.create_task(self.amend_order(price, size, order_id, market))
+                        old_order_size = task[1]['old_order']['size']
+                        loop.create_task(self.amend_order(price, size, order_id, market, old_order_size))
                     self.async_tasks.remove(task)
                 ts_ms = time.time()
                 if ts_ms - self.last_keep_alive > 5:
@@ -286,13 +287,14 @@ class BtseClient(BaseClient):
         return price, amount
 
     @try_exc_async
-    async def amend_order(self, price, sz, order_id, market):
+    async def amend_order(self, price, sz, order_id, market, old_order_size):
         time_start = time.time()
         path = '/api/v2.1/order'
+        type = 'PRICE' if old_order_size == sz else 'ALL'
         contract_value = self.instruments[market]['contract_value']
         body = {"symbol": market,
                 "orderID": order_id,
-                "type": "ALL",
+                "type": type,
                 "orderPrice": price,
                 "orderSize": int(sz / contract_value)}
         self.get_private_headers(path, body)
@@ -352,7 +354,7 @@ class BtseClient(BaseClient):
                          'timestamp': response[0]['timestamp'] / 1000 if response[0].get('timestamp') else time.time(),
                          'status': status,
                          'api_response': response[0],
-                         'size': response[0]['fillSize'],
+                         'size': response[0]['fillSize'] * self.instruments[market]['contract_value'],
                          'price': response[0]['avgFillPrice'],
                          'time_order_sent': time_start,
                          'create_order_time': response[0]['timestamp'] / 1000 - time_start}
