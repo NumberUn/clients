@@ -383,6 +383,8 @@ class WhiteBitClient(BaseClient):
     async def update_orders(self, data):
         print(f'ORDERS UPDATE {self.EXCHANGE_NAME} {datetime.utcnow()}', data)
         print()
+        loop = asyncio.get_event_loop()
+        loop.create_task(self.multibot.update_all_av_balances())
         status_id = 0
         for order in data['params']:
             if isinstance(order, int):
@@ -398,7 +400,6 @@ class WhiteBitClient(BaseClient):
                             'price': factual_price,
                             'timestamp': order['mtime'],
                             'ts_ms': own_ts}
-                    loop = asyncio.get_event_loop()
                     loop.create_task(self.multibot.hedge_maker_position(deal))
                 # self.get_position()
             else:

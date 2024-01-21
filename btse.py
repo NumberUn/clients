@@ -533,6 +533,8 @@ class BtseClient(BaseClient):
     @try_exc_async
     async def upd_fills(self, data):
         print(f"GOT FILL {datetime.utcnow()}")
+        loop = asyncio.get_event_loop()
+        loop.create_task(self.multibot.update_all_av_balances())
         for fill in data['data']:
             order_id = fill['orderId']
             size = float(fill['size']) * self.instruments[fill['symbol']]['contract_value']
@@ -544,7 +546,6 @@ class BtseClient(BaseClient):
                         'price': float(fill['price']),
                         'timestamp': fill['timestamp'] / 1000,
                         'ts_ms': own_ts}
-                loop = asyncio.get_event_loop()
                 loop.create_task(self.multibot.hedge_maker_position(deal))
             size_usd = size * float(fill['price'])
             if order := self.orders.get(order_id):
