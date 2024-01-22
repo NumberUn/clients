@@ -91,7 +91,7 @@ class WhiteBitClient(BaseClient):
                         client_id = task[1].get('client_id')
                         loop.create_task(self.create_fast_order(price, size, side, market, client_id))
                     elif task[0] == 'cancel_order':
-                        loop.create_task(self.cancel_all_orders(task[1]['market']))
+                        loop.create_task(self.cancel_order(task[1]['market'], task[1]['order_id']))
                     elif task[0] == 'amend_order':
                         market = task[1]['market']
                         loop.create_task(self.cancel_order(market, task[1]['order_id']))
@@ -135,16 +135,13 @@ class WhiteBitClient(BaseClient):
         res = self.session.post(url=self.BASE_URL + path, json=params)
         return res.json()
 
-    @try_exc_async
-    async def cancel_all_orders(self, market=None):
+    @try_exc_regular
+    def cancel_all_orders(self):
         path = '/api/v4/order/cancel/all'
         params = self.get_auth_for_request({}, path)
-        if market:
-            params.update({'market': market,
-                           'type': ['Futures']})
-        async with self.async_session.post(url=self.BASE_URL + path, json=params, headers=self.session.headers) as res:
-            print(res.text)
-            self.multibot.open_orders.pop(market.split('_')[0] + '-' + self.EXCHANGE_NAME)
+        path += self._create_uri(params)
+        res = self.session.post(url=self.BASE_URL + path, json=params)
+        return res.json()
 
     @try_exc_async
     async def cancel_order(self, symbol: str, order_id: int):
@@ -168,7 +165,7 @@ class WhiteBitClient(BaseClient):
             except:
                 print(resp.text)
                 await asyncio.sleep(1)
-                await self.cancel_all_orders(symbol)
+                self.cancel_all_orders()
     # example = {'orderId': 422806159063, 'clientOrderId': 'maker-WHITEBIT-XRP-1003947', 'market': 'XRP_PERP',
     #            'side': 'buy', 'type': 'margin limit', 'timestamp': 1705924757.295865, 'dealMoney': '0',
     #            'dealStock': '0', 'amount': '110', 'takerFee': '0.00035', 'makerFee': '0.0001', 'left': '110',
@@ -562,6 +559,7 @@ class WhiteBitClient(BaseClient):
             except:
                 print(f"{self.EXCHANGE_NAME} ORDER CREATE FAILURE\nBODY: {body}\nRESP: {resp.text}")
                 return
+
             self.update_order_after_deal(response)
             price = float(response['dealMoney']) / float(response['dealStock']) if response['dealStock'] != '0' else 0
             order_res = {'exchange_name': self.EXCHANGE_NAME,
@@ -810,3 +808,4 @@ if __name__ == '__main__':
 
     while True:
         time.sleep(1)
+        asyncio.run(test_order())
