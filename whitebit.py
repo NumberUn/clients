@@ -550,6 +550,8 @@ class WhiteBitClient(BaseClient):
             except:
                 response = resp.text
                 print(f"{self.EXCHANGE_NAME} ORDER CREATE FAILURE\nBODY: {body}")
+                self.multibot.telegram.send_message(f"ALERT! MAKER DEAL DIDN'T PLACED\n{body}\nResp:{response}",
+                                                    self.multibot.TG_Groups.MainGroup)
                 print(response)
                 return
             print(f"{self.EXCHANGE_NAME} ORDER CREATE RESPONSE: {response}")
