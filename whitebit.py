@@ -767,7 +767,7 @@ class WhiteBitClient(BaseClient):
             return snap
         if snap['top_ask'][0] <= snap['top_bid'][0]:
             return {}
-        ob = {'timestamp': self.orderbook[symbol]['timestamp'],
+        ob = {'timestamp': snap['timestamp'],
               'asks': sorted([[float(x), float(y)] for x, y in snap['asks'].copy().items()])[:self.ob_len],
               'bids': sorted([[float(x), float(y)] for x, y in snap['bids'].copy().items()])[::-1][:self.ob_len],
               'top_ask_timestamp': snap['top_ask_timestamp'],

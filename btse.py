@@ -517,13 +517,17 @@ class BtseClient(BaseClient):
         path += '?' + "&".join([f"{key}={params[key]}" for key in sorted(params)])
         async with self.async_session.delete(url=self.BASE_URL + path, headers=self.session.headers, json=params) as resp:
             response = await resp.json()
-            print(f'ORDER CANCELED {self.EXCHANGE_NAME}', response)
             if order_id in self.multibot.deleted_orders:
                 self.multibot.deleted_orders.remove(order_id)
-            if 'maker' in response[0].get('clOrderID', '') and self.EXCHANGE_NAME == self.multibot.mm_exchange:
-                coin = symbol.split('PFC')[0]
-                if self.multibot.open_orders.get(coin + '-' + self.EXCHANGE_NAME)[0] == response[0]['orderID']:
-                    self.multibot.open_orders.pop(coin + '-' + self.EXCHANGE_NAME)
+            if isinstance(response, list):
+                print(f'ORDER CANCELED {self.EXCHANGE_NAME}', response)
+                if 'maker' in response[0].get('clOrderID', '') and self.EXCHANGE_NAME == self.multibot.mm_exchange:
+                    coin = symbol.split('PFC')[0]
+                    if self.multibot.open_orders.get(coin + '-' + self.EXCHANGE_NAME)[0] == response[0]['orderID']:
+                        self.multibot.open_orders.pop(coin + '-' + self.EXCHANGE_NAME)
+            else:
+                print(f'ORDER HAD CANCELED BEFORE {self.EXCHANGE_NAME}', response)
+
     # example = [{'status': 6, 'symbol': 'TRBPFC', 'orderType': 76, 'price': 118.35, 'side': 'BUY', 'size': 2,
     #       'orderID': 'cfcbcd08-bda4-487a-a261-192e24c31db4', 'timestamp': 1705925467489, 'triggerPrice': 0,
     #       'trigger': False, 'deviation': 100, 'stealth': 100, 'message': '', 'avgFillPrice': 0, 'fillSize': 0,
@@ -735,12 +739,12 @@ class BtseClient(BaseClient):
             print(f"ALARM! ORDERBOOK ERROR {self.EXCHANGE_NAME}: {snap}")
             return {}
         c_v = self.instruments[symbol]['contract_value']
-        ob = {'timestamp': self.orderbook[symbol]['timestamp'],
-              'asks': sorted([[float(x), y] for x, y in snap['asks'].items()])[:self.ob_len],
-              'bids': sorted([[float(x), y] for x, y in snap['bids'].items()])[::-1][:self.ob_len],
-              'top_ask_timestamp': self.orderbook[symbol]['top_ask_timestamp'],
-              'top_bid_timestamp': self.orderbook[symbol]['top_bid_timestamp'],
-              'ts_ms': self.orderbook[symbol]['ts_ms']}
+        ob = {'timestamp': snap['timestamp'],
+              'asks': sorted([[float(x), float(y)] for x, y in snap['asks'].copy().items()])[:self.ob_len],
+              'bids': sorted([[float(x), float(y)] for x, y in snap['bids'].copy().items()])[::-1][:self.ob_len],
+              'top_ask_timestamp': snap['top_ask_timestamp'],
+              'top_bid_timestamp': snap['top_bid_timestamp'],
+              'ts_ms': snap['ts_ms']}
         ob['asks'] = [[x, float(y) * c_v] for x, y in ob['asks']]
         ob['bids'] = [[x, float(y) * c_v] for x, y in ob['bids']]
         return ob
