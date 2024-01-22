@@ -293,11 +293,13 @@ class BtseClient(BaseClient):
         path = '/api/v2.1/order'
         body = {"symbol": market,
                 "orderID": order_id,
-                "type": 'PRICE' if old_order_size == sz else 'ALL',
-                "orderPrice": price}
+                "type": 'PRICE' if old_order_size == sz else 'ALL'}
         if body['type'] == 'ALL':
             contract_value = self.instruments[market]['contract_value']
-            body.update({"orderSize": int(sz / contract_value)})
+            body.update({"orderSize": int(sz / contract_value),
+                         "orderPrice": price})
+        else:
+            body.update({"value": price})
         self.get_private_headers(path, body)
         async with self.async_session.put(url=self.BASE_URL + path, headers=self.session.headers, json=body) as resp:
             response = await resp.json()
