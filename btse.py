@@ -109,7 +109,7 @@ class BtseClient(BaseClient):
                         size = task[1]['size']
                         order_id = task[1]['order_id']
                         market = task[1]['market']
-                        old_order_size = task[1]['old_order']['size']
+                        old_order_size = task[1]['old_order_size']
                         loop.create_task(self.amend_order(price, size, order_id, market, old_order_size))
                     self.async_tasks.remove(task)
                 ts_ms = time.time()
@@ -320,7 +320,7 @@ class BtseClient(BaseClient):
                 self.responses.update({response[0]["clOrderID"]: order_res})
             else:
                 self.responses.update({response[0]['orderId']: order_res})
-            self.last_keep_alive = order_res['timestamp']
+            # self.last_keep_alive = order_res['timestamp']
             # res_example = [{'status': 2, 'symbol': 'BTCPFC', 'orderType': 76, 'price': 43490, 'side': 'BUY', 'size': 1,
             #             'orderID': '13a82711-f6e2-4228-bf9f-3755cd8d7885', 'timestamp': 1703535543583,
             #             'triggerPrice': 0, 'trigger': False, 'deviation': 100, 'stealth': 100, 'message': '',
@@ -362,7 +362,6 @@ class BtseClient(BaseClient):
                 self.responses.update({response[0]["clOrderID"]: order_res})
             else:
                 self.responses.update({response[0]['orderId']: order_res})
-            self.last_keep_alive = order_res['timestamp']
             # res_example = [{'status': 2, 'symbol': 'BTCPFC', 'orderType': 76, 'price': 43490, 'side': 'BUY', 'size': 1,
             #             'orderID': '13a82711-f6e2-4228-bf9f-3755cd8d7885', 'timestamp': 1703535543583,
             #             'triggerPrice': 0, 'trigger': False, 'deviation': 100, 'stealth': 100, 'message': '',

@@ -107,10 +107,6 @@ class WhiteBitClient(BaseClient):
                     loop.create_task(self.get_position_async())
                 await asyncio.sleep(0.0001)
 
-    @try_exc_async
-    async def amend_order(self, price, sz, order_id, market):
-        pass
-
     @try_exc_regular
     def get_markets(self):
         path = "/api/v4/public/markets"
@@ -150,7 +146,7 @@ class WhiteBitClient(BaseClient):
         return res.json()
 
     @try_exc_async
-    async def cancel_order(self, symbol: str, order_id: int, client_order_id: str = None):
+    async def cancel_order(self, symbol: str, order_id: int):
         path = '/api/v4/order/cancel'
         params = {"market": symbol,
                   "orderId": order_id}
@@ -169,6 +165,7 @@ class WhiteBitClient(BaseClient):
                     if self.multibot.open_orders.get(coin + '-' + self.EXCHANGE_NAME)[0] == response['orderId']:
                         self.multibot.open_orders.pop(coin + '-' + self.EXCHANGE_NAME)
             except:
+                print(resp.text)
                 await asyncio.sleep(1)
                 await self.cancel_order(symbol, order_id)
     # example = {'orderId': 422806159063, 'clientOrderId': 'maker-WHITEBIT-XRP-1003947', 'market': 'XRP_PERP',
@@ -560,23 +557,16 @@ class WhiteBitClient(BaseClient):
             try:
                 response = await resp.json()
             except:
-                response = resp.text
-                print(f"{self.EXCHANGE_NAME} ORDER CREATE FAILURE\nBODY: {body}")
-                # self.cancel_all_orders(market=market)
-                # self.multibot.telegram.send_message(f"ALERT! MAKER DEAL DIDN'T PLACED\n{body}\nResp:{response}",
-                #                                     self.multibot.TG_Groups.MainGroup)
-                print(response)
+                print(f"{self.EXCHANGE_NAME} ORDER CREATE FAILURE\nBODY: {body}\nRESP: {resp.text}")
                 return
             print(f"{self.EXCHANGE_NAME} ORDER CREATE RESPONSE: {response}")
             print(f"{self.EXCHANGE_NAME} ORDER CREATE PING: {response['timestamp'] - time_start}")
             self.update_order_after_deal(response)
-            status = self.get_order_response_status(response)
-            self.LAST_ORDER_ID = response.get('orderId', 'default')
             price = float(response['dealMoney']) / float(response['dealStock']) if response['dealStock'] != '0' else 0
             order_res = {'exchange_name': self.EXCHANGE_NAME,
                          'exchange_order_id': response.get('orderId'),
                          'timestamp': response.get('timestamp', time.time()),
-                         'status': status,
+                         'status': self.get_order_response_status(response),
                          'api_response': response,
                          'size': float(response['dealStock']),
                          'price': price,
@@ -588,7 +578,6 @@ class WhiteBitClient(BaseClient):
                 self.responses.update({client_id: order_res})
             else:
                 self.responses.update({response['orderId']: order_res})
-            self.last_keep_alive = order_res['timestamp']
             # example_executed = {'orderId': 395248275015, 'clientOrderId': '', 'market': 'BTC_PERP', 'side': 'buy',
             # 'type': 'margin limit',
             #  'timestamp': 1703664697.619855, 'dealMoney': '42.509', 'dealStock': '0.001', 'amount': '0.001',
