@@ -494,9 +494,8 @@ class BtseClient(BaseClient):
                         loop.create_task(upd_positions(data))
                         loop.create_task(self.ping_websocket(ws))
                     elif data.get('topic') == 'fills':
-                        print(f'FILLS {self.EXCHANGE_NAME} WS MESSAGE {datetime.utcnow()}:', data)
                         loop.create_task(upd_fills(data))
-                        loop.create_task(self.ping_websocket(ws))
+                        print(f'FILLS {self.EXCHANGE_NAME} WS MESSAGE {datetime.utcnow()}:', data)
                     else:
                         print(data)
             await ws.close()
@@ -710,9 +709,14 @@ class BtseClient(BaseClient):
                                   'ts_ms': time.time()}
 
     @try_exc_regular
-    def get_orderbook(self, symbol) -> dict:
+    def get_orderbook(self, symbol, necessary=False) -> dict:
         if not self.orderbook.get(symbol):
             return {}
+        if necessary:
+            orderbook = None
+            while not orderbook:
+                orderbook = self.get_orderbook(symbol)
+            return orderbook
         snap = self.orderbook[symbol].copy()
         if isinstance(snap['asks'], list):
             return snap

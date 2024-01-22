@@ -148,7 +148,7 @@ class WhiteBitClient(BaseClient):
         return res.json()
 
     @try_exc_async
-    async def cancel_order(self, symbol: str, order_id: int):
+    async def cancel_order(self, symbol: str, order_id: int, client_order_id: str = None):
         path = '/api/v4/order/cancel'
         params = {"market": symbol,
                   "orderId": order_id}
@@ -550,8 +550,8 @@ class WhiteBitClient(BaseClient):
             except:
                 response = resp.text
                 print(f"{self.EXCHANGE_NAME} ORDER CREATE FAILURE\nBODY: {body}")
-                self.multibot.telegram.send_message(f"ALERT! MAKER DEAL DIDN'T PLACED\n{body}\nResp:{response}",
-                                                    self.multibot.TG_Groups.MainGroup)
+                # self.multibot.telegram.send_message(f"ALERT! MAKER DEAL DIDN'T PLACED\n{body}\nResp:{response}",
+                #                                     self.multibot.TG_Groups.MainGroup)
                 print(response)
                 return
             print(f"{self.EXCHANGE_NAME} ORDER CREATE RESPONSE: {response}")
@@ -752,9 +752,14 @@ class WhiteBitClient(BaseClient):
                                       'ts_ms': time.time()}
 
     @try_exc_regular
-    def get_orderbook(self, symbol) -> dict:
+    def get_orderbook(self, symbol, necessary=False) -> dict:
         if not self.orderbook.get(symbol):
             return {}
+        if necessary:
+            orderbook = None
+            while not orderbook:
+                orderbook = self.get_orderbook(symbol)
+            return orderbook
         snap = self.orderbook[symbol].copy()
         if isinstance(snap['asks'], list):
             return snap
