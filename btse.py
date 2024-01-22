@@ -291,13 +291,13 @@ class BtseClient(BaseClient):
     async def amend_order(self, price, sz, order_id, market, old_order_size):
         time_start = time.time()
         path = '/api/v2.1/order'
-        type = 'PRICE' if old_order_size == sz else 'ALL'
-        contract_value = self.instruments[market]['contract_value']
         body = {"symbol": market,
                 "orderID": order_id,
-                "type": type,
-                "orderPrice": price,
-                "orderSize": int(sz / contract_value)}
+                "type": 'PRICE' if old_order_size == sz else 'ALL',
+                "orderPrice": price}
+        if body['type'] == 'ALL':
+            contract_value = self.instruments[market]['contract_value']
+            body.update({"orderSize": int(sz / contract_value)})
         self.get_private_headers(path, body)
         async with self.async_session.put(url=self.BASE_URL + path, headers=self.session.headers, json=body) as resp:
             response = await resp.json()
