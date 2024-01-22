@@ -690,8 +690,12 @@ class WhiteBitClient(BaseClient):
             new_ob = self.cut_extra_orders_from_ob(symbol, data, new_ob)
         self.orderbook[symbol] = new_ob
         if self.market_finder and flag_market:
-            coin = symbol.split('_')[0]
-            await self.market_finder.count_one_coin(coin, self.EXCHANGE_NAME)
+            if self.multibot.mm_exchange == self.EXCHANGE_NAME:
+                if ts_ms - ts_ob < 0.035:
+                    await self.market_finder.count_one_coin(symbol.split('_')[0], self.EXCHANGE_NAME)
+            else:
+                if ts_ms - ts_ob < 0.120:
+                    await self.market_finder.count_one_coin(symbol.split('_')[0], self.EXCHANGE_NAME)
         if flag and ts_ms - ts_ob < 0.035 and self.finder:
             coin = symbol.split('_')[0]
             if self.state == 'Bot':
