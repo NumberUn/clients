@@ -140,9 +140,11 @@ class WhiteBitClient(BaseClient):
         return res.json()
 
     @try_exc_regular
-    def cancel_all_orders(self):
+    def cancel_all_orders(self, market=None):
         path = '/api/v4/order/cancel/all'
         params = self.get_auth_for_request({}, path)
+        if market:
+            params.update({'market': market})
         path += self._create_uri(params)
         res = self.session.post(url=self.BASE_URL + path, json=params)
         return res.json()
@@ -550,6 +552,7 @@ class WhiteBitClient(BaseClient):
             except:
                 response = resp.text
                 print(f"{self.EXCHANGE_NAME} ORDER CREATE FAILURE\nBODY: {body}")
+                self.cancel_all_orders(market=market)
                 # self.multibot.telegram.send_message(f"ALERT! MAKER DEAL DIDN'T PLACED\n{body}\nResp:{response}",
                 #                                     self.multibot.TG_Groups.MainGroup)
                 print(response)
