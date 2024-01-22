@@ -73,6 +73,7 @@ class BtseClient(BaseClient):
         self.async_tasks = []
         self.responses = {}
         self.deleted_orders = []
+        self.cancel_all_orders()
 
     @try_exc_regular
     def deals_thread_func(self, loop):
