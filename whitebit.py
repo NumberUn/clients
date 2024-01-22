@@ -140,7 +140,8 @@ class WhiteBitClient(BaseClient):
         path = '/api/v4/order/cancel/all'
         params = self.get_auth_for_request({}, path)
         if market:
-            params.update({'market': market})
+            params.update({'market': market,
+                           'type': ['Futures']})
         path += self._create_uri(params)
         async with self.async_session.post(url=self.BASE_URL + path, json=params, headers=self.session.headers) as res:
             print(res.text)
