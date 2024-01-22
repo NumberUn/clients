@@ -160,12 +160,21 @@ class WhiteBitClient(BaseClient):
         params = self.get_auth_for_request(params, path)
         async with self.async_session.post(url=self.BASE_URL + path, headers=self.session.headers, json=params) as resp:
             try:
-                print(f'ORDER CANCELED {self.EXCHANGE_NAME}', await resp.json())
+                response = await resp.json()
+                print(f'ORDER CANCELED {self.EXCHANGE_NAME}', response)
                 if order_id in self.multibot.deleted_orders:
                     self.multibot.deleted_orders.remove(order_id)
+                if 'maker' in response.get('clientOrderId', '') and self.EXCHANGE_NAME == self.multibot.mm_exchange:
+                    coin = symbol.split('_')[0]
+                    if self.multibot.open_orders.get(coin + '-' + self.EXCHANGE_NAME)[0] == response['orderId']:
+                        self.multibot.open_orders.pop(coin + '-' + self.EXCHANGE_NAME)
             except:
                 await asyncio.sleep(1)
                 await self.cancel_order(symbol, order_id)
+    # example = {'orderId': 422806159063, 'clientOrderId': 'maker-WHITEBIT-XRP-1003947', 'market': 'XRP_PERP',
+    #            'side': 'buy', 'type': 'margin limit', 'timestamp': 1705924757.295865, 'dealMoney': '0',
+    #            'dealStock': '0', 'amount': '110', 'takerFee': '0.00035', 'makerFee': '0.0001', 'left': '110',
+    #            'dealFee': '0', 'ioc': False, 'postOnly': False, 'price': '0.531'}
 
     def get_auth_for_request(self, params, uri):
         params['request'] = uri
@@ -250,6 +259,7 @@ class WhiteBitClient(BaseClient):
         self.balance = {'timestamp': datetime.utcnow().timestamp(),
                         'total': float(response['USDT']),
                         'free': float(response['USDT'])}
+
     # example = {'ADA': '0', 'APE': '0', 'ARB': '0', 'ATOM': '0', 'AVAX': '0', 'BCH': '0', 'BTC': '0', 'DOGE': '0',
     #            'DOT': '0', 'EOS': '0', 'ETC': '0', 'ETH': '0', 'LINK': '0', 'LTC': '0', 'MATIC': '0', 'NEAR': '0',
     #            'OP': '0', 'SHIB': '0', 'SOL': '0', 'TRX': '0', 'UNI': '0', 'USDC': '0', 'USDT': '50', 'WBT': '0',
@@ -552,7 +562,7 @@ class WhiteBitClient(BaseClient):
             except:
                 response = resp.text
                 print(f"{self.EXCHANGE_NAME} ORDER CREATE FAILURE\nBODY: {body}")
-                self.cancel_all_orders(market=market)
+                # self.cancel_all_orders(market=market)
                 # self.multibot.telegram.send_message(f"ALERT! MAKER DEAL DIDN'T PLACED\n{body}\nResp:{response}",
                 #                                     self.multibot.TG_Groups.MainGroup)
                 print(response)
@@ -804,9 +814,9 @@ if __name__ == '__main__':
             time.sleep(1)
             client.cancel_all_orders()
 
+
     client.markets_list = list(client.markets.keys())
     client.run_updater()
 
     while True:
         time.sleep(1)
-

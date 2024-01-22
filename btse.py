@@ -516,9 +516,20 @@ class BtseClient(BaseClient):
         self.get_private_headers(path, params)
         path += '?' + "&".join([f"{key}={params[key]}" for key in sorted(params)])
         async with self.async_session.delete(url=self.BASE_URL + path, headers=self.session.headers, json=params) as resp:
+            response = await resp.json()
+            print(f'ORDER CANCELED {self.EXCHANGE_NAME}', response)
             if order_id in self.multibot.deleted_orders:
                 self.multibot.deleted_orders.remove(order_id)
-            print(f'ORDER CANCELED {self.EXCHANGE_NAME}', await resp.json())
+            if 'maker' in response[0].get('clOrderID', '') and self.EXCHANGE_NAME == self.multibot.mm_exchange:
+                coin = symbol.split('PFC')[0]
+                if self.multibot.open_orders.get(coin + '-' + self.EXCHANGE_NAME)[0] == response[0]['orderID']:
+                    self.multibot.open_orders.pop(coin + '-' + self.EXCHANGE_NAME)
+    # example = [{'status': 6, 'symbol': 'TRBPFC', 'orderType': 76, 'price': 118.35, 'side': 'BUY', 'size': 2,
+    #       'orderID': 'cfcbcd08-bda4-487a-a261-192e24c31db4', 'timestamp': 1705925467489, 'triggerPrice': 0,
+    #       'trigger': False, 'deviation': 100, 'stealth': 100, 'message': '', 'avgFillPrice': 0, 'fillSize': 0,
+    #       'clOrderID': 'maker-BTSE-TRB-7089166', 'originalSize': 2, 'postOnly': False, 'remainingSize': 2,
+    #       'orderDetailType': None, 'positionMode': 'ONE_WAY', 'positionDirection': None, 'positionId': 'TRBPFC-USD',
+    #       'time_in_force': 'GTC'}]
 
     @try_exc_regular
     def get_order_status_by_fill(self, order_id, size):
