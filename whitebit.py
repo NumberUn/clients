@@ -142,7 +142,7 @@ class WhiteBitClient(BaseClient):
         if market:
             params.update({'market': market})
         path += self._create_uri(params)
-        with self.async_session.post(url=self.BASE_URL + path, json=params) as res:
+        async with self.async_session.post(url=self.BASE_URL + path, json=params) as res:
             await res.json()
             self.multibot.open_orders.pop(market.split('_')[0] + '-' + self.EXCHANGE_NAME)
 
