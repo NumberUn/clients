@@ -1,4 +1,6 @@
 import time
+import traceback
+
 import aiohttp
 import json
 import requests
@@ -350,10 +352,15 @@ class BtseClient(BaseClient):
         # print(f"{self.EXCHANGE_NAME} SENDING ORDER: {body}")
         self.get_private_headers(path, body)
         async with self.async_session.post(url=self.BASE_URL + path, headers=self.session.headers, json=body) as resp:
-            response = await resp.json()
-            # print(f"{self.EXCHANGE_NAME} ORDER CREATE RESPONSE: {response}")
-            if self.EXCHANGE_NAME != self.multibot.mm_exchange:
-                print(f"{self.EXCHANGE_NAME} ORDER CREATE PING: {response[0]['timestamp'] / 1000 - time_start}")
+            try:
+                response = await resp.json()
+                if self.EXCHANGE_NAME != self.multibot.mm_exchange:
+                    print(f"{self.EXCHANGE_NAME} ORDER CREATE RESPONSE: {response}")
+                    print(f"{self.EXCHANGE_NAME} ORDER CREATE PING: {response[0]['timestamp'] / 1000 - time_start}")
+            except Exception:
+                if self.EXCHANGE_NAME != self.multibot.mm_exchange:
+                    traceback.print_exc()
+                    print(resp)
             status = self.get_order_response_status(response)
             self.LAST_ORDER_ID = response[0].get('orderID', 'default')
             self.orig_sizes.update({self.LAST_ORDER_ID: response[0].get('originalSize')})
