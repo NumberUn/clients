@@ -312,9 +312,9 @@ class BtseClient(BaseClient):
                 return
             # print(f"{self.EXCHANGE_NAME} ORDER AMEND RESPONSE: {response}")
             if isinstance(response, dict):
-                print(f"ERROR BODY: {body}. Response: {response}")
-                print(f"old order size: {old_order_size}")
-                print(f"new order size: {sz}")
+                # print(f"ERROR BODY: {body}. Response: {response}")
+                # print(f"old order size: {old_order_size}")
+                # print(f"new order size: {sz}")
                 await self.cancel_order(market, order_id)
                 return
             # print(f"{self.EXCHANGE_NAME} ORDER AMEND PING: {response[0]['timestamp'] / 1000 - time_start}")
