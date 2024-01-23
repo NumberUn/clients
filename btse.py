@@ -563,7 +563,8 @@ class BtseClient(BaseClient):
                         'coin': fill['symbol'].split('PFC')[0],
                         'price': float(fill['price']),
                         'timestamp': fill['timestamp'] / 1000,
-                        'ts_ms': own_ts}
+                        'ts_ms': own_ts,
+                        'order_id': order_id}
                 loop.create_task(self.multibot.hedge_maker_position(deal))
             size_usd = size * float(fill['price'])
             if order := self.orders.get(order_id):
