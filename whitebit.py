@@ -150,7 +150,7 @@ class WhiteBitClient(BaseClient):
         async with self.async_session.post(url=self.BASE_URL + path, headers=self.session.headers, json=params) as resp:
             try:
                 response = await resp.json()
-                print(f'ORDER CANCELED {self.EXCHANGE_NAME}', response)
+                # print(f'ORDER CANCELED {self.EXCHANGE_NAME}', response)
                 if order_id in self.multibot.deleted_orders:
                     self.multibot.deleted_orders.remove(order_id)
                 if 'maker' in response.get('clientOrderId', '') and self.EXCHANGE_NAME == self.multibot.mm_exchange:
@@ -557,7 +557,7 @@ class WhiteBitClient(BaseClient):
         async with self.async_session.post(url=self.BASE_URL + path, headers=self.session.headers, json=body) as resp:
             try:
                 response = await resp.json()
-                print(f"{self.EXCHANGE_NAME} ORDER CREATE RESPONSE: {response}")
+                # print(f"{self.EXCHANGE_NAME} ORDER CREATE RESPONSE: {response}")
                 print(f"{self.EXCHANGE_NAME} ORDER CREATE PING: {response['timestamp'] - time_start}")
             except:
                 print(f"{self.EXCHANGE_NAME} ORDER CREATE FAILURE\nBODY: {body}\nRESP: {resp.text}")

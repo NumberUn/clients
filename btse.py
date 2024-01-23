@@ -304,7 +304,7 @@ class BtseClient(BaseClient):
         self.get_private_headers(path, body)
         async with self.async_session.put(url=self.BASE_URL + path, headers=self.session.headers, json=body) as resp:
             response = await resp.json()
-            print(f"{self.EXCHANGE_NAME} ORDER AMEND RESPONSE: {response}")
+            # print(f"{self.EXCHANGE_NAME} ORDER AMEND RESPONSE: {response}")
             if isinstance(response, dict):
                 print(f"ERROR BODY: {body}")
                 print(f"old order size: {old_order_size}")
@@ -351,7 +351,7 @@ class BtseClient(BaseClient):
         self.get_private_headers(path, body)
         async with self.async_session.post(url=self.BASE_URL + path, headers=self.session.headers, json=body) as resp:
             response = await resp.json()
-            print(f"{self.EXCHANGE_NAME} ORDER CREATE RESPONSE: {response}")
+            # print(f"{self.EXCHANGE_NAME} ORDER CREATE RESPONSE: {response}")
             print(f"{self.EXCHANGE_NAME} ORDER CREATE PING: {response[0]['timestamp'] / 1000 - time_start}")
             status = self.get_order_response_status(response)
             self.LAST_ORDER_ID = response[0].get('orderID', 'default')
@@ -529,7 +529,7 @@ class BtseClient(BaseClient):
             if order_id in self.multibot.deleted_orders:
                 self.multibot.deleted_orders.remove(order_id)
             if isinstance(response, list):
-                print(f'ORDER CANCELED {self.EXCHANGE_NAME}', response)
+                # print(f'ORDER CANCELED {self.EXCHANGE_NAME}', response)
                 if 'maker' in response[0].get('clOrderID', '') and self.EXCHANGE_NAME == self.multibot.mm_exchange:
                     coin = symbol.split('PFC')[0]
                     if self.multibot.open_orders.get(coin + '-' + self.EXCHANGE_NAME)[0] == response[0]['orderID']:
