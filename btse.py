@@ -306,12 +306,12 @@ class BtseClient(BaseClient):
             response = await resp.json()
             # print(f"{self.EXCHANGE_NAME} ORDER AMEND RESPONSE: {response}")
             if isinstance(response, dict):
-                print(f"ERROR BODY: {body}")
+                print(f"ERROR BODY: {body}. Response: {response}")
                 print(f"old order size: {old_order_size}")
                 print(f"new order size: {sz}")
                 await self.cancel_order(market, order_id)
                 return
-            print(f"{self.EXCHANGE_NAME} ORDER AMEND PING: {response[0]['timestamp'] / 1000 - time_start}")
+            # print(f"{self.EXCHANGE_NAME} ORDER AMEND PING: {response[0]['timestamp'] / 1000 - time_start}")
             status = self.get_order_response_status(response)
             self.LAST_ORDER_ID = response[0].get('orderID', 'default')
             self.orig_sizes.update({self.LAST_ORDER_ID: response[0].get('originalSize')})
