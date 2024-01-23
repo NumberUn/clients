@@ -744,9 +744,10 @@ class BtseClient(BaseClient):
             print(f"ALARM! ORDERBOOK ERROR {self.EXCHANGE_NAME}: {snap}")
             return {}
         c_v = self.instruments[symbol]['contract_value']
+
         ob = {'timestamp': snap['timestamp'],
-              'asks': sorted([[float(x), float(y)] for x, y in snap['asks'].copy().items()])[:self.ob_len],
-              'bids': sorted([[float(x), float(y)] for x, y in snap['bids'].copy().items()])[::-1][:self.ob_len],
+              'asks': sorted([[float(x), y] for x, y in snap['asks'].items()])[:self.ob_len],
+              'bids': sorted([[float(x), y] for x, y in snap['bids'].items()])[::-1][:self.ob_len],
               'top_ask_timestamp': snap['top_ask_timestamp'],
               'top_bid_timestamp': snap['top_bid_timestamp'],
               'ts_ms': snap['ts_ms']}
@@ -807,7 +808,7 @@ if __name__ == '__main__':
                         leverage=float(config['SETTINGS']['LEVERAGE']),
                         max_pos_part=int(config['SETTINGS']['PERCENT_PER_MARKET']),
                         markets_list=['ATOM'])
-
+    client.markets_list = list(client.markets.keys())
     client.run_updater()
     time.sleep(3)
     # ob = client.get_orderbook('MANAPFC')
@@ -816,7 +817,9 @@ if __name__ == '__main__':
     # client.order_loop.create_task(client.create_fast_order('MANAPFC', 'buy'))
     while True:
         time.sleep(1)
-        # print(client.get_orderbook('ATOMPFC'))
-        # print()
+        for symbol in client.markets.values():
+            print(client.get_orderbook(symbol))
+
+    # print()
 
 
