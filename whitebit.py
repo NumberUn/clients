@@ -1,4 +1,6 @@
 import time
+import traceback
+
 import aiohttp
 import json
 import requests
@@ -574,22 +576,26 @@ class WhiteBitClient(BaseClient):
                 print(f"{self.EXCHANGE_NAME} ORDER CREATE RESPONSE: {response}")
                 print(f"{self.EXCHANGE_NAME} ORDER CREATE PING: {response['timestamp'] - time_start}")
                 self.update_order_after_deal(response)
-            price = float(response['dealMoney']) / float(response['dealStock']) if response['dealStock'] != '0' else 0
-            order_res = {'exchange_name': self.EXCHANGE_NAME,
-                         'exchange_order_id': response.get('orderId'),
-                         'timestamp': response.get('timestamp', time.time()),
-                         'status': self.get_order_response_status(response),
-                         'api_response': response,
-                         'size': float(response['dealStock']),
-                         'price': price,
-                         'time_order_sent': time_start,
-                         'create_order_time': response['timestamp'] - time_start}
-            if response.get("clientOrderId"):
-                self.responses.update({response["clientOrderId"]: order_res})
-            elif amend:
-                self.responses.update({client_id: order_res})
-            else:
-                self.responses.update({response['orderId']: order_res})
+            try:
+                price = float(response['dealMoney']) / float(response['dealStock']) if response['dealStock'] != '0' else 0
+                order_res = {'exchange_name': self.EXCHANGE_NAME,
+                             'exchange_order_id': response.get('orderId'),
+                             'timestamp': response.get('timestamp', time.time()),
+                             'status': self.get_order_response_status(response),
+                             'api_response': response,
+                             'size': float(response['dealStock']),
+                             'price': price,
+                             'time_order_sent': time_start,
+                             'create_order_time': response['timestamp'] - time_start}
+                if response.get("clientOrderId"):
+                    self.responses.update({response["clientOrderId"]: order_res})
+                elif amend:
+                    self.responses.update({client_id: order_res})
+                else:
+                    self.responses.update({response['orderId']: order_res})
+            except Exception:
+                traceback.print_exc()
+                print(response)
             # example_executed = {'orderId': 395248275015, 'clientOrderId': '', 'market': 'BTC_PERP', 'side': 'buy',
             # 'type': 'margin limit',
             #  'timestamp': 1703664697.619855, 'dealMoney': '42.509', 'dealStock': '0.001', 'amount': '0.001',
