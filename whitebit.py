@@ -558,7 +558,8 @@ class WhiteBitClient(BaseClient):
             try:
                 response = await resp.json()
                 # print(f"{self.EXCHANGE_NAME} ORDER CREATE RESPONSE: {response}")
-                print(f"{self.EXCHANGE_NAME} ORDER CREATE PING: {response['timestamp'] - time_start}")
+                if self.EXCHANGE_NAME != self.multibot.mm_exchange:
+                    print(f"{self.EXCHANGE_NAME} ORDER CREATE PING: {response['timestamp'] - time_start}")
             except:
                 print(f"{self.EXCHANGE_NAME} ORDER CREATE FAILURE\nBODY: {body}\nRESP: {resp.text}")
                 return
