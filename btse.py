@@ -306,6 +306,8 @@ class BtseClient(BaseClient):
             print(f"{self.EXCHANGE_NAME} ORDER AMEND RESPONSE: {response}")
             if isinstance(response, dict):
                 print(f"ERROR BODY: {body}")
+                print(f"old order size: {old_order_size}")
+                print(f"new order size: {sz}")
                 return
             print(f"{self.EXCHANGE_NAME} ORDER AMEND PING: {response[0]['timestamp'] / 1000 - time_start}")
             status = self.get_order_response_status(response)
