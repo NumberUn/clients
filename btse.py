@@ -544,7 +544,7 @@ class BtseClient(BaseClient):
                 # print(f'ORDER CANCELED {self.EXCHANGE_NAME}', response)
                 if 'maker' in response[0].get('clOrderID', '') and self.EXCHANGE_NAME == self.multibot.mm_exchange:
                     coin = symbol.split('PFC')[0]
-                    if self.multibot.open_orders.get(coin + '-' + self.EXCHANGE_NAME)[0] == response[0]['orderID']:
+                    if self.multibot.open_orders.get(coin + '-' + self.EXCHANGE_NAME, [''])[0] == response[0]['orderID']:
                         self.multibot.open_orders.pop(coin + '-' + self.EXCHANGE_NAME)
             else:
                 print(f'ORDER HAD CANCELED BEFORE {self.EXCHANGE_NAME}', response)
@@ -763,8 +763,8 @@ class BtseClient(BaseClient):
         c_v = self.instruments[symbol]['contract_value']
 
         ob = {'timestamp': snap['timestamp'],
-              'asks': sorted([[float(x), y] for x, y in snap['asks'].items()])[:self.ob_len],
-              'bids': sorted([[float(x), y] for x, y in snap['bids'].items()])[::-1][:self.ob_len],
+              'asks': sorted([[float(x), y] for x, y in snap['asks'].copy().items()])[:self.ob_len],
+              'bids': sorted([[float(x), y] for x, y in snap['bids'].copy().items()])[::-1][:self.ob_len],
               'top_ask_timestamp': snap['top_ask_timestamp'],
               'top_bid_timestamp': snap['top_bid_timestamp'],
               'ts_ms': snap['ts_ms']}
