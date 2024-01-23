@@ -158,7 +158,7 @@ class WhiteBitClient(BaseClient):
                     if self.multibot.open_orders.get(coin + '-' + self.EXCHANGE_NAME)[0] == response['orderId']:
                         self.multibot.open_orders.pop(coin + '-' + self.EXCHANGE_NAME)
             except:
-                print(resp.text)
+                # print(resp.text)
                 await asyncio.sleep(1)
                 self.cancel_all_orders()
                 if self.EXCHANGE_NAME == self.multibot.mm_exchange:
@@ -370,6 +370,7 @@ class WhiteBitClient(BaseClient):
                         loop.create_task(self.ping_websocket(ws))
                     elif data.get('method') in ['ordersExecuted_update', 'ordersPending_update']:
                         loop.create_task(update_orders(data))
+                        print(data, datetime.utcnow())
                         loop.create_task(self.ping_websocket(ws))
                 await ws.close()
 
@@ -393,8 +394,6 @@ class WhiteBitClient(BaseClient):
 
     @try_exc_async
     async def update_orders(self, data):
-        print(f'ORDERS UPDATE {self.EXCHANGE_NAME} {datetime.utcnow()}', data)
-        print()
         loop = asyncio.get_event_loop()
         status_id = 0
         for order in data['params']:
@@ -426,7 +425,17 @@ class WhiteBitClient(BaseClient):
                       'ts_update': order['mtime']}
             self.orders.update({order['id']: result})
         loop.create_task(self.multibot.update_all_av_balances())
+        print(f'ORDERS UPDATE {self.EXCHANGE_NAME} {datetime.utcnow()}', data)
+        print()
 
+        orders_update = {'method': 'ordersExecuted_update',
+                         'params': [{'id': 424298129261, 'market': 'DOGE_PERP', 'type': 7,
+                                     'side': 2, 'post_only': False, 'ioc': False,
+                                     'ctime': 1706050928.250344, 'mtime': 1706050929.606137,
+                                     'price': '0.077767', 'amount': '800', 'taker_fee':
+                                         '0.00035', 'maker_fee': '0.0001', 'left': '0',
+                                     'deal_stock': '800', 'deal_money': '62.2136',
+                                     'deal_fee': '0.00622136', 'client_order_id': ''}], 'id': None}
         # example = {'method': 'ordersExecuted_update', 'params': [
         #     {'id': 395248275015, 'market': 'BTC_PERP', 'type': 7, 'side': 2, 'post_only': False, 'ioc': False,
         #      'ctime': 1703664697.619855, 'mtime': 1703664697.619855, 'price': '42511.7', 'amount': '0.001',
@@ -441,7 +450,7 @@ class WhiteBitClient(BaseClient):
         if not order:
             return OrderStatus.NOT_EXECUTED
         key = 'deal_stock' if order.get('deal_stock') else 'dealStock'
-        rest = float(order['left']) if order.get('left') else float(order['amount']) - float(order['dealStock'])
+        rest = float(order['left']) if order.get('left') else float(order['amount']) - float(order[key])
         if status_id:
             if status_id == 1 and order[key] == '0':
                 return OrderStatus.PROCESSING
@@ -557,15 +566,14 @@ class WhiteBitClient(BaseClient):
         async with self.async_session.post(url=self.BASE_URL + path, headers=self.session.headers, json=body) as resp:
             try:
                 response = await resp.json()
-                # print(f"{self.EXCHANGE_NAME} ORDER CREATE RESPONSE: {response}")
-                if self.EXCHANGE_NAME != self.multibot.mm_exchange:
-                    print(f"{self.EXCHANGE_NAME} ORDER CREATE PING: {response['timestamp'] - time_start}")
             except:
                 if self.EXCHANGE_NAME != self.multibot.mm_exchange:
                     print(f"{self.EXCHANGE_NAME} ORDER CREATE FAILURE\nBODY: {body}\nRESP: {resp.text}")
                 return
-
-            self.update_order_after_deal(response)
+            if self.EXCHANGE_NAME != self.multibot.mm_exchange:
+                print(f"{self.EXCHANGE_NAME} ORDER CREATE RESPONSE: {response}")
+                print(f"{self.EXCHANGE_NAME} ORDER CREATE PING: {response['timestamp'] - time_start}")
+                self.update_order_after_deal(response)
             price = float(response['dealMoney']) / float(response['dealStock']) if response['dealStock'] != '0' else 0
             order_res = {'exchange_name': self.EXCHANGE_NAME,
                          'exchange_order_id': response.get('orderId'),
