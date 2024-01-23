@@ -305,7 +305,11 @@ class BtseClient(BaseClient):
             body.update({"value": price})
         self.get_private_headers(path, body)
         async with self.async_session.put(url=self.BASE_URL + path, headers=self.session.headers, json=body) as resp:
-            response = await resp.json()
+            try:
+                response = await resp.json()
+            except:
+                await self.cancel_order(market, order_id)
+                return
             # print(f"{self.EXCHANGE_NAME} ORDER AMEND RESPONSE: {response}")
             if isinstance(response, dict):
                 print(f"ERROR BODY: {body}. Response: {response}")
