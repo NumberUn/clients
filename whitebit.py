@@ -165,10 +165,11 @@ class WhiteBitClient(BaseClient):
                         self.multibot.open_orders.pop(coin + '-' + self.EXCHANGE_NAME)
             except:
                 print(resp.text)
-                await asyncio.sleep(1)
-                self.cancel_all_orders()
-                if self.EXCHANGE_NAME == self.multibot.mm_exchange:
-                    self.multibot.open_orders = {}
+                await asyncio.sleep(.2)
+                await self.cancel_order(symbol, order_id)
+                # self.cancel_all_orders()
+                # if self.EXCHANGE_NAME == self.multibot.mm_exchange:
+                #     self.multibot.open_orders = {}
     # example = {'orderId': 422806159063, 'clientOrderId': 'maker-WHITEBIT-XRP-1003947', 'market': 'XRP_PERP',
     #            'side': 'buy', 'type': 'margin limit', 'timestamp': 1705924757.295865, 'dealMoney': '0',
     #            'dealStock': '0', 'amount': '110', 'takerFee': '0.00035', 'makerFee': '0.0001', 'left': '110',
