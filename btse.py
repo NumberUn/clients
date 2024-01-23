@@ -70,6 +70,7 @@ class BtseClient(BaseClient):
         self.orig_sizes = {}
         self.LAST_ORDER_ID = 'default'
         self.last_keep_alive = 0
+        self.last_websocket_ping = 0
         self.async_tasks = []
         self.responses = {}
         self.deleted_orders = []
@@ -308,6 +309,7 @@ class BtseClient(BaseClient):
                 print(f"ERROR BODY: {body}")
                 print(f"old order size: {old_order_size}")
                 print(f"new order size: {sz}")
+                await self.cancel_order(market, order_id)
                 return
             print(f"{self.EXCHANGE_NAME} ORDER AMEND PING: {response[0]['timestamp'] / 1000 - time_start}")
             status = self.get_order_response_status(response)
@@ -506,7 +508,10 @@ class BtseClient(BaseClient):
 
     @try_exc_async
     async def ping_websocket(self, ws):
-        await ws.ping()
+        ts = time.time()
+        if ts - self.last_websocket_ping > 10:
+            await ws.ping()
+            self.last_websocket_ping = ts
         # print(f'PING SENT: {datetime.utcnow()}')
 
     @try_exc_async

@@ -58,6 +58,7 @@ class WhiteBitClient(BaseClient):
         self.taker_fee = float(keys['TAKER_FEE']) * 0.6
         self.maker_fee = 0.0001 * 0.6
         self.last_keep_alive = 0
+        self.last_websocket_ping = 0
         self.async_tasks = []
         self.responses = {}
         self.deleted_orders = []
@@ -85,22 +86,15 @@ class WhiteBitClient(BaseClient):
             while True:
                 for task in self.async_tasks:
                     if task[0] == 'create_order':
-                        price = task[1]['price']
-                        size = task[1]['size']
-                        side = task[1]['side']
-                        market = task[1]['market']
-                        client_id = task[1].get('client_id')
-                        loop.create_task(self.create_fast_order(price, size, side, market, client_id))
+                        loop.create_task(self.create_fast_order(task[1]['price'], task[1]['size'], task[1]['side'],
+                                                                task[1]['market'], task[1].get('client_id')))
                     elif task[0] == 'cancel_order':
                         loop.create_task(self.cancel_order(task[1]['market'], task[1]['order_id']))
                     elif task[0] == 'amend_order':
                         market = task[1]['market']
                         loop.create_task(self.cancel_order(market, task[1]['order_id']))
-                        price = task[1]['price']
-                        size = task[1]['size']
-                        client_id = task[1]['client_id']
-                        side = task[1]['side']
-                        loop.create_task(self.create_fast_order(price, size, side, market, client_id, amend=True))
+                        loop.create_task(self.create_fast_order(task[1]['price'],  task[1]['size'], task[1]['side'],
+                                                                market, task[1]['client_id'], amend=True))
                     self.async_tasks.remove(task)
                 ts_ms = time.time()
                 if ts_ms - self.last_keep_alive > 5:
@@ -381,7 +375,11 @@ class WhiteBitClient(BaseClient):
 
     @try_exc_async
     async def ping_websocket(self, ws):
-        await ws.ping()
+        ts = time.time()
+        if ts - self.last_websocket_ping > 10:
+            await ws.ping()
+            self.last_websocket_ping = ts
+
         # print(f'PING SENT: {datetime.utcnow()}')
 
     @try_exc_async
@@ -398,7 +396,6 @@ class WhiteBitClient(BaseClient):
         print(f'ORDERS UPDATE {self.EXCHANGE_NAME} {datetime.utcnow()}', data)
         print()
         loop = asyncio.get_event_loop()
-        loop.create_task(self.multibot.update_all_av_balances())
         status_id = 0
         for order in data['params']:
             if isinstance(order, int):
@@ -428,6 +425,8 @@ class WhiteBitClient(BaseClient):
                       'datetime_update': datetime.utcnow(),
                       'ts_update': order['mtime']}
             self.orders.update({order['id']: result})
+        loop.create_task(self.multibot.update_all_av_balances())
+
         # example = {'method': 'ordersExecuted_update', 'params': [
         #     {'id': 395248275015, 'market': 'BTC_PERP', 'type': 7, 'side': 2, 'post_only': False, 'ioc': False,
         #      'ctime': 1703664697.619855, 'mtime': 1703664697.619855, 'price': '42511.7', 'amount': '0.001',
