@@ -600,7 +600,7 @@ class BtseClient(BaseClient):
                 message += f"STORED ID: {stored[0]}\n"
                 message += f"STORED TARGET PRICE: {stored[1].get('target')}\n"
                 message += f"STORED side : {stored[1].get('side')}\n"
-                self.multibot.telegram.send_message(message, self.multibot.TG_Groups.MainGroup)
+                self.multibot.telegram.send_message(message, self.multibot.main_group)
 
 
 
