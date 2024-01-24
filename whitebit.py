@@ -411,7 +411,7 @@ class WhiteBitClient(BaseClient):
                 coin = order['market'].split('_')[0]
                 stored = self.multibot.open_orders.get(coin + '-' + self.EXCHANGE_NAME, [])
                 if 'maker' in order.get('client_order_id', '') or order['id'] in stored:
-                    if self.multibot.mm_exchange == self.EXCHANGE_NAME:
+                    if self.multibot.mm_exchange != self.EXCHANGE_NAME:
                         own_ts = time.time()
                         deal = {'side': 'sell' if order['side'] == 1 else 'buy',
                                 'size': float(order['deal_stock']),

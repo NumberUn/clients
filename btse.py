@@ -578,7 +578,7 @@ class BtseClient(BaseClient):
         for fill in data['data']:
             order_id = fill['orderId']
             size = float(fill['size']) * self.instruments[fill['symbol']]['contract_value']
-            if 'maker' in fill.get('clOrderId', '') and self.multibot.mm_exchange == self.EXCHANGE_NAME:
+            if 'maker' in fill.get('clOrderId', '') and self.multibot.mm_exchange != self.EXCHANGE_NAME:
                 own_ts = time.time()
                 deal = {'side': fill['side'].lower(),
                         'size': size,
