@@ -578,16 +578,32 @@ class BtseClient(BaseClient):
         for fill in data['data']:
             order_id = fill['orderId']
             size = float(fill['size']) * self.instruments[fill['symbol']]['contract_value']
+            coin = fill['symbol'].split('PFC')[0]
             if 'maker' in fill.get('clOrderId', '') and self.multibot.mm_exchange != self.EXCHANGE_NAME:
                 own_ts = time.time()
-                deal = {'side': fill['side'].lower(),
+                deal = {'exchange_name': self.EXCHANGE_NAME,
+                        'side': fill['side'].lower(),
                         'size': size,
-                        'coin': fill['symbol'].split('PFC')[0],
+                        'coin': coin,
                         'price': float(fill['price']),
                         'timestamp': fill['timestamp'] / 1000,
                         'ts_ms': own_ts,
                         'order_id': order_id}
                 loop.create_task(self.multibot.hedge_maker_position(deal))
+            else:
+                stored = self.multibot.open_orders.get(coin + '-' + self.EXCHANGE_NAME, [None, {}])
+                message = f"MAKER EXECUTED {self.EXCHANGE_NAME}|{}\n"
+                message += f"SIZE: {size}\n"
+                message += f"PRICE: {fill['price']}\n"
+                message += f"SIDE: {coin}\n"
+                message += f"ORD ID: {order_id}\n"
+                message += f"STORED ID: {stored[0]}\n"
+                message += f"STORED TARGET PRICE: {stored[1].get('target')}\n"
+                message += f"STORED side : {stored[1].get('side')}\n"
+                self.multibot.telegram.send_message(message, self.multibot.TG_Groups.MainGroup)
+
+
+
             size_usd = size * float(fill['price'])
             if order := self.orders.get(order_id):
                 avg_price = (order['factual_amount_usd'] + size_usd) / (size + order['factual_amount_coin'])

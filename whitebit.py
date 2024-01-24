@@ -409,11 +409,12 @@ class WhiteBitClient(BaseClient):
             if order['deal_stock'] != '0':
                 factual_price = float(order['deal_money']) / float(order['deal_stock'])
                 coin = order['market'].split('_')[0]
-                stored = self.multibot.open_orders.get(coin + '-' + self.EXCHANGE_NAME, [])
+                stored = self.multibot.open_orders.get(coin + '-' + self.EXCHANGE_NAME, [None, {}])
                 if 'maker' in order.get('client_order_id', '') or order['id'] in stored:
                     if self.multibot.mm_exchange != self.EXCHANGE_NAME:
                         own_ts = time.time()
-                        deal = {'side': 'sell' if order['side'] == 1 else 'buy',
+                        deal = {'exchange_name': self.EXCHANGE_NAME,
+                                'side': 'sell' if order['side'] == 1 else 'buy',
                                 'size': float(order['deal_stock']),
                                 'coin': coin,
                                 'price': factual_price,
@@ -421,6 +422,16 @@ class WhiteBitClient(BaseClient):
                                 'ts_ms': own_ts,
                                 'order_id': order['id']}
                         loop.create_task(self.multibot.hedge_maker_position(deal))
+                    else:
+                        message = f"MAKER EXECUTED {self.EXCHANGE_NAME}|{coin}\n"
+                        message += f"SIZE: {order['deal_stock']}\n"
+                        message += f"PRICE: {factual_price}\n"
+                        message += f"SIDE: {'sell' if order['side'] == 1 else 'buy'}\n"
+                        message += f"ORD ID: {order['id']}\n"
+                        message += f"STORED ID: {stored[0]}\n"
+                        message += f"STORED TARGET PRICE: {stored[1].get('target')}\n"
+                        message += f"STORED side : {stored[1].get('side')}\n"
+                        self.multibot.telegram.send_message(message, self.multibot.TG_Groups.MainGroup)
                 # self.get_position()
             else:
                 factual_price = 0
