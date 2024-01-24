@@ -348,9 +348,12 @@ class BtseClient(BaseClient):
         contract_value = self.instruments[market]['contract_value']
         body = {"symbol": market,
                 "side": side.upper(),
-                "price": price,
-                "type": "LIMIT",
                 'size': int(sz / contract_value)}
+        if self.EXCHANGE_NAME == self.multibot.mm_exchange:
+            body.update({"price": price,
+                         'type': 'LIMIT'})
+        else:
+            body.update({"type": "MARKET"})
         if client_id:
             body.update({'clOrderID': client_id})
         # print(f"{self.EXCHANGE_NAME} SENDING ORDER: {body}")
