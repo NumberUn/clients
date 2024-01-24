@@ -401,22 +401,26 @@ class WhiteBitClient(BaseClient):
     async def update_orders(self, data):
         loop = asyncio.get_event_loop()
         status_id = 0
+        stored = []
         for order in data['params']:
             if isinstance(order, int):
                 status_id = order
                 continue
             if order['deal_stock'] != '0':
                 factual_price = float(order['deal_money']) / float(order['deal_stock'])
-                if 'maker' in order.get('client_order_id', '') and self.multibot.mm_exchange == self.EXCHANGE_NAME:
-                    own_ts = time.time()
-                    deal = {'side': 'sell' if order['side'] == 2 else 'buy',
-                            'size': float(order['deal_stock']),
-                            'coin': order['market'].split('_')[0],
-                            'price': factual_price,
-                            'timestamp': order['mtime'],
-                            'ts_ms': own_ts,
-                            'order_id': order['id']}
-                    loop.create_task(self.multibot.hedge_maker_position(deal))
+                coin = order['market'].split('_')[0]
+                stored = self.multibot.open_orders.get(coin + '-' + self.EXCHANGE_NAME, [])
+                if 'maker' in order.get('client_order_id', '') or order['id'] in stored:
+                    if self.multibot.mm_exchange == self.EXCHANGE_NAME:
+                        own_ts = time.time()
+                        deal = {'side': 'sell' if order['side'] == 2 else 'buy',
+                                'size': float(order['deal_stock']),
+                                'coin': coin,
+                                'price': factual_price,
+                                'timestamp': order['mtime'],
+                                'ts_ms': own_ts,
+                                'order_id': order['id']}
+                        loop.create_task(self.multibot.hedge_maker_position(deal))
                 # self.get_position()
             else:
                 factual_price = 0
@@ -431,16 +435,18 @@ class WhiteBitClient(BaseClient):
             self.orders.update({order['id']: result})
         loop.create_task(self.multibot.update_all_av_balances())
         print(f'ORDERS UPDATE {self.EXCHANGE_NAME} {datetime.utcnow()}', data)
+        if stored:
+            print(f"STORED ORDER: {stored}")
         print()
 
-        orders_update = {'method': 'ordersExecuted_update',
-                         'params': [{'id': 424298129261, 'market': 'DOGE_PERP', 'type': 7,
-                                     'side': 2, 'post_only': False, 'ioc': False,
-                                     'ctime': 1706050928.250344, 'mtime': 1706050929.606137,
-                                     'price': '0.077767', 'amount': '800', 'taker_fee':
-                                         '0.00035', 'maker_fee': '0.0001', 'left': '0',
-                                     'deal_stock': '800', 'deal_money': '62.2136',
-                                     'deal_fee': '0.00622136', 'client_order_id': ''}], 'id': None}
+        # orders_update = {'method': 'ordersExecuted_update',
+        #                  'params': [{'id': 424298129261, 'market': 'DOGE_PERP', 'type': 7,
+        #                              'side': 2, 'post_only': False, 'ioc': False,
+        #                              'ctime': 1706050928.250344, 'mtime': 1706050929.606137,
+        #                              'price': '0.077767', 'amount': '800', 'taker_fee':
+        #                                  '0.00035', 'maker_fee': '0.0001', 'left': '0',
+        #                              'deal_stock': '800', 'deal_money': '62.2136',
+        #                              'deal_fee': '0.00622136', 'client_order_id': ''}], 'id': None}
         # example = {'method': 'ordersExecuted_update', 'params': [
         #     {'id': 395248275015, 'market': 'BTC_PERP', 'type': 7, 'side': 2, 'post_only': False, 'ioc': False,
         #      'ctime': 1703664697.619855, 'mtime': 1703664697.619855, 'price': '42511.7', 'amount': '0.001',
