@@ -592,10 +592,10 @@ class BtseClient(BaseClient):
                 loop.create_task(self.multibot.hedge_maker_position(deal))
             else:
                 stored = self.multibot.open_orders.get(coin + '-' + self.EXCHANGE_NAME, [None, {}])
-                message = f"MAKER EXECUTED {self.EXCHANGE_NAME}|{}\n"
+                message = f"MAKER EXECUTED {self.EXCHANGE_NAME}|{coin}\n"
                 message += f"SIZE: {size}\n"
                 message += f"PRICE: {fill['price']}\n"
-                message += f"SIDE: {coin}\n"
+                message += f"SIDE: {fill['side'].lower()}\n"
                 message += f"ORD ID: {order_id}\n"
                 message += f"STORED ID: {stored[0]}\n"
                 message += f"STORED TARGET PRICE: {stored[1].get('target')}\n"
