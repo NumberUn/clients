@@ -27,6 +27,7 @@ class WhiteBitClient(BaseClient):
     def __init__(self, multibot=None, keys=None, leverage=None, state='Bot',
                  markets_list=[], max_pos_part=20, finder=None, ob_len=5, market_finder=None):
         super().__init__()
+        self.nonces = []
         self.market_finder = market_finder
         self.multibot = multibot
         self.state = state
@@ -68,7 +69,6 @@ class WhiteBitClient(BaseClient):
         self.total_requests = 0
         self.total_start_time = time.time()
         self.cancel_all_orders()
-        self.nonces = []
 
     @try_exc_regular
     def deals_thread_func(self, loop):
