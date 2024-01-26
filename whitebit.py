@@ -65,6 +65,8 @@ class WhiteBitClient(BaseClient):
         self.deleted_orders = []
         self.request_timer = time.time()
         self.requests_counter = 0
+        self.total_requests = 0
+        self.total_start_time = time.time()
         self.cancel_all_orders()
 
     @try_exc_regular
@@ -93,19 +95,24 @@ class WhiteBitClient(BaseClient):
                             loop.create_task(self.create_fast_order(task[1]['price'], task[1]['size'], task[1]['side'],
                                                                     task[1]['market'], task[1].get('client_id')))
                             self.requests_counter += 1
+                            self.total_requests += 1
                     elif task[0] == 'cancel_order':
                         loop.create_task(self.cancel_order(task[1]['market'], task[1]['order_id']))
                         self.requests_counter += 1
+                        self.total_requests += 1
                     elif task[0] == 'amend_order':
                         market = task[1]['market']
                         loop.create_task(self.cancel_order(market, task[1]['order_id']))
+                        self.requests_counter += 1
+                        self.total_requests += 1
                         if self.requests_counter < 9800:
                             loop.create_task(self.create_fast_order(task[1]['price'],  task[1]['size'], task[1]['side'],
                                                                     market, task[1]['client_id'], amend=True))
-                            self.requests_counter += 2
+                            self.requests_counter += 1
+                            self.total_requests += 1
                     self.async_tasks.remove(task)
                 ts_ms = time.time()
-                if ts_ms - self.request_timer > 1:
+                if ts_ms - self.request_timer > 10:
                     self.request_timer = ts_ms
                     self.requests_counter = 0
                 if ts_ms - self.last_keep_alive > 5:
@@ -170,8 +177,15 @@ class WhiteBitClient(BaseClient):
                     if self.multibot.open_orders.get(coin + '-' + self.EXCHANGE_NAME)[0] == response['orderId']:
                         self.multibot.open_orders.pop(coin + '-' + self.EXCHANGE_NAME)
             except:
+                print('ORDER CANCEL ERROR')
+                ts_now = time.time()
                 print(f"{self.requests_counter=}")
-                print(resp.text)
+                print(f"{ts_now - self.request_timer=}")
+
+                print(f"{self.total_requests=}")
+                print(f"{ts_now - self.total_start_time=}")
+
+                # print(resp.text)
                 await asyncio.sleep(1)
                 self.cancel_all_orders()
                 if self.EXCHANGE_NAME == self.multibot.mm_exchange:
@@ -590,8 +604,14 @@ class WhiteBitClient(BaseClient):
                 response = await resp.json()
             except:
                 # if self.EXCHANGE_NAME != self.multibot.mm_exchange:
+                print('ORDER CANCEL ERROR')
+                ts_now = time.time()
                 print(f"{self.requests_counter=}")
-                print(f"{self.EXCHANGE_NAME} ORDER CREATE FAILURE\nBODY: {body}\nRESP: {resp.text}")
+                print(f"{ts_now - self.request_timer=}")
+
+                print(f"{self.total_requests=}")
+                print(f"{ts_now - self.total_start_time=}")
+                # print(f"{self.EXCHANGE_NAME} ORDER CREATE FAILURE\nBODY: {body}\nRESP: {resp.text}")
                 return
             if self.EXCHANGE_NAME != self.multibot.mm_exchange:
                 print(f"{self.EXCHANGE_NAME} ORDER CREATE RESPONSE: {response}")
