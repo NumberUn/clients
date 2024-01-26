@@ -1,6 +1,5 @@
 import time
 import traceback
-
 import aiohttp
 import json
 import requests
@@ -64,6 +63,8 @@ class WhiteBitClient(BaseClient):
         self.async_tasks = []
         self.responses = {}
         self.deleted_orders = []
+        self.request_timer = time.time()
+        self.requests_counter = 0
         self.cancel_all_orders()
 
     @try_exc_regular
@@ -88,20 +89,29 @@ class WhiteBitClient(BaseClient):
             while True:
                 for task in self.async_tasks:
                     if task[0] == 'create_order':
-                        loop.create_task(self.create_fast_order(task[1]['price'], task[1]['size'], task[1]['side'],
-                                                                task[1]['market'], task[1].get('client_id')))
+                        if self.requests_counter < 9800:
+                            loop.create_task(self.create_fast_order(task[1]['price'], task[1]['size'], task[1]['side'],
+                                                                    task[1]['market'], task[1].get('client_id')))
+                            self.requests_counter += 1
                     elif task[0] == 'cancel_order':
                         loop.create_task(self.cancel_order(task[1]['market'], task[1]['order_id']))
+                        self.requests_counter += 1
                     elif task[0] == 'amend_order':
                         market = task[1]['market']
                         loop.create_task(self.cancel_order(market, task[1]['order_id']))
-                        loop.create_task(self.create_fast_order(task[1]['price'],  task[1]['size'], task[1]['side'],
-                                                                market, task[1]['client_id'], amend=True))
+                        if self.requests_counter < 9800:
+                            loop.create_task(self.create_fast_order(task[1]['price'],  task[1]['size'], task[1]['side'],
+                                                                    market, task[1]['client_id'], amend=True))
+                            self.requests_counter += 2
                     self.async_tasks.remove(task)
                 ts_ms = time.time()
+                if ts_ms - self.request_timer > 10:
+                    self.request_timer = ts_ms
+                    self.requests_counter = 0
                 if ts_ms - self.last_keep_alive > 5:
                     self.last_keep_alive = ts_ms
                     loop.create_task(self.get_position_async())
+                    self.requests_counter += 1
                 await asyncio.sleep(0.0001)
 
     @try_exc_regular
@@ -409,12 +419,11 @@ class WhiteBitClient(BaseClient):
             if order['deal_stock'] != '0':
                 factual_price = float(order['deal_money']) / float(order['deal_stock'])
                 coin = order['market'].split('_')[0]
-                stored = self.multibot.open_orders.get(coin + '-' + self.EXCHANGE_NAME, [None, {}])
+                stored = self.multibot.open_orders.get(coin + '-' + self.EXCHANGE_NAME, [])
                 if 'maker' in order.get('client_order_id', '') or order['id'] in stored:
-                    if self.multibot.mm_exchange != self.EXCHANGE_NAME:
+                    if self.multibot.mm_exchange == self.EXCHANGE_NAME:
                         own_ts = time.time()
-                        deal = {'exchange_name': self.EXCHANGE_NAME,
-                                'side': 'sell' if order['side'] == 1 else 'buy',
+                        deal = {'side': 'sell' if order['side'] == 1 else 'buy',
                                 'size': float(order['deal_stock']),
                                 'coin': coin,
                                 'price': factual_price,
@@ -422,16 +431,6 @@ class WhiteBitClient(BaseClient):
                                 'ts_ms': own_ts,
                                 'order_id': order['id']}
                         loop.create_task(self.multibot.hedge_maker_position(deal))
-                    else:
-                        message = f"MAKER EXECUTED {self.EXCHANGE_NAME}|{coin}\n"
-                        message += f"SIZE: {order['deal_stock']}\n"
-                        message += f"PRICE: {factual_price}\n"
-                        message += f"SIDE: {'sell' if order['side'] == 1 else 'buy'}\n"
-                        message += f"ORD ID: {order['id']}\n"
-                        message += f"STORED ID: {stored[0]}\n"
-                        message += f"STORED TARGET PRICE: {stored[1].get('target')}\n"
-                        message += f"STORED side : {stored[1].get('side')}\n"
-                        self.multibot.telegram.send_message(message, self.multibot.main_group)
                 # self.get_position()
             else:
                 factual_price = 0
@@ -550,12 +549,12 @@ class WhiteBitClient(BaseClient):
         #      'marketName': 'BTC_PERP'}]}}
 
     @try_exc_async
-    async def create_order(self, symbol, side, session, expire=10000, client_id=None):
+    async def create_order(self, symbol, side, price, size, session, expire=10000, client_id=None):
         path = "/api/v4/order/collateral/limit"
         params = {"market": symbol,
                   "side": side,
-                  "amount": self.amount,
-                  "price": self.price}
+                  "amount": size,
+                  "price": price}
         params = self.get_auth_for_request(params, path)
         path += self._create_uri(params)
         async with session.post(url=self.BASE_URL + path, headers=self.session.headers, json=params) as resp:
@@ -589,8 +588,8 @@ class WhiteBitClient(BaseClient):
             try:
                 response = await resp.json()
             except:
-                if self.EXCHANGE_NAME != self.multibot.mm_exchange:
-                    print(f"{self.EXCHANGE_NAME} ORDER CREATE FAILURE\nBODY: {body}\nRESP: {resp.text}")
+                # if self.EXCHANGE_NAME != self.multibot.mm_exchange:
+                print(f"{self.EXCHANGE_NAME} ORDER CREATE FAILURE\nBODY: {body}\nRESP: {resp.text}")
                 return
             if self.EXCHANGE_NAME != self.multibot.mm_exchange:
                 print(f"{self.EXCHANGE_NAME} ORDER CREATE RESPONSE: {response}")

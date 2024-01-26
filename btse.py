@@ -392,14 +392,14 @@ class BtseClient(BaseClient):
             #             'positionDirection': None, 'positionId': 'BTCPFC-USD', 'time_in_force': 'GTC'}]
 
     @try_exc_async
-    async def create_order(self, symbol, side, session, expire=10000, client_id=None, expiration=None):
+    async def create_order(self, symbol, side, price, size, session, expire=10000, client_id=None, expiration=None):
         path = '/api/v2.1/order'
         contract_value = self.instruments[symbol]['contract_value']
         body = {"symbol": symbol,
                 "side": side.upper(),
-                "price": self.price,
+                "price": price,
                 "type": "LIMIT",
-                'size': int(self.amount / contract_value)}
+                'size': int(size / contract_value)}
         self.get_private_headers(path, body)
         async with session.post(url=self.BASE_URL + path, headers=self.session.headers, json=body) as resp:
             res = await resp.json()
@@ -578,32 +578,16 @@ class BtseClient(BaseClient):
         for fill in data['data']:
             order_id = fill['orderId']
             size = float(fill['size']) * self.instruments[fill['symbol']]['contract_value']
-            coin = fill['symbol'].split('PFC')[0]
-            if 'maker' in fill.get('clOrderId', '') and self.multibot.mm_exchange != self.EXCHANGE_NAME:
+            if 'maker' in fill.get('clOrderId', '') and self.multibot.mm_exchange == self.EXCHANGE_NAME:
                 own_ts = time.time()
-                deal = {'exchange_name': self.EXCHANGE_NAME,
-                        'side': fill['side'].lower(),
+                deal = {'side': fill['side'].lower(),
                         'size': size,
-                        'coin': coin,
+                        'coin': fill['symbol'].split('PFC')[0],
                         'price': float(fill['price']),
                         'timestamp': fill['timestamp'] / 1000,
                         'ts_ms': own_ts,
                         'order_id': order_id}
                 loop.create_task(self.multibot.hedge_maker_position(deal))
-            else:
-                stored = self.multibot.open_orders.get(coin + '-' + self.EXCHANGE_NAME, [None, {}])
-                message = f"MAKER EXECUTED {self.EXCHANGE_NAME}|{coin}\n"
-                message += f"SIZE: {size}\n"
-                message += f"PRICE: {fill['price']}\n"
-                message += f"SIDE: {fill['side'].lower()}\n"
-                message += f"ORD ID: {order_id}\n"
-                message += f"STORED ID: {stored[0]}\n"
-                message += f"STORED TARGET PRICE: {stored[1].get('target')}\n"
-                message += f"STORED side : {stored[1].get('side')}\n"
-                self.multibot.telegram.send_message(message, self.multibot.main_group)
-
-
-
             size_usd = size * float(fill['price'])
             if order := self.orders.get(order_id):
                 avg_price = (order['factual_amount_usd'] + size_usd) / (size + order['factual_amount_coin'])
