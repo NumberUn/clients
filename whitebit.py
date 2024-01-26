@@ -173,8 +173,8 @@ class WhiteBitClient(BaseClient):
                         self.multibot.open_orders.pop(coin + '-' + self.EXCHANGE_NAME)
             except:
                 print(resp.text)
+                await asyncio.sleep(0.1)
                 await self.cancel_order(symbol, order_id)
-                # await asyncio.sleep(1)
                 # self.cancel_all_orders()
                 # if self.EXCHANGE_NAME == self.multibot.mm_exchange:
                 #     self.multibot.open_orders = {}
