@@ -179,6 +179,7 @@ class WhiteBitClient(BaseClient):
             except:
                 print('ORDER CANCEL ERROR')
                 ts_now = time.time()
+                print(f"{ts_now=}")
                 print(f"{self.requests_counter=}")
                 print(f"{ts_now - self.request_timer=}")
 
@@ -604,8 +605,9 @@ class WhiteBitClient(BaseClient):
                 response = await resp.json()
             except:
                 # if self.EXCHANGE_NAME != self.multibot.mm_exchange:
-                print('ORDER CANCEL ERROR')
+                print('ORDER CREATE ERROR')
                 ts_now = time.time()
+                print(f"{ts_now=}")
                 print(f"{self.requests_counter=}")
                 print(f"{ts_now - self.request_timer=}")
 
