@@ -68,6 +68,7 @@ class WhiteBitClient(BaseClient):
         self.total_requests = 0
         self.total_start_time = time.time()
         self.cancel_all_orders()
+        self.nonces = []
 
     @try_exc_regular
     def deals_thread_func(self, loop):
@@ -112,7 +113,7 @@ class WhiteBitClient(BaseClient):
                             self.total_requests += 1
                     self.async_tasks.remove(task)
                 ts_ms = time.time()
-                if int(ts_ms) != self.request_timer:
+                if ts_ms - self.request_timer > 10:
                     self.request_timer = int(ts_ms)
                     self.requests_counter = 0
                 if ts_ms - self.last_keep_alive > 5:
@@ -197,7 +198,12 @@ class WhiteBitClient(BaseClient):
 
     def get_auth_for_request(self, params, uri):
         params['request'] = uri
-        params['nonce'] = int(time.time() * 1000)
+        nonce = int(time.time() * 1000)
+        params['nonce'] = nonce
+        if nonce not in self.nonces:
+            self.nonces.append(nonce)
+        else:
+            print(f'ALARM NONCE ALREADY HAVE BEEN USED')
         params['nonceWindow'] = True
         signature, payload = self.get_signature(params)
         self.session.headers.update({
