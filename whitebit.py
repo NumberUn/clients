@@ -91,7 +91,7 @@ class WhiteBitClient(BaseClient):
             while True:
                 for task in self.async_tasks:
                     if task[0] == 'create_order':
-                        if self.requests_counter < 9800:
+                        if self.requests_counter < 9:
                             loop.create_task(self.create_fast_order(task[1]['price'], task[1]['size'], task[1]['side'],
                                                                     task[1]['market'], task[1].get('client_id')))
                             self.requests_counter += 1
@@ -105,14 +105,14 @@ class WhiteBitClient(BaseClient):
                         loop.create_task(self.cancel_order(market, task[1]['order_id']))
                         self.requests_counter += 1
                         self.total_requests += 1
-                        if self.requests_counter < 9800:
+                        if self.requests_counter < 9:
                             loop.create_task(self.create_fast_order(task[1]['price'],  task[1]['size'], task[1]['side'],
                                                                     market, task[1]['client_id'], amend=True))
                             self.requests_counter += 1
                             self.total_requests += 1
                     self.async_tasks.remove(task)
                 ts_ms = time.time()
-                if ts_ms - self.request_timer > 10:
+                if ts_ms - self.request_timer > 1:
                     self.request_timer = ts_ms
                     self.requests_counter = 0
                 if ts_ms - self.last_keep_alive > 5:
@@ -607,7 +607,7 @@ class WhiteBitClient(BaseClient):
                 print('ORDER CANCEL ERROR')
                 ts_now = time.time()
                 print(f"{self.requests_counter=}")
-                print(f"{ts_now - self.request_timer=}")
+                print(f"{ts_now - self.request_timer=}")x
 
                 print(f"{self.total_requests=}")
                 print(f"{ts_now - self.total_start_time=}")
