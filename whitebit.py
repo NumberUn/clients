@@ -159,6 +159,13 @@ class WhiteBitClient(BaseClient):
 
     @try_exc_async
     async def cancel_order(self, symbol: str, order_id: int):
+        time_start = time.time()
+        message = f'ORDER CANCEL ERROR\n'
+        message += f"{time_start=}\n"
+        message += f"{self.requests_counter=}\n"
+        message += f"{time_start - self.request_timer=}\n"
+        message += f"{self.total_requests=}\n"
+        message += f"{time_start - self.total_start_time=}\n"
         path = '/api/v4/order/cancel'
         params = {"market": symbol,
                   "orderId": order_id}
@@ -177,15 +184,7 @@ class WhiteBitClient(BaseClient):
                     if self.multibot.open_orders.get(coin + '-' + self.EXCHANGE_NAME)[0] == response['orderId']:
                         self.multibot.open_orders.pop(coin + '-' + self.EXCHANGE_NAME)
             except:
-                print('ORDER CANCEL ERROR')
-                ts_now = time.time()
-                print(f"{ts_now=}")
-                print(f"{self.requests_counter=}")
-                print(f"{ts_now - self.request_timer=}")
-
-                print(f"{self.total_requests=}")
-                print(f"{ts_now - self.total_start_time=}")
-
+                print(message)
                 # print(resp.text)
                 await asyncio.sleep(1)
                 self.cancel_all_orders()
@@ -591,6 +590,12 @@ class WhiteBitClient(BaseClient):
     @try_exc_async
     async def create_fast_order(self, price, sz, side, market, client_id=None, amend=False):
         time_start = time.time()
+        message = f'ORDER CREATE ERROR\n'
+        message += f"{time_start=}\n"
+        message += f"{self.requests_counter=}\n"
+        message += f"{time_start - self.request_timer=}\n"
+        message += f"{self.total_requests=}\n"
+        message += f"{time_start - self.total_start_time=}\n"
         path = "/api/v4/order/collateral/limit"
         body = {"market": market,
                 "side": side,
@@ -605,14 +610,7 @@ class WhiteBitClient(BaseClient):
                 response = await resp.json()
             except:
                 # if self.EXCHANGE_NAME != self.multibot.mm_exchange:
-                print('ORDER CREATE ERROR')
-                ts_now = time.time()
-                print(f"{ts_now=}")
-                print(f"{self.requests_counter=}")
-                print(f"{ts_now - self.request_timer=}")
-
-                print(f"{self.total_requests=}")
-                print(f"{ts_now - self.total_start_time=}")
+                print(message)
                 # print(f"{self.EXCHANGE_NAME} ORDER CREATE FAILURE\nBODY: {body}\nRESP: {resp.text}")
                 return
             if self.EXCHANGE_NAME != self.multibot.mm_exchange:
