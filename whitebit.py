@@ -172,10 +172,10 @@ class WhiteBitClient(BaseClient):
                     if self.multibot.open_orders.get(coin + '-' + self.EXCHANGE_NAME)[0] == response['orderId']:
                         self.multibot.open_orders.pop(coin + '-' + self.EXCHANGE_NAME)
             except:
-                print(resp.text)
+                # print(resp.text)
                 await asyncio.sleep(0.1)
-                await self.cancel_order(symbol, order_id)
-                # self.cancel_all_orders()
+                # await self.cancel_order(symbol, order_id)
+                self.cancel_all_orders()
                 # if self.EXCHANGE_NAME == self.multibot.mm_exchange:
                 #     self.multibot.open_orders = {}
     # example = {'orderId': 422806159063, 'clientOrderId': 'maker-WHITEBIT-XRP-1003947', 'market': 'XRP_PERP',
@@ -610,7 +610,7 @@ class WhiteBitClient(BaseClient):
             except:
                 # if self.EXCHANGE_NAME != self.multibot.mm_exchange:
                 # print(message)
-                print(f"{self.EXCHANGE_NAME} ORDER CREATE FAILURE\nBODY: {body}\nRESP: {resp.text}")
+                # print(f"{self.EXCHANGE_NAME} ORDER CREATE FAILURE\nBODY: {body}\nRESP: {resp.text}")
                 return
             if self.EXCHANGE_NAME != self.multibot.mm_exchange:
                 print(f"{self.EXCHANGE_NAME} ORDER CREATE RESPONSE: {response}")
