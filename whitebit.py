@@ -607,7 +607,7 @@ class WhiteBitClient(BaseClient):
                 print('ORDER CANCEL ERROR')
                 ts_now = time.time()
                 print(f"{self.requests_counter=}")
-                print(f"{ts_now - self.request_timer=}")x
+                print(f"{ts_now - self.request_timer=}")
 
                 print(f"{self.total_requests=}")
                 print(f"{ts_now - self.total_start_time=}")
