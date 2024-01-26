@@ -105,7 +105,7 @@ class WhiteBitClient(BaseClient):
                             self.requests_counter += 2
                     self.async_tasks.remove(task)
                 ts_ms = time.time()
-                if ts_ms - self.request_timer > 10:
+                if ts_ms - self.request_timer > 1:
                     self.request_timer = ts_ms
                     self.requests_counter = 0
                 if ts_ms - self.last_keep_alive > 5:
