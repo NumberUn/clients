@@ -186,16 +186,16 @@ class WhiteBitClient(BaseClient):
     def get_auth_for_request(self, params, uri):
         params['request'] = uri
         nonce = int(time.time() * 1000)
-        if self.EXCHANGE_NAME == self.multibot.mm_exchange:
-            if nonce not in self.nonces:
-                self.nonces.append(nonce)
-                if len(self.nonces) >= 100:
-                    self.nonces = self.nonces[::-1][:30]
-            else:
-                while nonce in self.nonces:
-                    nonce += 1
-        else:
-            nonce += randint(1000, 3000)
+        # if self.EXCHANGE_NAME == self.multibot.mm_exchange:
+        #     if nonce not in self.nonces:
+        #         self.nonces.append(nonce)
+        #         if len(self.nonces) >= 100:
+        #             self.nonces = self.nonces[::-1][:30]
+        #     else:
+        #         while nonce in self.nonces:
+        #             nonce += 1
+        # else:
+        nonce += randint(-5000, 5000)
         params['nonce'] = nonce
         params['nonceWindow'] = True
         signature, payload = self.get_signature(params)
@@ -617,6 +617,7 @@ class WhiteBitClient(BaseClient):
                 print(f"{self.EXCHANGE_NAME} ORDER CREATE PING: {response['timestamp'] - time_start}")
                 self.update_order_after_deal(response)
             if response.get('code'):
+                print(f"CREATE ORDER RESPONSE: {body=}")
                 print(response)
                 return
             price = float(response['dealMoney']) / float(response['dealStock']) if response['dealStock'] != '0' else 0
