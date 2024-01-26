@@ -15,6 +15,7 @@ from clients.core.base_client import BaseClient
 from aiohttp.client_exceptions import ContentTypeError
 from random import randint
 
+
 class WhiteBitClient(BaseClient):
     PUBLIC_WS_ENDPOINT = 'wss://api.whitebit.com/ws'
     BASE_URL = 'https://whitebit.com'
@@ -172,6 +173,7 @@ class WhiteBitClient(BaseClient):
                         self.multibot.open_orders.pop(coin + '-' + self.EXCHANGE_NAME)
             except:
                 print(resp.text)
+                await self.cancel_order(symbol, order_id)
                 # await asyncio.sleep(1)
                 # self.cancel_all_orders()
                 # if self.EXCHANGE_NAME == self.multibot.mm_exchange:
