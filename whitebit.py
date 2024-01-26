@@ -13,7 +13,7 @@ from clients.core.enums import ResponseStatus, OrderStatus
 from core.wrappers import try_exc_regular, try_exc_async
 from clients.core.base_client import BaseClient
 from aiohttp.client_exceptions import ContentTypeError
-
+from random import randint
 
 class WhiteBitClient(BaseClient):
     PUBLIC_WS_ENDPOINT = 'wss://api.whitebit.com/ws'
@@ -183,14 +183,14 @@ class WhiteBitClient(BaseClient):
 
     def get_auth_for_request(self, params, uri):
         params['request'] = uri
-        nonce = int(time.time() * 1000)
-        if nonce not in self.nonces:
-            self.nonces.append(nonce)
-            if len(self.nonces) >= 300:
-                self.nonces = []
-        else:
-            while nonce in self.nonces:
-                nonce += 1
+        nonce = int(time.time() * 1000) + randint(-4000, 5000)
+        # if nonce not in self.nonces:
+        #     self.nonces.append(nonce)
+        #     if len(self.nonces) >= 100:
+        #         self.nonces = self.nonces[::-1][:10]
+        # else:
+        #     while nonce in self.nonces:
+        #         nonce += 1
         params['nonce'] = nonce
         params['nonceWindow'] = True
         signature, payload = self.get_signature(params)

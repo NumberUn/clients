@@ -1,5 +1,4 @@
 import traceback
-
 import aiohttp
 import asyncio
 import time
@@ -61,11 +60,11 @@ class OkxClient(BaseClient):
         self.balance = {'free': 0, 'total': 0, 'timestamp': 0}
         self.start_time = int(datetime.utcnow().timestamp())
         self.time_sent = datetime.utcnow().timestamp()
+        self.async_tasks = []
 
     def change_leverage(self):
         for symbol in self.markets_list:
             self.set_leverage(self.markets[symbol])
-
     @staticmethod
     @try_exc_regular
     def id_generator(size=12, chars=string.digits):
@@ -98,10 +97,8 @@ class OkxClient(BaseClient):
         if str(body) == '{}' or str(body) == 'None':
             body = ''
         message = str(timestamp) + str.upper(method) + request_path + str(body)
-
         mac = hmac.new(bytes(self.secret_key, encoding='utf8'), bytes(message, encoding='utf-8'), digestmod='sha256')
         signature = mac.digest()
-
         return base64.b64encode(signature).decode('UTF-8')
 
     @try_exc_async
