@@ -185,14 +185,17 @@ class WhiteBitClient(BaseClient):
 
     def get_auth_for_request(self, params, uri):
         params['request'] = uri
-        nonce = int(time.time() * 1000) + randint(-4000, 5000)
-        # if nonce not in self.nonces:
-        #     self.nonces.append(nonce)
-        #     if len(self.nonces) >= 100:
-        #         self.nonces = self.nonces[::-1][:10]
-        # else:
-        #     while nonce in self.nonces:
-        #         nonce += 1
+        nonce = int(time.time() * 1000)
+        if self.EXCHANGE_NAME == self.multibot.mm_exchange:
+            if nonce not in self.nonces:
+                self.nonces.append(nonce)
+                if len(self.nonces) >= 100:
+                    self.nonces = self.nonces[::-1][:30]
+            else:
+                while nonce in self.nonces:
+                    nonce += 1
+        else:
+            nonce += randint(1000, 3000)
         params['nonce'] = nonce
         params['nonceWindow'] = True
         signature, payload = self.get_signature(params)
