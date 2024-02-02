@@ -350,7 +350,6 @@ class OkxClient(BaseClient):
     @try_exc_async
     async def _update_orders(self, obj):
         if obj.get('data') and obj.get('arg'):
-            update_data = {}
             for order in obj.get('data'):
                 print(f"OKEX RESPONSE: {order}\n")
                 status = self.get_order_status(order, 'WS')
@@ -371,10 +370,9 @@ class OkxClient(BaseClient):
                     'timestamp': float(order['uTime']) / 1000,
                     'time_order_sent': self.time_sent,
                     'create_order_time': float(order['uTime']) / 1000 - self.time_sent}
-                if client_id := order.get("clOrdId"):
-                    update_data.update({client_id: result})
+                if client_id := order.get("clOrdId") and self.orders.get(order['ordId']):
+                    self.responses.update({client_id: result})
                 self.orders.update({order['ordId']: result})
-            self.responses.update(update_data)
         # example = {'accFillSz': '0', 'algoClOrdId': '', 'algoId': '', 'amendResult': '', 'amendSource': '',
         #            'attachAlgoClOrdId': '', 'attachAlgoOrds': [], 'avgPx': '0', 'cTime': '1706884013692',
         #            'cancelSource': '', 'category': 'normal', 'ccy': '', 'clOrdId': 'makerxxxOKXxxxlXicApxxxETH',
