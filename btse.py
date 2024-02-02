@@ -829,7 +829,7 @@ if __name__ == '__main__':
 
     config = configparser.ConfigParser()
     config.read('config.ini', "utf-8")
-    client = BtseClient(state='Parser')
+    client = BtseClient(keys=config['BTSE'], state='Bot')
     client.markets_list = list(client.markets.keys())
     client.run_updater()
     # time.sleep(3)
@@ -839,7 +839,7 @@ if __name__ == '__main__':
     # client.order_loop.create_task(client.create_fast_order('MANAPFC', 'buy'))
     while True:
         time.sleep(5)
-        print(f"AV. WS PING: {sum(client.pings) / len(client.pings)}")
+        client.cancel_all_orders()
         # for symbol in client.markets.values():
         #     print(client.get_orderbook(symbol))
 
