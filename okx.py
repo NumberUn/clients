@@ -46,11 +46,11 @@ class OkxClient(BaseClient):
         self.instruments = self.get_instruments()
         self.markets = self.get_markets()
         self.change_leverage()
+        self.balance = {}
         self.get_real_balance()
         self.error_info = None
         self.orderbook = {}
         self.orders = {}
-        self.balance = {}
         self.async_tasks = []
         self.deleted_orders = []
         self.responses = {}
@@ -61,6 +61,7 @@ class OkxClient(BaseClient):
     def change_leverage(self):
         for symbol in self.markets_list:
             self.set_leverage(self.markets[symbol])
+            time.sleep(0.1)
 
     @staticmethod
     @try_exc_regular
@@ -274,6 +275,8 @@ class OkxClient(BaseClient):
 
     @try_exc_regular
     def get_balance(self):
+        if not self.balance.get('total'):
+            self.get_real_balance()
         return self.balance['total']
 
     @try_exc_regular

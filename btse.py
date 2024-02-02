@@ -368,22 +368,25 @@ class BtseClient(BaseClient):
                 if self.EXCHANGE_NAME != self.multibot.mm_exchange:
                     traceback.print_exc()
                     print(resp)
-            status = self.get_order_response_status(response)
-            self.LAST_ORDER_ID = response[0].get('orderID', 'default')
-            self.orig_sizes.update({self.LAST_ORDER_ID: response[0].get('originalSize')})
-            order_res = {'exchange_name': self.EXCHANGE_NAME,
-                         'exchange_order_id': self.LAST_ORDER_ID,
-                         'timestamp': response[0]['timestamp'] / 1000 if response[0].get('timestamp') else time.time(),
-                         'status': status,
-                         'api_response': response[0],
-                         'size': response[0]['fillSize'] * self.instruments[market]['contract_value'],
-                         'price': response[0]['avgFillPrice'],
-                         'time_order_sent': time_start,
-                         'create_order_time': response[0]['timestamp'] / 1000 - time_start}
-            if response[0].get("clOrderID"):
-                self.responses.update({response[0]["clOrderID"]: order_res})
+            if isinstance(response, list):
+                status = self.get_order_response_status(response)
+                self.LAST_ORDER_ID = response[0].get('orderID', 'default')
+                self.orig_sizes.update({self.LAST_ORDER_ID: response[0].get('originalSize')})
+                order_res = {'exchange_name': self.EXCHANGE_NAME,
+                             'exchange_order_id': self.LAST_ORDER_ID,
+                             'timestamp': response[0]['timestamp'] / 1000 if response[0].get('timestamp') else time.time(),
+                             'status': status,
+                             'api_response': response[0],
+                             'size': response[0]['fillSize'] * self.instruments[market]['contract_value'],
+                             'price': response[0]['avgFillPrice'],
+                             'time_order_sent': time_start,
+                             'create_order_time': response[0]['timestamp'] / 1000 - time_start}
+                if response[0].get("clOrderID"):
+                    self.responses.update({response[0]["clOrderID"]: order_res})
+                else:
+                    self.responses.update({response[0]['orderId']: order_res})
             else:
-                self.responses.update({response[0]['orderId']: order_res})
+                print(response)
             # res_example = [{'status': 2, 'symbol': 'BTCPFC', 'orderType': 76, 'price': 43490, 'side': 'BUY', 'size': 1,
             #             'orderID': '13a82711-f6e2-4228-bf9f-3755cd8d7885', 'timestamp': 1703535543583,
             #             'triggerPrice': 0, 'trigger': False, 'deviation': 100, 'stealth': 100, 'message': '',
