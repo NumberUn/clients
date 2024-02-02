@@ -798,13 +798,15 @@ class BtseClient(BaseClient):
     def run_updater(self):
         self.wst_public.daemon = True
         self.wst_public.start()
-        while set(self.orderbook) < set([self.markets[x] for x in self.markets_list if self.markets.get(x)]):
-            time.sleep(0.1)
         if self.state == 'Bot':
             self.orders_thread.daemon = True
             self.orders_thread.start()
             self.wst_private.daemon = True
             self.wst_private.start()
+        while True:
+            if set(self.orderbook) == set([y for x, y in self.markets.items() if x in self.markets_list]):
+                print(f"{self.EXCHANGE_NAME} ALL MARKETS FETCHED")
+            time.sleep(0.1)
 
     @try_exc_regular
     def get_fills(self, symbol: str, order_id: str):

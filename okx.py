@@ -79,6 +79,10 @@ class OkxClient(BaseClient):
             wst_orders = threading.Thread(target=self._run_order_loop, args=[asyncio.new_event_loop()])
             wst_orders.daemon = True
             wst_orders.start()
+        while True:
+            if set(self.orderbook) == set([y for x, y in self.markets.items() if x in self.markets_list]):
+                print(f"{self.EXCHANGE_NAME} ALL MARKETS FETCHED")
+            time.sleep(0.1)
 
     @try_exc_regular
     def _run_order_loop(self, loop):
@@ -312,13 +316,16 @@ class OkxClient(BaseClient):
     async def _update_orderbook(self, obj):
         market = obj['arg']['instId']
         contract = self.get_contract_value(market)
+        top_ask = self.orderbook.get(market, {}).get('asks', [[None, None]])[0][0]
+        top_bid = self.orderbook.get(market, {}).get('bids', [[None, None]])[0][0]
         orderbook = obj['data'][0]
         self.orderbook.update({market: {'asks': [[float(x[0]), float(x[1]) / contract] for x in orderbook['asks']],
                                         'bids': [[float(x[0]), float(x[1]) / contract] for x in orderbook['bids']],
                                         'timestamp': float(orderbook['ts']) / 1000,
                                         'ts_ms': time.time()}})
         if self.market_finder:
-            await self.market_finder.count_one_coin(market.split('-')[0], self.EXCHANGE_NAME)
+            if top_ask != self.orderbook[market]['asks'][0][0] or top_bid != self.orderbook[market]['asks'][0][0]:
+                await self.market_finder.count_one_coin(market.split('-')[0], self.EXCHANGE_NAME)
 
     @try_exc_async
     async def _update_account(self, obj):
@@ -542,10 +549,7 @@ class OkxClient(BaseClient):
 
     @try_exc_regular
     def get_orderbook(self, symbol):
-        while not self.orderbook.get(symbol):
-            print(f"{self.EXCHANGE_NAME}: CAN'T GET OB {symbol}")
-            time.sleep(0.01)
-        return self.orderbook[symbol]
+        return self.orderbook.get(symbol, {})
 
     @try_exc_async
     async def get_all_orders(self, symbol=None, session=None):
