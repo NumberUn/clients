@@ -67,7 +67,7 @@ class BtseClient(BaseClient):
         self.orders_thread = threading.Thread(target=self.deals_thread_func, args=[self.order_loop])
         self.orderbook = {}
         self.orders = {}
-        self.taker_fee = float(keys['TAKER_FEE']) * 0.75
+        self.taker_fee = 0.0005 * 0.75
         self.maker_fee = 0.0001 * 0.75
         self.orig_sizes = {}
         self.LAST_ORDER_ID = 'default'
@@ -489,6 +489,7 @@ class BtseClient(BaseClient):
 
     @try_exc_async
     async def _run_ws_loop(self, ws_type, upd_ob_snapshot, upd_ob, upd_positions, upd_fills, loop):
+        # self.pings = []
         async with aiohttp.ClientSession() as s:
             if ws_type == 'private':
                 endpoint = self.PRIVATE_WS_ENDPOINT
@@ -507,6 +508,9 @@ class BtseClient(BaseClient):
                     data = json.loads(msg.data)
                     if 'update' in data.get('topic', ''):
                         if data.get('data') and data['data']['type'] == 'delta':
+                            # ts_ms = time.time()
+                            # ts_ob = data['data']['timestamp'] / 1000
+                            # self.pings.append(ts_ms - ts_ob)
                             loop.create_task(upd_ob(data))
                         elif data.get('data') and data['data']['type'] == 'snapshot':
                             loop.create_task(upd_ob_snapshot(data))
@@ -824,21 +828,19 @@ if __name__ == '__main__':
 
     config = configparser.ConfigParser()
     config.read('config.ini', "utf-8")
-    client = BtseClient(keys=config['BTSE'],
-                        leverage=float(config['SETTINGS']['LEVERAGE']),
-                        max_pos_part=int(config['SETTINGS']['PERCENT_PER_MARKET']),
-                        markets_list=['ATOM'])
+    client = BtseClient(state='Parser')
     client.markets_list = list(client.markets.keys())
     client.run_updater()
-    time.sleep(3)
+    # time.sleep(3)
     # ob = client.get_orderbook('MANAPFC')
     # client.amount = client.instruments['MANAPFC']['min_size']
     # client.fit_sizes(ob['asks'][2][0], 'MANAPFC')
     # client.order_loop.create_task(client.create_fast_order('MANAPFC', 'buy'))
     while True:
-        time.sleep(1)
-        for symbol in client.markets.values():
-            print(client.get_orderbook(symbol))
+        time.sleep(5)
+        print(f"AV. WS PING: {sum(client.pings) / len(client.pings)}")
+        # for symbol in client.markets.values():
+        #     print(client.get_orderbook(symbol))
 
     # print()
 

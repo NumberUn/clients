@@ -10,7 +10,6 @@ import string
 from datetime import datetime
 import requests
 import random
-import queue
 import uuid
 
 from clients.core.base_client import BaseClient
@@ -19,66 +18,138 @@ from core.wrappers import try_exc_regular, try_exc_async
 
 
 class OkxClient(BaseClient):
-    URI_WS_AWS = "wss://wsaws.okx.com:8443/ws/v5/public"
-    URI_WS_PRIVATE = "wss://wsaws.okx.com:8443/ws/v5/private"
+    WS_PBL = "wss://wsaws.okx.com:8443/ws/v5/public"
+    WS_PRV = "wss://wsaws.okx.com:8443/ws/v5/private"
     BASE_URL = 'https://www.okx.com'
     headers = {'Content-Type': 'application/json'}
     EXCHANGE_NAME = 'OKX'
+    LAST_ORDER_ID = 'default'
 
-    def __init__(self, keys, leverage, markets_list=[], max_pos_part=20):
+    def __init__(self, multibot=None, keys=None, leverage=None, state='Bot', markets_list=[],
+                 max_pos_part=20, finder=None, ob_len=4, market_finder=None):
         super().__init__()
+        self.multibot = multibot
+        self.finder = finder
+        self.market_finder = market_finder
         self.max_pos_part = max_pos_part
         self.markets_list = markets_list
-        self.requestLimit = 1200
-        self.create_order_response = False
-        self.taker_fee = 0.0005
         self.leverage = leverage
-        self.public_key = keys['API_KEY']
-        self.secret_key = keys['API_SECRET']
-        self.passphrase = keys['PASSPHRASE']
-        self.positions = {}
+        self.state = state
+        self.ob_len = ob_len
+        self.taker_fee = 0.0005
+        if keys:
+            self.public_key = keys['API_KEY']
+            self.secret_key = keys['API_SECRET']
+            self.passphrase = keys['PASSPHRASE']
         self.get_position()
-        self._loop_public = asyncio.new_event_loop()
-        self._loop_private = asyncio.new_event_loop()
-        self.queue = queue.Queue()
-        self._connected = asyncio.Event()
-        self.wst_public = threading.Thread(target=self._run_ws_forever, args=['public', self._loop_public])
-        self.wst_private = threading.Thread(target=self._run_ws_forever, args=['private', self._loop_private])
-        self._ws_private = None
         self.instruments = self.get_instruments()
         self.markets = self.get_markets()
-        self.error_info = None
-        self.LAST_ORDER_ID = 'default'
         self.change_leverage()
-
-        self.price = 0
-        self.amount_contracts = 0
-        self.amount = 0
+        self.error_info = None
         self.orderbook = {}
         self.orders = {}
-        self.last_price = {}
-        self.balance = {'free': 0, 'total': 0, 'timestamp': 0}
-        self.start_time = int(datetime.utcnow().timestamp())
-        self.time_sent = datetime.utcnow().timestamp()
+        self.balance = {}
         self.async_tasks = []
+        self.responses = {}
+        self.time_sent = 0
 
     def change_leverage(self):
         for symbol in self.markets_list:
             self.set_leverage(self.markets[symbol])
+
     @staticmethod
     @try_exc_regular
-    def id_generator(size=12, chars=string.digits):
+    def id_generator(size=6, chars=string.ascii_letters):
         return ''.join(random.choice(chars) for _ in range(size))
 
     @try_exc_regular
     def run_updater(self):
-        self.wst_public.daemon = True
-        self.wst_public.start()
-        self.wst_private.daemon = True
-        self.wst_private.start()
+        wst_public = threading.Thread(target=self._run_ws, args=['public', asyncio.new_event_loop(), self.WS_PBL])
+        wst_public.daemon = True
+        wst_public.start()
+        if self.state == 'Bot':
+            wst_private = threading.Thread(target=self._run_ws, args=['private', asyncio.new_event_loop(), self.WS_PRV])
+            wst_private.daemon = True
+            wst_private.start()
+            wst_orders = threading.Thread(target=self._run_order_loop, args=[asyncio.new_event_loop()])
+            wst_orders.daemon = True
+            wst_orders.start()
+
+    @try_exc_regular
+    def _run_order_loop(self, loop):
+        while True:
+            loop.run_until_complete(self.orders_processing_loop(loop))
 
     @try_exc_async
-    async def _login(self, ws, event):
+    async def orders_processing_loop(self, loop):
+        async with aiohttp.ClientSession() as s:
+            async with s.ws_connect(self.WS_PRV) as ws:
+                await loop.create_task(self.login_ws_message(loop, ws, 'orders_processing'))
+                loop.create_task(self._ping(ws))
+                while True:
+                    for task in self.async_tasks:
+                        if task[0] == 'create_order':
+                            price = task[1]['price']
+                            size = task[1]['size']
+                            side = task[1]['side']
+                            market = task[1]['market']
+                            client_id = task[1].get('client_id')
+                            loop.create_task(self._send_order(market, size, price, side, ws, client_id))
+                        elif task[0] == 'cancel_order':
+                            loop.create_task(self.cancel_order(task[1]['market'], task[1]['order_id']))
+                        elif task[0] == 'amend_order':
+                            price = task[1]['price']
+                            size = task[1]['size']
+                            order_id = task[1]['order_id']
+                            market = task[1]['market']
+                            loop.create_task(self.amend_order(price, size, order_id, market))
+                        self.async_tasks.remove(task)
+                    await asyncio.sleep(0.0001)
+
+    @try_exc_async
+    async def cancel_order(self, market, order_id):
+        pass
+
+    @try_exc_async
+    async def amend_order(self, price, size, order_id, market):
+        pass
+
+    @try_exc_async
+    async def _send_order(self, symbol, amount, price, side, ws, client_id, expire=100):
+        self.time_sent = time.time()
+        contract_value = self.instruments[symbol]['contract_value']
+        msg = {"id": self.id_generator(),
+               "op": "order",
+               "args": [{"side": side,
+                         "instId": symbol,
+                         "tdMode": "cross",
+                         "ordType": 'limit',
+                         "sz": int(amount * contract_value),
+                         "px": price}]}
+        if client_id:
+            msg['args'][0].update({'clOrdId': client_id})
+        await ws.send_json(msg)
+        response = await ws.receive()
+        response = json.loads(response.data)
+        order_id = response['data'][0]['ordId'] if response['code'] == '0' else 'default'
+        self.LAST_ORDER_ID = order_id
+        if not order_id:
+            self.error_info = response
+        print(f'{self.EXCHANGE_NAME} CREATE ORDER RESPONSE', response)
+        print(f"{self.EXCHANGE_NAME} CREATE ORDER  TIME {float(response['inTime']) / 1000000 - self.time_sent} sec")
+        # error_parameter = {"id": "587912334468", "op": "order", "code": "1", "msg": "",
+        #          "data": [{"tag": "", "ordId": "", "clOrdId": "", "sCode": "51000", "sMsg": "Parameter sz  error"}],
+        #          "inTime": "1706881893459102", "outTime": "1706881893459133"}
+        # error_margin = {"id": "309558547378", "op": "order", "code": "1", "msg": "", "data": [
+        #     {"tag": "", "ordId": "", "clOrdId": "", "sCode": "51008",
+        #      "sMsg": "Order failed. Insufficient USDT margin in account"}], "inTime": "1706882063195045",
+        #                 "outTime": "1706882063196212"}
+        # success = {"id": "LOpfkn", "op": "order", "code": "0", "msg": "", "data": [
+        #     {"tag": "", "ordId": "673649813187354653", "clOrdId": "makerxxxOKXxxxWPZhyuETH", "sCode": "0",
+        #      "sMsg": "Order successfully placed."}], "inTime": "1706882631273262", "outTime": "1706882631274259"}
+
+    @try_exc_async
+    async def _login(self, ws):
         request_path = '/users/self/verify'
         timestamp = str(int(round(time.time())))
         signature = self.signature(timestamp, 'GET', request_path, None)
@@ -89,7 +160,6 @@ class OkxClient(BaseClient):
                    "timestamp": timestamp,
                    "sign": signature
                }]}
-        await event.wait()
         await ws.send_json(msg)
 
     @try_exc_regular
@@ -102,112 +172,74 @@ class OkxClient(BaseClient):
         return base64.b64encode(signature).decode('UTF-8')
 
     @try_exc_async
-    async def _subscribe_orderbooks(self):
-        # for symbol in list(self.markets.values())[:10]:
+    async def _subscribe_orderbooks(self, ws):
         for symbol in self.markets_list:
             if market := self.markets.get(symbol):
-                msg = {
-                    "op": "subscribe",
-                    "args": [{
-                        "channel": "books5",  # 0-l2-tbt",
-                        "instId": market
-                    }]}
-                await self._connected.wait()
-                await self._ws_public.send_json(msg)
+                msg = {"op": "subscribe",
+                       "args": [{
+                           "channel": "bbo-tbt",  # "bbo-tbt",  # 0-l2-tbt",
+                           "instId": market}]}
+                await ws.send_json(msg)
 
     @try_exc_async
-    async def _subscribe_account(self):
-        msg = {
-            "op": "subscribe",
-            "args": [{
-                "channel": "account"
-            }]}
-        await self._connected.wait()
-        try:
-            await self._ws_private.send_json(msg)
-        except Exception as e:
-            traceback.print_exc()
+    async def _subscribe_account(self, ws):
+        msg = {"op": "subscribe",
+               "args": [{"channel": "account"}]}
+        await ws.send_json(msg)
 
     @try_exc_async
-    async def _subscribe_positions(self):
+    async def _subscribe_positions(self, ws):
         for symbol in self.markets_list:
             if market := self.markets.get(symbol):
-                msg = {
-                    "op": "subscribe",
-                    "args": [
-                        {
-                            "channel": "positions",
-                            "instType": "SWAP",
-                            "instFamily": market.split('-SWAP')[0],
-                            "instId": market
-                        }
-                    ]
-                }
-                await self._connected.wait()
-                await self._ws_private.send_json(msg)
+                msg = {"op": "subscribe",
+                       "args": [{"channel": "positions",
+                                 "instType": "SWAP",
+                                 "instFamily": market.split('-SWAP')[0],
+                                 "instId": market}]}
+                await ws.send_json(msg)
 
     @try_exc_async
-    async def _subscribe_orders(self):
+    async def _subscribe_orders(self, ws):
         for symbol in self.markets_list:
             if market := self.markets.get(symbol):
-                msg = {
-                    "op": "subscribe",
-                    "args": [
-                        {
-                            "channel": "orders",
-                            "instType": "SWAP",
-                            "instFamily": market.split('-SWAP')[0],
-                            "instId": market
-                        }
-                    ]
-                }
-                await self._connected.wait()
-                await self._ws_private.send_json(msg)
+                msg = {"op": "subscribe",
+                       "args": [{"channel": "orders",
+                                 "instType": "SWAP",
+                                 "instFamily": market.split('-SWAP')[0],
+                                 "instId": market}]}
+                await ws.send_json(msg)
 
     @try_exc_regular
-    def _run_ws_forever(self, type, loop):
+    def _run_ws(self, connection_type, loop, endpoint):
         while True:
-            loop.run_until_complete(self._run_ws_loop(type))
+            loop.run_until_complete(self._run_ws_loop(connection_type, loop, endpoint))
 
     @try_exc_async
-    async def _run_ws_loop(self, type):
+    async def _run_ws_loop(self, connection_type, loop, endpoint):
         async with aiohttp.ClientSession() as s:
-            if type == 'private':
-                endpoint = self.URI_WS_PRIVATE
-            else:
-                endpoint = self.URI_WS_AWS
             async with s.ws_connect(endpoint) as ws:
-                print(f"OKEX: connected {type}")
-                self._connected.set()
-                # try:
-                if type == 'private':
+                await loop.create_task(self.login_ws_message(loop, ws, connection_type))
+                if connection_type == 'private':
                     self._ws_private = ws
-                    await self._loop_private.create_task(self._login(ws, self._connected))
-                    async for msg in ws:
-                        if json.loads(msg.data).get('event'):
-                            break
-                    await self._loop_private.create_task(self._subscribe_account())
-                    await self._loop_private.create_task(self._subscribe_positions())
-                    await self._loop_private.create_task(self._subscribe_orders())
+                    await loop.create_task(self._subscribe_account(ws))
+                    await loop.create_task(self._subscribe_positions(ws))
+                    await loop.create_task(self._subscribe_orders(ws))
                 else:
-                    self._ws_public = ws
-                    await self._loop_public.create_task(self._login(ws, self._connected))
-                    await self._loop_public.create_task(self._subscribe_orderbooks())
+                    await loop.create_task(self._subscribe_orderbooks(ws))
+                loop.create_task(self._ping(ws))
                 async for msg in ws:
-                    try:
-                        args = self.queue.get_nowait()
-                        print(f"ORDER SENDING: {args}")
-                        await self._send_order(**args)
-                    except queue.Empty:
-                        await self._ping(ws)
                     self._process_msg(msg)
 
     @try_exc_async
+    async def login_ws_message(self, loop, ws, connection_type):
+        await loop.create_task(self._login(ws))
+        print(self.EXCHANGE_NAME, connection_type, await ws.receive())
+
+    @try_exc_async
     async def _ping(self, ws):
-        time_from = int(int(round(datetime.utcnow().timestamp())) - self.start_time) % 5
-        if not time_from:
-            await ws.ping(b'PING')
-            self.start_time -= 1
+        while True:
+            await asyncio.sleep(25)  # Adjust the ping interval as needed
+            await ws.ping()
 
     @try_exc_regular
     def get_balance(self):
@@ -242,31 +274,27 @@ class OkxClient(BaseClient):
         for position in obj['data']:
             if not position.get('notionalUsd'):
                 continue
-            side = 'LONG' if float(position['pos']) > 0 else 'SHORT'
+            market = obj['arg']['instId']
             amount_usd = float(position['notionalUsd'])
-            if side == 'SHORT':
-                amount_usd = -amount_usd
-            amount = amount_usd / float(position['markPx'])
-            self.positions.update({obj['arg']['instId']: {'side': side,
-                                                          'amount_usd': amount_usd,
-                                                          'amount': amount,
-                                                          'entry_price': float(position['avgPx']),
-                                                          'unrealized_pnl_usd': float(position['upl']),
-                                                          'realized_pnl_usd': 0,
-                                                          'lever': self.leverage}})
-        # print(self.positions)
-        # for one in obj['data'][0]:
-        #     if obj['data'][0][one]:
-        #         self.positions[obj['arg']['instId']].update({one: obj['data'][0][one]})
+            self.positions.update({market: {'side': 'LONG' if float(position['pos']) > 0 else 'SHORT',
+                                            'amount_usd': amount_usd if float(position['pos']) > 0 else -amount_usd,
+                                            'amount': amount_usd / float(position['markPx']),
+                                            'entry_price': float(position['avgPx']),
+                                            'unrealized_pnl_usd': float(position['upl']),
+                                            'realized_pnl_usd': 0,
+                                            'lever': self.leverage}})
 
     @try_exc_regular
     def _update_orderbook(self, obj):
-        symbol = obj['arg']['instId']
-        contract = self.get_contract_value(symbol)
+        flag = False
+        flag_market = False
+        market = obj['arg']['instId']
+        contract = self.get_contract_value(market)
         orderbook = obj['data'][0]
-        self.orderbook.update({symbol: {'asks': [[float(x[0]), float(x[1]) * contract] for x in orderbook['asks']],
+        print(orderbook)
+        self.orderbook.update({market: {'asks': [[float(x[0]), float(x[1]) * contract] for x in orderbook['asks']],
                                         'bids': [[float(x[0]), float(x[1]) * contract] for x in orderbook['bids']],
-                                        'timestamp': int(orderbook['ts'])}})
+                                        'timestamp': orderbook['ts']}})
 
     @try_exc_regular
     def _update_account(self, obj):
@@ -286,22 +314,41 @@ class OkxClient(BaseClient):
         if obj.get('data') and obj.get('arg'):
             for order in obj.get('data'):
                 print(f"OKEX RESPONSE: {order}\n")
-                status, flag = self.get_order_status(order, 'WS')
-                if flag:
-                    continue
+                status = self.get_order_status(order, 'WS')
                 self.get_taker_fee(order)
                 contract_value = self.get_contract_value(order['instId'])
                 result = {
                     'exchange_order_id': order['ordId'],
-                    'exchange': self.EXCHANGE_NAME,
+                    'exchange_name': self.EXCHANGE_NAME,
                     'status': status,
                     'factual_price': float(order['fillPx']) if order['fillPx'] else 0,
+                    'price': float(order['fillPx']) if order['fillPx'] else 0,
                     'factual_amount_coin': float(order['fillSz']) * contract_value if order['fillSz'] else 0,
+                    'size': float(order['fillSz']) * contract_value if order['fillSz'] else 0,
                     'factual_amount_usd': float(order['fillNotionalUsd']) if order['fillNotionalUsd'] else 0,
                     'datetime_update': datetime.utcnow(),
-                    'ts_update': int(round(datetime.utcnow().timestamp() * 1000))
-                }
+                    'ts_update': int(round(datetime.utcnow().timestamp() * 1000)),
+                    'api_response': order,
+                    'timestamp': float(order['uTime']) / 1000,
+                    'time_order_sent': self.time_sent,
+                    'create_order_time': float(order['uTime']) / 1000 - self.time_sent}
+                print(result)
+                if client_id := order.get("clOrdId"):
+                    self.responses.update({client_id: result})
                 self.orders.update({order['ordId']: result})
+        # example = {'accFillSz': '0', 'algoClOrdId': '', 'algoId': '', 'amendResult': '', 'amendSource': '',
+        #            'attachAlgoClOrdId': '', 'attachAlgoOrds': [], 'avgPx': '0', 'cTime': '1706884013692',
+        #            'cancelSource': '', 'category': 'normal', 'ccy': '', 'clOrdId': 'makerxxxOKXxxxlXicApxxxETH',
+        #            'code': '0', 'execType': '', 'fee': '0', 'feeCcy': 'USDT', 'fillFee': '0', 'fillFeeCcy': '',
+        #            'fillFwdPx': '', 'fillMarkPx': '', 'fillMarkVol': '', 'fillNotionalUsd': '', 'fillPnl': '0',
+        #            'fillPx': '', 'fillPxUsd': '', 'fillPxVol': '', 'fillSz': '0', 'fillTime': '',
+        #            'instId': 'ETH-USDT-SWAP', 'instType': 'SWAP', 'lastPx': '2288.05', 'lever': '5', 'msg': '',
+        #            'notionalUsd': '217.2335816', 'ordId': '673655611477090329', 'ordType': 'limit', 'pnl': '0',
+        #            'posSide': 'net', 'px': '2173.64', 'pxType': '', 'pxUsd': '', 'pxVol': '', 'quickMgnType': '',
+        #            'rebate': '0', 'rebateCcy': 'USDT', 'reduceOnly': 'false', 'reqId': '', 'side': 'buy', 'slOrdPx': '',
+        #            'slTriggerPx': '', 'slTriggerPxType': '', 'source': '', 'state': 'live', 'stpId': '', 'stpMode': '',
+        #            'sz': '1', 'tag': '', 'tdMode': 'cross', 'tgtCcy': '', 'tpOrdPx': '', 'tpTriggerPx': '',
+        #            'tpTriggerPxType': '', 'tradeId': '', 'uTime': '1706884013692'}
 
     @try_exc_regular
     def get_taker_fee(self, order):
@@ -313,6 +360,7 @@ class OkxClient(BaseClient):
     def _process_msg(self, msg: aiohttp.WSMessage):
         obj = json.loads(msg.data)
         if obj.get('event'):
+            print(obj)
             return
         if obj.get('arg'):
             if obj['arg']['channel'] == 'account':
@@ -364,32 +412,15 @@ class OkxClient(BaseClient):
         return price_precision
 
     @try_exc_regular
-    def fit_sizes(self, price, symbol):
+    def fit_sizes(self, price, amount, symbol):
         instr = self.instruments[symbol]
         tick_size = instr['tick_size']
         quantity_precision = instr['quantity_precision']
         price_precision = instr['price_precision']
-        contract_value = instr['contract_value']
-        self.amount = round(self.amount, quantity_precision)
-        self.amount_contracts = round(self.amount * contract_value)
+        amount = round(amount, quantity_precision)
         rounded_price = round(price / tick_size) * tick_size
-        self.price = round(rounded_price, price_precision)
-
-    @try_exc_async
-    async def create_order(self, symbol, side, session, expire=100, client_id=None) -> dict:
-        self.time_sent = int(round((datetime.utcnow().timestamp()) * 1000))
-        if not self._ws_private:
-            return self.create_http_order(symbol, side, expire=expire, client_id=client_id)
-        self.queue.put_nowait({'symbol': symbol,
-                               'amount': self.amount_contracts,
-                               'price': self.price,
-                               'side': side,
-                               'expire': expire})
-        while not self.create_order_response:
-            if datetime.utcnow().timestamp() - (self.time_sent / 1000) > 2:
-                return self.create_http_order(symbol, side, expire=expire, client_id=client_id)
-            time.sleep(0.01)
-        return self.get_order_response()
+        price = round(rounded_price, price_precision)
+        return price, amount
 
     @try_exc_regular
     def get_order_response(self):
@@ -410,26 +441,6 @@ class OkxClient(BaseClient):
             }
             self.error_info = "WS DOESN'T GIVE ANY DATA ABOUT ERROR"
         return response
-
-    @try_exc_async
-    async def _send_order(self, symbol, amount, price, side, expire=100):
-        # expire_date = str(round((datetime.utcnow().timestamp() + expire) * 1000))
-        msg = {
-            "id": self.id_generator(),
-            "op": "order",
-            "args": [
-                {
-                    "side": side,
-                    "instId": symbol,
-                    "tdMode": "cross",
-                    "ordType": 'limit',
-                    "sz": amount,
-                    # "expTime": expire_date,
-                    "px": price
-                }
-            ]
-        }
-        await self._ws_private.send_json(msg)
 
     @staticmethod
     @try_exc_regular
@@ -482,7 +493,6 @@ class OkxClient(BaseClient):
         headers = self.get_private_headers('GET', way)
         headers.update(self.headers)
         resp = requests.get(url=self.BASE_URL + way, headers=headers).json()
-        # print(resp)
         if resp.get('code') == '0':
             self.balance = {'free': float(resp['data'][0]['details'][0]['availBal']),
                             'total': float(resp['data'][0]['details'][0]['eq']),
@@ -505,8 +515,7 @@ class OkxClient(BaseClient):
                 }
         body_json = json.dumps(body)
         headers = self.get_private_headers('POST', way, body_json)
-        resp = requests.post(url=self.BASE_URL + way, headers=headers, data=body_json).json()
-        print(resp)
+        requests.post(url=self.BASE_URL + way, headers=headers, data=body_json).json()
 
     @try_exc_regular
     def get_orderbook(self, symbol):
@@ -514,14 +523,6 @@ class OkxClient(BaseClient):
             print(f"{self.EXCHANGE_NAME}: CAN'T GET OB {symbol}")
             time.sleep(0.01)
         return self.orderbook[symbol]
-
-    @try_exc_regular
-    def get_last_price(self, side):
-        return self.last_price[side]
-
-    @try_exc_regular
-    def get_orders(self):
-        return self.orders
 
     @try_exc_async
     async def get_all_orders(self, symbol=None, session=None):
@@ -580,19 +581,13 @@ class OkxClient(BaseClient):
     @try_exc_regular
     def get_order_status(self, order, req_type):
         status = None
-        flag = False
         if order['state'] == 'live':
             if req_type == 'HTTP':
                 status = OrderStatus.PROCESSING
             else:
-                if float(order['px']) == self.price and float(order['sz']) == self.amount_contracts:
-                    self.create_order_response = True
-                    self.LAST_ORDER_ID = order['ordId']
-                print(f"OKEX ORDER PLACE TIME: {float(order['uTime']) - self.time_sent} ms\n")
-                if self.orders.get(order['ordId']):
-                    flag = True
-                else:
-                    status = OrderStatus.PROCESSING
+                self.LAST_ORDER_ID = order['ordId']
+                # print(f"OKEX ORDER PLACE TIME: {float(order['uTime']) - self.time_sent} ms\n")
+                status = OrderStatus.PROCESSING
         if order['state'] == 'filled':
             status = OrderStatus.FULLY_EXECUTED
         elif order['state'] == 'canceled' and order['fillSz'] != '0' and order['fillSz'] != order['sz']:
@@ -601,14 +596,14 @@ class OkxClient(BaseClient):
             status = OrderStatus.PARTIALLY_EXECUTED
         elif order['state'] == 'canceled' and order['fillSz'] == '0':
             status = OrderStatus.NOT_EXECUTED
-        return status, flag
+        return status
 
     @try_exc_regular
     def reformat_orders(self, response):
         orders = []
         for order in response['data']:
             symbol = order['instId']
-            status, flag = self.get_order_status(order, 'HTTP')
+            status = self.get_order_status(order, 'HTTP')
             real_fee = 0
             usd_size = 0
             if order['avgPx']:
@@ -677,14 +672,15 @@ class OkxClient(BaseClient):
                 return orderbook
 
     @try_exc_regular
-    def create_http_order(self, symbol, side, expire=100, client_id=None):
+    def create_order(self, symbol, side, price, sz, session, expire=10000, client_id=None, expiration=None):
         way = '/api/v5/trade/order'
+        contract_value = self.instruments[symbol]['contract_value']
         body = {"instId": symbol,
                 "tdMode": "cross",
                 "side": side,
                 "ordType": "limit",
-                "px": self.price,
-                "sz": self.amount_contracts}
+                "px": price,
+                "sz": int(sz * contract_value)}
         json_body = json.dumps(body)
         headers = self.get_private_headers('POST', way, json_body)
         resp = requests.post(url=self.BASE_URL + way, headers=headers, data=json_body).json()
@@ -730,22 +726,21 @@ if __name__ == '__main__':
 
     client.run_updater()
 
+    time.sleep(3)
+    market = client.markets['ETH']
+    ob = client.get_orderbook(market)
+    size = 0.1
+    price = ob['bids'][0][0] * 0.95
+    price, size = client.fit_sizes(price, size, market)
+    order_data = {'market': market,
+                  'client_id': f'makerxxx{client.EXCHANGE_NAME}xxx' + client.id_generator() + 'xxx' + market.split('-')[
+                      0],
+                  'price': price,
+                  'size': size,
+                  'side': 'buy'}
+    print(order_data)
+    client.async_tasks.append(['create_order', order_data])
 
-    # price = client.get_orderbook('SOL-USDT-SWAP')['bids'][4][0]
-    # client.fit_sizes(2.1223566, price, 'SOL-USDT-SWAP')
-    # print(client.get_orderbook_by_symbol('XRP-USDT-SWAP'))
-    client.amount_contracts = 3
-    client.price = 9.2
-    data = client.create_http_order('ICP-USDT-SWAP', 'buy')
-    print(client.get_order_by_id('ICP-USDT-SWAP', data['exchange_order_id']))
     while True:
-        time.sleep(1)
-    # async def test_order():
-    #     async with aiohttp.ClientSession() as session:
-    #         data = await client.create_order('SOL-USDT-SWAP',
-    #                                          'buy',
-    #                                          session=session,
-    #                                          client_id=f"api_deal_{str(uuid.uuid4()).replace('-', '')[:20]}")
-    #         await client.get_all_orders()
-    #         await client.get_order_by_id(order_id='637752702231269376', symbol='SOL-USDT-SWAP', session=session)
-
+        time.sleep(5)
+        print(client.get_all_tops())
