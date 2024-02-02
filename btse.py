@@ -806,6 +806,7 @@ class BtseClient(BaseClient):
         while True:
             if set(self.orderbook) == set([y for x, y in self.markets.items() if x in self.markets_list]):
                 print(f"{self.EXCHANGE_NAME} ALL MARKETS FETCHED")
+                break
             time.sleep(0.1)
 
     @try_exc_regular
