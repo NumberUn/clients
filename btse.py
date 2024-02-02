@@ -630,7 +630,7 @@ class BtseClient(BaseClient):
             market = pos['marketName'].split('-')[0]
             contract_value = self.instruments[market]['contract_value']
             size = pos['totalContracts'] * contract_value
-            size = -size if pos['orderModeName'] == 'MODE_SELL' else size
+            size = -size if pos['totalValue'] < 0 else size
             self.positions.update({market: {'timestamp': int(datetime.utcnow().timestamp()),
                                             'entry_price': pos['entryPrice'],
                                             'amount': size,

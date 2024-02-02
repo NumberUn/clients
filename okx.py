@@ -314,14 +314,13 @@ class OkxClient(BaseClient):
     async def _update_positions(self, obj):
         if not obj['data']:
             return
-        print(f"POSITIONS UPDATE {self.EXCHANGE_NAME}: {obj}")
         for position in obj['data']:
             if not position.get('notionalUsd'):
                 continue
             market = obj['arg']['instId']
-            amount_usd = float(position['notionalUsd'])
+            amount_usd = float(position['notionalUsd']) if float(position['pos']) > 0 else -float(position['notionalUsd'])
             self.positions.update({market: {'side': 'LONG' if float(position['pos']) > 0 else 'SHORT',
-                                            'amount_usd': amount_usd if float(position['pos']) > 0 else -amount_usd,
+                                            'amount_usd': amount_usd,
                                             'amount': amount_usd / float(position['markPx']),
                                             'entry_price': float(position['avgPx']),
                                             'unrealized_pnl_usd': float(position['upl']),
