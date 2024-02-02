@@ -110,7 +110,7 @@ class OkxClient(BaseClient):
 
     @try_exc_async
     async def cancel_order(self, market, order_id, ws):
-        # self.multibot.deleted_orders.append(order_id)
+        self.multibot.deleted_orders.append(order_id)
         data = {"id": self.id_generator(),
                 "op": "cancel-order",
                 "args": [
@@ -118,15 +118,14 @@ class OkxClient(BaseClient):
                      "ordId": order_id}]}
         await ws.send_json(data)
         response = await ws.receive()
-        print(json.loads(response.data))
-        # if order_id in self.multibot.deleted_orders:
-        #     self.multibot.deleted_orders.remove(order_id)
-
-    #     # print(f'ORDER CANCELED {self.EXCHANGE_NAME}', response)
-    #     if 'maker' in response[0].get('clOrderID', '') and self.EXCHANGE_NAME == self.multibot.mm_exchange:
-    #         coin = symbol.split('PFC')[0]
-    #         if self.multibot.open_orders.get(coin + '-' + self.EXCHANGE_NAME, [''])[0] == response[0]['orderID']:
-    #             self.multibot.open_orders.pop(coin + '-' + self.EXCHANGE_NAME)
+        response = json.loads(response.data)
+        if order_id in self.multibot.deleted_orders:
+            self.multibot.deleted_orders.remove(order_id)
+        # print(f'ORDER CANCELED {self.EXCHANGE_NAME}', response)
+        if 'maker' in response['data'][0].get('clOrdId', '') and self.EXCHANGE_NAME == self.multibot.mm_exchange:
+            coin = market.split('-')[0]
+            if self.multibot.open_orders.get(coin + '-' + self.EXCHANGE_NAME, [''])[0] == response[0]['orderID']:
+                self.multibot.open_orders.pop(coin + '-' + self.EXCHANGE_NAME)
     # error_example = {'id': 'RrkaMm', 'op': 'cancel-order', 'code': '1', 'msg': '', 'data': [
     #     {'ordId': 'makerxxxOKXxxxXoSXQmxxxETH', 'clOrdId': '', 'sCode': '51000', 'sMsg': 'Parameter ordId  error'}],
     #                  'inTime': '1706890754843769', 'outTime': '1706890754843819'}
