@@ -107,7 +107,8 @@ class BtseClient(BaseClient):
                         client_id = task[1].get('client_id')
                         loop.create_task(self.create_fast_order(price, size, side, market, client_id))
                     elif task[0] == 'cancel_order':
-                        loop.create_task(self.cancel_order(task[1]['market'], task[1]['order_id']))
+                        if task[1]['order_id'] not in self.multibot.deleted_orders:
+                            loop.create_task(self.cancel_order(task[1]['market'], task[1]['order_id']))
                     elif task[0] == 'amend_order':
                         price = task[1]['price']
                         size = task[1]['size']
@@ -308,14 +309,16 @@ class BtseClient(BaseClient):
             try:
                 response = await resp.json()
             except:
-                await self.cancel_order(market, order_id)
+                if order_id not in self.multibot.deleted_orders:
+                    await self.cancel_order(market, order_id)
                 return
             # print(f"{self.EXCHANGE_NAME} ORDER AMEND RESPONSE: {response}")
             if isinstance(response, dict):
                 # print(f"ERROR BODY: {body}. Response: {response}")
                 # print(f"old order size: {old_order_size}")
                 # print(f"new order size: {sz}")
-                await self.cancel_order(market, order_id)
+                if order_id not in self.multibot.deleted_orders:
+                    await self.cancel_order(market, order_id)
                 return
             # print(f"{self.EXCHANGE_NAME} ORDER AMEND PING: {response[0]['timestamp'] / 1000 - time_start}")
             status = self.get_order_response_status(response)
@@ -346,9 +349,10 @@ class BtseClient(BaseClient):
         time_start = time.time()
         path = '/api/v2.1/order'
         contract_value = self.instruments[market]['contract_value']
+        sz = int(sz / contract_value)
         body = {"symbol": market,
                 "side": side.upper(),
-                'size': int(sz / contract_value)}
+                'size': sz if sz else 1}
         if self.EXCHANGE_NAME == self.multibot.mm_exchange:
             body.update({"price": price,
                          'type': 'LIMIT'})
@@ -538,10 +542,10 @@ class BtseClient(BaseClient):
 
     @try_exc_async
     async def cancel_order(self, symbol: str, order_id: str):
+        self.multibot.deleted_orders.append(order_id)
         path = '/api/v2.1/order'
         params = {'symbol': symbol,
                   'orderID': order_id}
-        self.multibot.deleted_orders.append(order_id)
         self.get_private_headers(path, params)
         path += '?' + "&".join([f"{key}={params[key]}" for key in sorted(params)])
         async with self.async_session.delete(url=self.BASE_URL + path, headers=self.session.headers, json=params) as resp:
