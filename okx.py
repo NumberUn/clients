@@ -55,6 +55,8 @@ class OkxClient(BaseClient):
         self.responses = {}
         self.time_sent = 0
         self.orders_timestamps = {}
+        self.receiving = asyncio.Event()
+        self.receiving.set()
         if multibot:
             self.cancel_all_orders()
 
@@ -127,7 +129,10 @@ class OkxClient(BaseClient):
                     {"instId": market,
                      "ordId": order_id}]}
         await ws.send_json(data)
+        await self.receiving.wait()
+        self.receiving.clear()
         response = await ws.receive()
+        self.receiving.set()
         response = json.loads(response.data)
         if order_id in self.multibot.deleted_orders:
             self.multibot.deleted_orders.remove(order_id)
@@ -162,7 +167,10 @@ class OkxClient(BaseClient):
         if client_id:
             msg['args'][0].update({'clOrdId': client_id})
         await ws.send_json(msg)
+        await self.receiving.wait()
+        self.receiving.clear()
         response = await ws.receive()
+        self.receiving.set()
         response = json.loads(response.data)
         order_id = response['data'][0]['ordId'] if response['code'] == '0' else 'default'
         self.LAST_ORDER_ID = order_id
@@ -306,6 +314,7 @@ class OkxClient(BaseClient):
     async def _update_positions(self, obj):
         if not obj['data']:
             return
+        print(f"POSITIONS UPDATE {self.EXCHANGE_NAME}: {obj}")
         for position in obj['data']:
             if not position.get('notionalUsd'):
                 continue
