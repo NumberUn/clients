@@ -50,8 +50,10 @@ class OkxClient(BaseClient):
         self.orders = {}
         self.balance = {}
         self.async_tasks = []
+        self.deleted_orders = []
         self.responses = {}
         self.time_sent = 0
+        self.cancel_all_orders()
 
     def change_leverage(self):
         for symbol in self.markets_list:
@@ -96,7 +98,7 @@ class OkxClient(BaseClient):
                             client_id = task[1].get('client_id')
                             loop.create_task(self._send_order(market, size, price, side, ws, client_id))
                         elif task[0] == 'cancel_order':
-                            loop.create_task(self.cancel_order(task[1]['market'], task[1]['order_id']))
+                            loop.create_task(self.cancel_order(task[1]['market'], task[1]['order_id'], ws))
                         elif task[0] == 'amend_order':
                             price = task[1]['price']
                             size = task[1]['size']
@@ -107,8 +109,30 @@ class OkxClient(BaseClient):
                     await asyncio.sleep(0.0001)
 
     @try_exc_async
-    async def cancel_order(self, market, order_id):
-        pass
+    async def cancel_order(self, market, order_id, ws):
+        # self.multibot.deleted_orders.append(order_id)
+        data = {"id": self.id_generator(),
+                "op": "cancel-order",
+                "args": [
+                    {"instId": market,
+                     "ordId": order_id}]}
+        await ws.send_json(data)
+        response = await ws.receive()
+        print(json.loads(response.data))
+        # if order_id in self.multibot.deleted_orders:
+        #     self.multibot.deleted_orders.remove(order_id)
+
+    #     # print(f'ORDER CANCELED {self.EXCHANGE_NAME}', response)
+    #     if 'maker' in response[0].get('clOrderID', '') and self.EXCHANGE_NAME == self.multibot.mm_exchange:
+    #         coin = symbol.split('PFC')[0]
+    #         if self.multibot.open_orders.get(coin + '-' + self.EXCHANGE_NAME, [''])[0] == response[0]['orderID']:
+    #             self.multibot.open_orders.pop(coin + '-' + self.EXCHANGE_NAME)
+    # error_example = {'id': 'RrkaMm', 'op': 'cancel-order', 'code': '1', 'msg': '', 'data': [
+    #     {'ordId': 'makerxxxOKXxxxXoSXQmxxxETH', 'clOrdId': '', 'sCode': '51000', 'sMsg': 'Parameter ordId  error'}],
+    #                  'inTime': '1706890754843769', 'outTime': '1706890754843819'}
+    # success_example = {'id': 'rfkWOW', 'op': 'cancel-order', 'code': '0', 'msg': '', 'data': [
+    #     {'ordId': '673684370330640402', 'clOrdId': 'makerxxxOKXxxxCgSkIRxxxETH', 'sCode': '0', 'sMsg': ''}],
+    #                    'inTime': '1706890870438465', 'outTime': '1706890870439349'}
 
     @try_exc_async
     async def amend_order(self, price, size, order_id, market):
@@ -228,7 +252,7 @@ class OkxClient(BaseClient):
                     await loop.create_task(self._subscribe_orderbooks(ws))
                 loop.create_task(self._ping(ws))
                 async for msg in ws:
-                    self._process_msg(msg)
+                    loop.create_task(self._process_msg(msg))
 
     @try_exc_async
     async def login_ws_message(self, loop, ws, connection_type):
@@ -267,8 +291,8 @@ class OkxClient(BaseClient):
                                                    'realized_pnl_usd': 0,
                                                    'lever': self.leverage}})
 
-    @try_exc_regular
-    def _update_positions(self, obj):
+    @try_exc_async
+    async def _update_positions(self, obj):
         if not obj['data']:
             return
         for position in obj['data']:
@@ -284,20 +308,20 @@ class OkxClient(BaseClient):
                                             'realized_pnl_usd': 0,
                                             'lever': self.leverage}})
 
-    @try_exc_regular
-    def _update_orderbook(self, obj):
-        flag = False
-        flag_market = False
+    @try_exc_async
+    async def _update_orderbook(self, obj):
         market = obj['arg']['instId']
         contract = self.get_contract_value(market)
         orderbook = obj['data'][0]
-        print(orderbook)
         self.orderbook.update({market: {'asks': [[float(x[0]), float(x[1]) * contract] for x in orderbook['asks']],
                                         'bids': [[float(x[0]), float(x[1]) * contract] for x in orderbook['bids']],
-                                        'timestamp': orderbook['ts']}})
+                                        'timestamp': float(orderbook['ts']) / 1000,
+                                        'ts_ms': time.time()}})
+        if self.market_finder:
+            await self.market_finder.count_one_coin(market.split('-')[0], self.EXCHANGE_NAME)
 
-    @try_exc_regular
-    def _update_account(self, obj):
+    @try_exc_async
+    async def _update_account(self, obj):
         resp = obj['data']
         if len(resp):
             acc_data = resp[0]['details'][0]
@@ -309,8 +333,8 @@ class OkxClient(BaseClient):
                             'total': 0,
                             'timestamp': round(datetime.utcnow().timestamp())}
 
-    @try_exc_regular
-    def _update_orders(self, obj):
+    @try_exc_async
+    async def _update_orders(self, obj):
         if obj.get('data') and obj.get('arg'):
             for order in obj.get('data'):
                 print(f"OKEX RESPONSE: {order}\n")
@@ -332,7 +356,7 @@ class OkxClient(BaseClient):
                     'timestamp': float(order['uTime']) / 1000,
                     'time_order_sent': self.time_sent,
                     'create_order_time': float(order['uTime']) / 1000 - self.time_sent}
-                print(result)
+                # print(result)
                 if client_id := order.get("clOrdId"):
                     self.responses.update({client_id: result})
                 self.orders.update({order['ordId']: result})
@@ -356,21 +380,21 @@ class OkxClient(BaseClient):
             if order['fillNotionalUsd']:
                 self.taker_fee = abs(float(order['fillFee'])) / float(order['fillNotionalUsd'])
 
-    @try_exc_regular
-    def _process_msg(self, msg: aiohttp.WSMessage):
+    @try_exc_async
+    async def _process_msg(self, msg: aiohttp.WSMessage):
         obj = json.loads(msg.data)
         if obj.get('event'):
             print(obj)
             return
         if obj.get('arg'):
             if obj['arg']['channel'] == 'account':
-                self._update_account(obj)
+                await self._update_account(obj)
             elif obj['arg']['channel'] in ['bbo-tbt', 'books50-l2-tbt', 'books5']:
-                self._update_orderbook(obj)
+                await self._update_orderbook(obj)
             elif obj['arg']['channel'] == 'positions':
-                self._update_positions(obj)
+                await self._update_positions(obj)
             elif obj['arg']['channel'] == 'orders':
-                self._update_orders(obj)
+                await self._update_orders(obj)
 
     @try_exc_regular
     def get_contract_value(self, symbol):
@@ -614,7 +638,7 @@ class OkxClient(BaseClient):
                 'id': uuid.uuid4(),
                 'datetime': datetime.utcfromtimestamp(int(order['uTime']) / 1000),
                 'ts': int(time.time()),
-                'context': 'web-interface' if 'api_' not in order['clOrdId'] else order['clOrdId'].split('_')[1],
+                'context': 'web-interface' if 'api_' not in order['clOrdId'] else order['clOrdId'].split('xxx')[0],
                 'parent_id': uuid.uuid4(),
                 'exchange_order_id': order['ordId'],
                 'type': order['category'],
@@ -738,9 +762,16 @@ if __name__ == '__main__':
                   'price': price,
                   'size': size,
                   'side': 'buy'}
-    print(order_data)
+    print(f"{order_data=}")
     client.async_tasks.append(['create_order', order_data])
+    time.sleep(0.1)
+    print(client.responses)
+    for order_id, response in client.responses.items():
+        cancel_data = ['cancel_order', {'order_id': response['exchange_order_id'],
+                                        'market': market}]
+        print(f"{cancel_data=}")
+        client.async_tasks.append(cancel_data)
 
     while True:
         time.sleep(5)
-        print(client.get_all_tops())
+        # print(client.get_all_tops())

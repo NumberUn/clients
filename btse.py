@@ -75,7 +75,6 @@ class BtseClient(BaseClient):
         self.last_websocket_ping = 0
         self.async_tasks = []
         self.responses = {}
-        self.deleted_orders = []
         self.cancel_all_orders()
 
     @try_exc_regular
@@ -538,9 +537,7 @@ class BtseClient(BaseClient):
         path = '/api/v2.1/order'
         params = {'symbol': symbol,
                   'orderID': order_id}
-        if order_id in self.deleted_orders:
-            return
-        self.deleted_orders.append(order_id)
+        self.multibot.deleted_orders.append(order_id)
         self.get_private_headers(path, params)
         path += '?' + "&".join([f"{key}={params[key]}" for key in sorted(params)])
         async with self.async_session.delete(url=self.BASE_URL + path, headers=self.session.headers, json=params) as resp:
