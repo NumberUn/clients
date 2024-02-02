@@ -53,7 +53,8 @@ class OkxClient(BaseClient):
         self.deleted_orders = []
         self.responses = {}
         self.time_sent = 0
-        self.cancel_all_orders()
+        if multibot:
+            self.cancel_all_orders()
 
     def change_leverage(self):
         for symbol in self.markets_list:

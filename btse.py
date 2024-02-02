@@ -75,7 +75,8 @@ class BtseClient(BaseClient):
         self.last_websocket_ping = 0
         self.async_tasks = []
         self.responses = {}
-        self.cancel_all_orders()
+        if multibot:
+            self.cancel_all_orders()
 
     @try_exc_regular
     def deals_thread_func(self, loop):
