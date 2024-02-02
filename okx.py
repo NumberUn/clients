@@ -372,8 +372,7 @@ class OkxClient(BaseClient):
                     'time_order_sent': self.time_sent,
                     'create_order_time': float(order['uTime']) / 1000 - self.time_sent}
                 if client_id := order.get("clOrdId"):
-                    if self.orders.get(order['ordId']):
-                        self.responses.update({client_id: result})
+                    self.responses.update({client_id: result})
                 self.orders.update({order['ordId']: result})
         # example = {'accFillSz': '0', 'algoClOrdId': '', 'algoId': '', 'amendResult': '', 'amendSource': '',
         #            'attachAlgoClOrdId': '', 'attachAlgoOrds': [], 'avgPx': '0', 'cTime': '1706884013692',
