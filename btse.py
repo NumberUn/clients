@@ -554,8 +554,8 @@ class BtseClient(BaseClient):
                     coin = symbol.split('PFC')[0]
                     if self.multibot.open_orders.get(coin + '-' + self.EXCHANGE_NAME, [''])[0] == response[0]['orderID']:
                         self.multibot.open_orders.pop(coin + '-' + self.EXCHANGE_NAME)
-            else:
-                print(f'ORDER HAD CANCELED BEFORE {self.EXCHANGE_NAME}', response)
+            # else:
+                # print(f'ORDER HAD CANCELED BEFORE {self.EXCHANGE_NAME}', response)
 
     # example = [{'status': 6, 'symbol': 'TRBPFC', 'orderType': 76, 'price': 118.35, 'side': 'BUY', 'size': 2,
     #       'orderID': 'cfcbcd08-bda4-487a-a261-192e24c31db4', 'timestamp': 1705925467489, 'triggerPrice': 0,
