@@ -45,7 +45,6 @@ class OkxClient(BaseClient):
         self.get_position()
         self.instruments = self.get_instruments()
         self.markets = self.get_markets()
-        self.change_leverage()
         self.balance = {}
         self.get_real_balance()
         self.error_info = None
@@ -80,6 +79,7 @@ class OkxClient(BaseClient):
             wst_orders = threading.Thread(target=self._run_order_loop, args=[asyncio.new_event_loop()])
             wst_orders.daemon = True
             wst_orders.start()
+        self.change_leverage()
         while True:
             if set(self.orderbook) == set([y for x, y in self.markets.items() if x in self.markets_list]):
                 print(f"{self.EXCHANGE_NAME} ALL MARKETS FETCHED")
@@ -549,7 +549,8 @@ class OkxClient(BaseClient):
                 }
         body_json = json.dumps(body)
         headers = self.get_private_headers('POST', way, body_json)
-        requests.post(url=self.BASE_URL + way, headers=headers, data=body_json).json()
+        resp = requests.post(url=self.BASE_URL + way, headers=headers, data=body_json).json()
+        print(resp)
 
     @try_exc_regular
     def get_orderbook(self, symbol):
@@ -712,6 +713,7 @@ class OkxClient(BaseClient):
                 "ordType": "limit",
                 "px": price,
                 "sz": int(size * contract_value)}
+        print(body)
         json_body = json.dumps(body)
         headers = self.get_private_headers('POST', way, json_body)
         resp = requests.post(url=self.BASE_URL + way, headers=headers, data=json_body).json()
