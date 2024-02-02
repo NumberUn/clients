@@ -16,11 +16,11 @@ ALL_CLIENTS = {
     # 'DYDX': DydxClient,
     # 'BINANCE': BinanceClient,
     # 'APOLLOX': ApolloxClient,
-    # 'OKX': OkxClient,
+    'OKX': OkxClient,
     # 'KRAKEN': KrakenClient,
     # 'HITBTC': HitbtcClient,
     # 'BITMAKE': BitmakeClient,
     # 'GLOBE': GlobeClient,
     # 'BIT': BitClient,
-    'BTSE': BtseClient,
-    'WHITEBIT': WhiteBitClient}
+    'BTSE': BtseClient}
+    # 'WHITEBIT': WhiteBitClient}
