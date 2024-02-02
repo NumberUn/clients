@@ -350,6 +350,7 @@ class OkxClient(BaseClient):
     @try_exc_async
     async def _update_orders(self, obj):
         if obj.get('data') and obj.get('arg'):
+            print(f"ORDERS DATA LEN: {obj.get('data')}\n")
             for order in obj.get('data'):
                 print(f"OKEX RESPONSE: {order}\n")
                 status = self.get_order_status(order, 'WS')
