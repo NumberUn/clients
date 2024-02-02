@@ -104,7 +104,7 @@ class GlobeClient:
         while True:
             loop.run_until_complete(self._run_ws_loop(loop))
 
-    def run_orders_loop(self, loop):
+    async def run_orders_loop(self, loop):
         headers = self.get_private_headers("GET/api/v1/ws")
         async with aiohttp.ClientSession() as s:
             async with s.ws_connect(url=self.PUBLIC_WS_ENDPOINT, headers=headers) as ws:
