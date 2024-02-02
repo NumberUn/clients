@@ -350,9 +350,7 @@ class OkxClient(BaseClient):
     @try_exc_async
     async def _update_orders(self, obj):
         if obj.get('data') and obj.get('arg'):
-            print(f"ORDERS DATA LEN: {obj.get('data')}\n")
             for order in obj.get('data'):
-                print(f"OKEX RESPONSE: {order}\n")
                 status = self.get_order_status(order, 'WS')
                 self.get_taker_fee(order)
                 contract_value = self.get_contract_value(order['instId'])
@@ -372,6 +370,8 @@ class OkxClient(BaseClient):
                     'timestamp': float(order['uTime']) / 1000,
                     'time_order_sent': self.time_sent,
                     'create_order_time': float(order['uTime']) / 1000 - self.time_sent}
+                if result['size']:
+                    print(f"OKEX FILL: {order}\n")
                 if client_id := order.get("clOrdId"):
                     self.responses.update({client_id: result})
                 self.orders.update({order['ordId']: result})
