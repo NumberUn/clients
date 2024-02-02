@@ -694,8 +694,8 @@ class OkxClient(BaseClient):
                 orderbook['timestamp'] = int(orderbook['ts'])
                 return orderbook
 
-    @try_exc_regular
-    def create_order(self, symbol, side, price, sz, session, expire=10000, client_id=None, expiration=None):
+    @try_exc_async
+    async def create_order(self, symbol, side, price, size, session, expire=10000, client_id=None, expiration=None):
         way = '/api/v5/trade/order'
         contract_value = self.instruments[symbol]['contract_value']
         body = {"instId": symbol,
@@ -703,7 +703,7 @@ class OkxClient(BaseClient):
                 "side": side,
                 "ordType": "limit",
                 "px": price,
-                "sz": int(sz * contract_value)}
+                "sz": int(size * contract_value)}
         json_body = json.dumps(body)
         headers = self.get_private_headers('POST', way, json_body)
         resp = requests.post(url=self.BASE_URL + way, headers=headers, data=json_body).json()
