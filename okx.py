@@ -391,7 +391,7 @@ class OkxClient(BaseClient):
     async def _process_msg(self, msg: aiohttp.WSMessage):
         obj = json.loads(msg.data)
         if obj.get('event'):
-            print(obj)
+            # print(obj)
             return
         if obj.get('arg'):
             if obj['arg']['channel'] == 'account':
