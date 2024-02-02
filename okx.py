@@ -37,6 +37,7 @@ class OkxClient(BaseClient):
         self.state = state
         self.ob_len = ob_len
         self.taker_fee = 0.0005
+        self.maker_fee = 0.0002
         if keys:
             self.public_key = keys['API_KEY']
             self.secret_key = keys['API_SECRET']
@@ -45,6 +46,7 @@ class OkxClient(BaseClient):
         self.instruments = self.get_instruments()
         self.markets = self.get_markets()
         self.change_leverage()
+        self.get_real_balance()
         self.error_info = None
         self.orderbook = {}
         self.orders = {}
@@ -267,8 +269,6 @@ class OkxClient(BaseClient):
 
     @try_exc_regular
     def get_balance(self):
-        if round(datetime.utcnow().timestamp()) - self.balance['timestamp'] > 60:
-            self.get_real_balance()
         return self.balance['total']
 
     @try_exc_regular
