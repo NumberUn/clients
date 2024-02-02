@@ -312,8 +312,8 @@ class OkxClient(BaseClient):
         market = obj['arg']['instId']
         contract = self.get_contract_value(market)
         orderbook = obj['data'][0]
-        self.orderbook.update({market: {'asks': [[float(x[0]), float(x[1]) * contract] for x in orderbook['asks']],
-                                        'bids': [[float(x[0]), float(x[1]) * contract] for x in orderbook['bids']],
+        self.orderbook.update({market: {'asks': [[float(x[0]), float(x[1]) / contract] for x in orderbook['asks']],
+                                        'bids': [[float(x[0]), float(x[1]) / contract] for x in orderbook['bids']],
                                         'timestamp': float(orderbook['ts']) / 1000,
                                         'ts_ms': time.time()}})
         if self.market_finder:
@@ -419,8 +419,8 @@ class OkxClient(BaseClient):
                                                        'contract_value': contract_value,
                                                        'quantity_precision': quantity_precision,
                                                        'min_size': float(instrument['minSz']) / contract_value,
-                                                       'price_precision': price_precision,
-                                                       'contract_type': instrument['ctType']}})
+                                                       'price_precision': price_precision}})
+            print(instrument['instId'], float(instrument['minSz']) / contract_value)
         return instruments
 
     @staticmethod
@@ -749,28 +749,28 @@ if __name__ == '__main__':
 
     client.run_updater()
 
-    time.sleep(3)
-    market = client.markets['ETH']
-    ob = client.get_orderbook(market)
-    size = 0.1
-    price = ob['bids'][0][0] * 0.95
-    price, size = client.fit_sizes(price, size, market)
-    order_data = {'market': market,
-                  'client_id': f'makerxxx{client.EXCHANGE_NAME}xxx' + client.id_generator() + 'xxx' + market.split('-')[
-                      0],
-                  'price': price,
-                  'size': size,
-                  'side': 'buy'}
-    print(f"{order_data=}")
-    client.async_tasks.append(['create_order', order_data])
-    time.sleep(0.1)
-    print(client.responses)
-    for order_id, response in client.responses.items():
-        cancel_data = ['cancel_order', {'order_id': response['exchange_order_id'],
-                                        'market': market}]
-        print(f"{cancel_data=}")
-        client.async_tasks.append(cancel_data)
+    # time.sleep(3)
+    # market = client.markets['ETH']
+    # ob = client.get_orderbook(market)
+    # size = 0.1
+    # price = ob['bids'][0][0] * 0.95
+    # price, size = client.fit_sizes(price, size, market)
+    # order_data = {'market': market,
+    #               'client_id': f'makerxxx{client.EXCHANGE_NAME}xxx' + client.id_generator() + 'xxx' + market.split('-')[
+    #                   0],
+    #               'price': price,
+    #               'size': size,
+    #               'side': 'buy'}
+    # print(f"{order_data=}")
+    # client.async_tasks.append(['create_order', order_data])
+    # time.sleep(0.1)
+    # print(client.responses)
+    # for order_id, response in client.responses.items():
+    #     cancel_data = ['cancel_order', {'order_id': response['exchange_order_id'],
+    #                                     'market': market}]
+    #     print(f"{cancel_data=}")
+    #     client.async_tasks.append(cancel_data)
 
     while True:
         time.sleep(5)
-        # print(client.get_all_tops())
+        print(client.get_all_tops())
