@@ -420,7 +420,6 @@ class OkxClient(BaseClient):
                                                        'quantity_precision': quantity_precision,
                                                        'min_size': float(instrument['minSz']) / contract_value,
                                                        'price_precision': price_precision}})
-            print(instrument['instId'], float(instrument['minSz']) / contract_value)
         return instruments
 
     @staticmethod
