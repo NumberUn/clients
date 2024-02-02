@@ -370,8 +370,9 @@ class OkxClient(BaseClient):
                     'timestamp': float(order['uTime']) / 1000,
                     'time_order_sent': self.time_sent,
                     'create_order_time': float(order['uTime']) / 1000 - self.time_sent}
-                if client_id := order.get("clOrdId") and self.orders.get(order['ordId']):
-                    self.responses.update({client_id: result})
+                if client_id := order.get("clOrdId"):
+                    if self.orders.get(order['ordId']):
+                        self.responses.update({client_id: result})
                 self.orders.update({order['ordId']: result})
         # example = {'accFillSz': '0', 'algoClOrdId': '', 'algoId': '', 'amendResult': '', 'amendSource': '',
         #            'attachAlgoClOrdId': '', 'attachAlgoOrds': [], 'avgPx': '0', 'cTime': '1706884013692',
@@ -551,8 +552,7 @@ class OkxClient(BaseClient):
                 }
         body_json = json.dumps(body)
         headers = self.get_private_headers('POST', way, body_json)
-        resp = requests.post(url=self.BASE_URL + way, headers=headers, data=body_json).json()
-        print(resp)
+        requests.post(url=self.BASE_URL + way, headers=headers, data=body_json).json()
 
     @try_exc_regular
     def get_orderbook(self, symbol):
