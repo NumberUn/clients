@@ -54,6 +54,7 @@ class OkxClient(BaseClient):
         self.deleted_orders = []
         self.responses = {}
         self.time_sent = 0
+        self.orders_timestamps = {}
         if multibot:
             self.cancel_all_orders()
 
@@ -167,6 +168,8 @@ class OkxClient(BaseClient):
         self.LAST_ORDER_ID = order_id
         if not order_id:
             self.error_info = response
+        else:
+            self.orders_timestamps.update({order_id: float(response['inTime']) / 1000000})
         print(f'{self.EXCHANGE_NAME} CREATE ORDER RESPONSE', response)
         print(f"{self.EXCHANGE_NAME} CREATE ORDER  TIME {float(response['inTime']) / 1000000 - self.time_sent} sec")
         # error_parameter = {"id": "587912334468", "op": "order", "code": "1", "msg": "",
@@ -347,6 +350,7 @@ class OkxClient(BaseClient):
     @try_exc_async
     async def _update_orders(self, obj):
         if obj.get('data') and obj.get('arg'):
+            update_data = {}
             for order in obj.get('data'):
                 print(f"OKEX RESPONSE: {order}\n")
                 status = self.get_order_status(order, 'WS')
@@ -367,10 +371,10 @@ class OkxClient(BaseClient):
                     'timestamp': float(order['uTime']) / 1000,
                     'time_order_sent': self.time_sent,
                     'create_order_time': float(order['uTime']) / 1000 - self.time_sent}
-                # print(result)
                 if client_id := order.get("clOrdId"):
-                    self.responses.update({client_id: result})
+                    update_data.update({client_id: result})
                 self.orders.update({order['ordId']: result})
+            self.responses.update(update_data)
         # example = {'accFillSz': '0', 'algoClOrdId': '', 'algoId': '', 'amendResult': '', 'amendSource': '',
         #            'attachAlgoClOrdId': '', 'attachAlgoOrds': [], 'avgPx': '0', 'cTime': '1706884013692',
         #            'cancelSource': '', 'category': 'normal', 'ccy': '', 'clOrdId': 'makerxxxOKXxxxlXicApxxxETH',
