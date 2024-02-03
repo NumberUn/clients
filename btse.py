@@ -98,12 +98,12 @@ class BtseClient(BaseClient):
     @try_exc_async
     async def _run_order_loop(self, loop):
         counter = 0
-        ts = int(time.time())
+        ts = time.time()
         async with aiohttp.ClientSession() as self.async_session:
             self.async_session.headers.update(self.headers)
             while True:
                 for task in self.async_tasks:
-                    if counter >= 74:
+                    if counter >= self.rate_limit_orders - 3:
                         pass
                     elif task[0] == 'create_order':
                         counter += 1
@@ -128,10 +128,10 @@ class BtseClient(BaseClient):
                         loop.create_task(self.amend_order(price, size, order_id, market, old_order_size))
                     self.async_tasks.remove(task)
                 ts_ms = time.time()
-                if int(ts_ms) - ts > 0:
+                if ts_ms - ts > 1:
                     counter = 0
-                    ts = int(ts_ms)
-                if ts_ms - self.last_keep_alive > 5:
+                    ts = ts_ms
+                if ts_ms - self.last_keep_alive > 25:
                     self.last_keep_alive = ts_ms
                     loop.create_task(self.get_position_async())
                 await asyncio.sleep(0.0001)
