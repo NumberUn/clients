@@ -255,6 +255,7 @@ class BtseClient(BaseClient):
                                                        'amount_usd': size_usd}})
         else:
             print(f"ERROR IN GET_POSITION RESPONSE BTSE: {response.text=}")
+
     # example = [
     #     {'marginType': 91, 'entryPrice': 2285.71, 'markPrice': 2287.538939479, 'symbol': 'ETHPFC', 'side': 'SELL',
     #      'orderValue': 91.5015575792, 'settleWithAsset': 'USDT', 'unrealizedProfitLoss': -0.07315758,
@@ -311,13 +312,13 @@ class BtseClient(BaseClient):
             try:
                 response = await resp.json()
             except:
-            #     # print(f"AMEND ERROR BODY: {body}. Response: {resp}")
-            #     # print(f"old order size: {old_order_size}")
+                #     # print(f"AMEND ERROR BODY: {body}. Response: {resp}")
+                #     # print(f"old order size: {old_order_size}")
                 self.async_tasks.append(['cancel_order', {'order_id': order_id, 'market': market}])
                 return
             if isinstance(response, dict):
-            #     # print(f"AMEND ERROR BODY: {body}. Response: {response}")
-            #     # print(f"old order size: {old_order_size}")
+                #     # print(f"AMEND ERROR BODY: {body}. Response: {response}")
+                #     # print(f"old order size: {old_order_size}")
                 self.async_tasks.append(['cancel_order', {'order_id': order_id, 'market': market}])
                 return
             # print(f"{self.EXCHANGE_NAME} ORDER AMEND PING: {response[0]['timestamp'] / 1000 - time_start}")
@@ -366,9 +367,9 @@ class BtseClient(BaseClient):
         async with self.async_session.post(url=self.BASE_URL + path, headers=self.session.headers, json=body) as resp:
             try:
                 response = await resp.json()
-                # if self.EXCHANGE_NAME != self.multibot.mm_exchange:
-                print(f"{self.EXCHANGE_NAME} ORDER CREATE RESPONSE: {response}")
-                print(f"{self.EXCHANGE_NAME} ORDER CREATE PING: {response[0]['timestamp'] / 1000 - time_start}")
+                if self.EXCHANGE_NAME != self.multibot.mm_exchange:
+                    print(f"{self.EXCHANGE_NAME} ORDER CREATE RESPONSE: {response}")
+                    print(f"{self.EXCHANGE_NAME} ORDER CREATE PING: {response[0]['timestamp'] / 1000 - time_start}")
             except Exception:
                 # if self.EXCHANGE_NAME != self.multibot.mm_exchange:
                 print(body)
@@ -380,7 +381,8 @@ class BtseClient(BaseClient):
                 self.orig_sizes.update({self.LAST_ORDER_ID: response[0].get('originalSize')})
                 order_res = {'exchange_name': self.EXCHANGE_NAME,
                              'exchange_order_id': self.LAST_ORDER_ID,
-                             'timestamp': response[0]['timestamp'] / 1000 if response[0].get('timestamp') else time.time(),
+                             'timestamp': response[0]['timestamp'] / 1000 if response[0].get(
+                                 'timestamp') else time.time(),
                              'status': status,
                              'api_response': response[0],
                              'size': response[0]['fillSize'] * self.instruments[market]['contract_value'],
@@ -498,7 +500,6 @@ class BtseClient(BaseClient):
 
     @try_exc_async
     async def _run_ws_loop(self, ws_type, upd_ob_snapshot, upd_ob, upd_positions, upd_fills, loop):
-        # self.pings = []
         async with aiohttp.ClientSession() as s:
             if ws_type == 'private':
                 endpoint = self.PRIVATE_WS_ENDPOINT
@@ -513,20 +514,16 @@ class BtseClient(BaseClient):
                 else:
                     self._ws_public = ws
                     await loop.create_task(self.subscribe_orderbooks())
+                loop.create_task(self._ping(ws, ws_type))
                 async for msg in ws:
                     data = json.loads(msg.data)
                     if 'update' in data.get('topic', ''):
                         if data.get('data') and data['data']['type'] == 'delta':
-                            # ts_ms = time.time()
-                            # ts_ob = data['data']['timestamp'] / 1000
-                            # self.pings.append(ts_ms - ts_ob)
                             loop.create_task(upd_ob(data))
                         elif data.get('data') and data['data']['type'] == 'snapshot':
                             loop.create_task(upd_ob_snapshot(data))
                     elif data.get('topic') == 'allPosition':
-                        # print('GOT POSITIONS UPDATE')
                         loop.create_task(upd_positions(data))
-                        loop.create_task(self.ping_websocket(ws))
                     elif data.get('topic') == 'fills':
                         loop.create_task(upd_fills(data))
                         print(f'FILLS {self.EXCHANGE_NAME} WS MESSAGE {datetime.utcnow()}:', data)
@@ -535,12 +532,50 @@ class BtseClient(BaseClient):
             await ws.close()
 
     @try_exc_async
-    async def ping_websocket(self, ws):
-        ts = time.time()
-        if ts - self.last_websocket_ping > 10:
+    async def _ping(self, ws, ws_type):
+        while True:
+            await asyncio.sleep(25)  # Adjust the ping interval as needed
             await ws.ping()
-            self.last_websocket_ping = ts
+            if ws_type == 'private':
+                self.check_extra_orders()
         # print(f'PING SENT: {datetime.utcnow()}')
+
+    @try_exc_regular
+    def check_extra_orders(self):
+        orders = self.get_all_orders()
+        all_legit_orders = [x[0] for x in self.multibot.open_orders.values()]
+        for order in orders:
+            if order['orderID'] not in all_legit_orders:
+                self.async_tasks.append(['cancel_order', {'market': order['symbol'], 'order_id': order['orderID']}])
+                print(f"ALERT: NON-LEGIT ORDER: {order}")
+
+    @try_exc_regular
+    def get_all_orders(self):
+        path = '/api/v2.1/user/open_orders'
+        self.get_private_headers(path, {})
+        return self.session.get(url=self.BASE_URL + path).json()
+        # example = [{'vendorName': None, 'botID': None, 'orderType': 76, 'price': 0.02562, 'size': 11900, 'side': 'BUY',
+        #             'filledSize': 0, 'orderValue': 304.878, 'pegPriceMin ': 0, 'pegPriceMax': 0, 'pegPriceDeviation': 1,
+        #             'cancelDuration': 0, 'timestamp': 1706981603805,
+        #             'orderID': '0cc00ce1-eeab-4251-b859-4f4eefb0d04d', 'stealth': 1, 'triggerOrder': False,
+        #             'triggered': False, 'triggerPrice': 0, 'triggerOriginalPrice': 0, 'triggerOrderType': 0,
+        #             'triggerTrailingStopDeviation': 0, 'triggerStopPrice': 0, 'symbol': 'PEOPLEPFC',
+        #             'trailValue': 0, 'remainingSize': 11900, 'clOrderID': 'makerxxxBTSExxxPEOPLExxxNKTWVI',
+        #             'reduceOnly': False, 'orderState': 'STATUS_ACTIVE', 'triggerUseLastPrice': False,
+        #             'avgFilledPrice': 0, 'timeInForce': 'GTC', 'orderDetailType': None, 'takeProfitOrder': None,
+        #             'stopLossOrder': None, 'closeOrder': False, 'positionMode': 'ONE_WAY', 'positionDirection': None,
+        #             'positionId': 'PEOPLEPFC-USD'},
+        #            {'vendorNa    me': None, 'botID': None, 'orderType': 76, 'price': 113.73, 'size': 26, 'side': 'BUY',
+        #             'filledSize': 0, 'orderValue': 295.698, 'pegPriceMin': 0, 'pegPriceMax': 0, 'pegPriceDeviation': 1,
+        #             'cancelDuration': 0, 'timestamp': 1706981594980,
+        #             'orderID': 'f0a6a3ea-13b0-4442-9e2c-d1bc73c9884b', 'stealth': 1, 'triggerOrder': False,
+        #             'triggered': False, 'triggerPrice': 0, 'triggerOriginalPrice': 0, 'triggerOrderType': 0,
+        #             'triggerTrailingStopDeviation': 0, 'triggerStopPrice': 0, 'symbol': 'TRBPFC', 'trailValue': 0,
+        #             'remainingSize': 26, 'clOrderID': 'makerxxxBTSExxxTRBxxxWcjnVB', 'reduceOnly': False,
+        #             'orderState': 'STATUS_ACTIVE', 'triggerUseLastPrice': False, 'avgFilledPrice': 0,
+        #             'timeInForce': 'GTC', 'orderDetailType': None, 'takeProfitOrder': None, 'stopLossOrder': None,
+        #             'closeOrder': False, 'positionMode': 'ONE_WAY', 'positionDirection': None,
+        #             'positionId': 'TRBPFC-USD'}]
 
     @try_exc_async
     async def cancel_order(self, symbol: str, order_id: str):
@@ -549,14 +584,16 @@ class BtseClient(BaseClient):
                   'orderID': order_id}
         self.get_private_headers(path, params)
         path += '?' + "&".join([f"{key}={params[key]}" for key in sorted(params)])
-        async with self.async_session.delete(url=self.BASE_URL + path, headers=self.session.headers, json=params) as resp:
+        async with self.async_session.delete(url=self.BASE_URL + path, headers=self.session.headers,
+                                             json=params) as resp:
             try:
                 response = await resp.json()
-                print(f'ORDER CANCEL', response)
+                # print(f'ORDER CANCEL', response)
                 if isinstance(response, list):
                     if 'maker' in response[0].get('clOrderID', '') and self.EXCHANGE_NAME == self.multibot.mm_exchange:
                         coin = symbol.split('PFC')[0]
-                        if self.multibot.open_orders.get(coin + '-' + self.EXCHANGE_NAME, [''])[0] == response[0]['orderID']:
+                        if self.multibot.open_orders.get(coin + '-' + self.EXCHANGE_NAME, [''])[0] == response[0][
+                            'orderID']:
                             self.multibot.open_orders.pop(coin + '-' + self.EXCHANGE_NAME)
             except:
                 print(f'ORDER CANCEL ERROR', resp)
@@ -737,7 +774,7 @@ class BtseClient(BaseClient):
         self.orderbook[symbol] = new_ob
         if self.market_finder and flag_market:
             # if self.multibot.mm_exchange == self.EXCHANGE_NAME:
-                # if ts_ms - ts_ob < 0.035:
+            # if ts_ms - ts_ob < 0.035:
             await self.market_finder.count_one_coin(symbol.split('PFC')[0], self.EXCHANGE_NAME)
             # else:
             #     # if ts_ms - ts_ob < 0.120:
@@ -850,10 +887,9 @@ if __name__ == '__main__':
     # client.order_loop.create_task(client.create_fast_order('MANAPFC', 'buy'))
     while True:
         time.sleep(5)
+        client.get_all_orders()
         client.cancel_all_orders()
         # for symbol in client.markets.values():
         #     print(client.get_orderbook(symbol))
 
     # print()
-
-
