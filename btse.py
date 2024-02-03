@@ -312,13 +312,13 @@ class BtseClient(BaseClient):
             except:
                 # print(f"AMEND ERROR BODY: {body}. Response: {resp}")
                 # print(f"old order size: {old_order_size}")
-                # await self.cancel_order(market, order_id)
+                await self.cancel_order(market, order_id)
                 return
             # print(f"{self.EXCHANGE_NAME} ORDER AMEND RESPONSE: {response}")
             if isinstance(response, dict):
                 # print(f"AMEND ERROR BODY: {body}. Response: {response}")
                 # print(f"old order size: {old_order_size}")
-                # await self.cancel_order(market, order_id)
+                await self.cancel_order(market, order_id)
                 return
             # print(f"{self.EXCHANGE_NAME} ORDER AMEND PING: {response[0]['timestamp'] / 1000 - time_start}")
             status = self.get_order_response_status(response)
@@ -555,13 +555,12 @@ class BtseClient(BaseClient):
             response = await resp.json()
             if order_id in self.multibot.deleted_orders:
                 self.multibot.deleted_orders.remove(order_id)
-            coin = symbol.split('PFC')[0]
-            if self.multibot.open_orders.get(coin + '-' + self.EXCHANGE_NAME, [''])[0] == order_id:
-                self.multibot.open_orders.pop(coin + '-' + self.EXCHANGE_NAME)
-            # if isinstance(response, list):
-            #     # print(f'ORDER CANCELED', order_id)
-            #     if 'maker' in response[0].get('clOrderID', '') and self.EXCHANGE_NAME == self.multibot.mm_exchange:
-
+            if isinstance(response, list):
+                # print(f'ORDER CANCELED', order_id)
+                if 'maker' in response[0].get('clOrderID', '') and self.EXCHANGE_NAME == self.multibot.mm_exchange:
+                    coin = symbol.split('PFC')[0]
+                    if self.multibot.open_orders.get(coin + '-' + self.EXCHANGE_NAME, [''])[0] == response[0]['orderID']:
+                        self.multibot.open_orders.pop(coin + '-' + self.EXCHANGE_NAME)
             # else:
             #     print(f'ORDER WAS CANCELED BEFORE {self.EXCHANGE_NAME}', response)
 
