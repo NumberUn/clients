@@ -310,17 +310,18 @@ class BtseClient(BaseClient):
             try:
                 response = await resp.json()
             except:
-                if order_id not in self.multibot.deleted_orders:
-                    await self.cancel_order(market, order_id)
-                return
+                print(resp)
+            #     if order_id not in self.multibot.deleted_orders:
+            #         await self.cancel_order(market, order_id)
+            #     return
             # print(f"{self.EXCHANGE_NAME} ORDER AMEND RESPONSE: {response}")
             if isinstance(response, dict):
-                # print(f"ERROR BODY: {body}. Response: {response}")
-                # print(f"old order size: {old_order_size}")
-                # print(f"new order size: {sz}")
-                if order_id not in self.multibot.deleted_orders:
-                    await self.cancel_order(market, order_id)
-                return
+                print(f"ERROR BODY: {body}. Response: {response}")
+            #     # print(f"old order size: {old_order_size}")
+            #     # print(f"new order size: {sz}")
+            #     if order_id not in self.multibot.deleted_orders:
+            #         await self.cancel_order(market, order_id)
+            #     return
             # print(f"{self.EXCHANGE_NAME} ORDER AMEND PING: {response[0]['timestamp'] / 1000 - time_start}")
             status = self.get_order_response_status(response)
             self.LAST_ORDER_ID = response[0].get('orderID', 'default')
@@ -555,7 +556,7 @@ class BtseClient(BaseClient):
             if order_id in self.multibot.deleted_orders:
                 self.multibot.deleted_orders.remove(order_id)
             if isinstance(response, list):
-                # print(f'ORDER CANCELED {self.EXCHANGE_NAME}', response)
+                print(f'ORDER CANCELED', order_id)
                 if 'maker' in response[0].get('clOrderID', '') and self.EXCHANGE_NAME == self.multibot.mm_exchange:
                     coin = symbol.split('PFC')[0]
                     if self.multibot.open_orders.get(coin + '-' + self.EXCHANGE_NAME, [''])[0] == response[0]['orderID']:
