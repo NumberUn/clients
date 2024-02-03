@@ -68,6 +68,7 @@ class BtseClient(BaseClient):
         self.orders_thread = threading.Thread(target=self.deals_thread_func, args=[self.order_loop])
         self.orderbook = {}
         self.orders = {}
+        self.rate_limit_orders = 75
         self.taker_fee = 0.0005 * 0.75
         self.maker_fee = 0.0001 * 0.75
         self.orig_sizes = {}
@@ -96,11 +97,16 @@ class BtseClient(BaseClient):
 
     @try_exc_async
     async def _run_order_loop(self, loop):
+        counter = 0
+        ts = int(time.time())
         async with aiohttp.ClientSession() as self.async_session:
             self.async_session.headers.update(self.headers)
             while True:
                 for task in self.async_tasks:
-                    if task[0] == 'create_order':
+                    if counter >= 74:
+                        pass
+                    elif task[0] == 'create_order':
+                        counter += 1
                         price = task[1]['price']
                         size = task[1]['size']
                         side = task[1]['side']
@@ -109,9 +115,11 @@ class BtseClient(BaseClient):
                         loop.create_task(self.create_fast_order(price, size, side, market, client_id))
                     elif task[0] == 'cancel_order':
                         if not task[1]['order_id'] in self.multibot.deleted_orders:
+                            counter += 1
                             self.multibot.deleted_orders.append(task[1]['order_id'])
                             loop.create_task(self.cancel_order(task[1]['market'], task[1]['order_id']))
                     elif task[0] == 'amend_order':
+                        counter += 1
                         price = task[1]['price']
                         size = task[1]['size']
                         order_id = task[1]['order_id']
@@ -120,6 +128,9 @@ class BtseClient(BaseClient):
                         loop.create_task(self.amend_order(price, size, order_id, market, old_order_size))
                     self.async_tasks.remove(task)
                 ts_ms = time.time()
+                if int(ts_ms) - ts > 0:
+                    counter = 0
+                    ts = int(ts_ms)
                 if ts_ms - self.last_keep_alive > 5:
                     self.last_keep_alive = ts_ms
                     loop.create_task(self.get_position_async())
