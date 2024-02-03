@@ -310,17 +310,15 @@ class BtseClient(BaseClient):
             try:
                 response = await resp.json()
             except:
-                print(f"AMEND ERROR BODY: {body}. Response: {resp}")
-                print(f"old order size: {old_order_size}")
-                if order_id not in self.multibot.deleted_orders:
-                    await self.cancel_order(market, order_id)
+                # print(f"AMEND ERROR BODY: {body}. Response: {resp}")
+                # print(f"old order size: {old_order_size}")
+                # await self.cancel_order(market, order_id)
                 return
             # print(f"{self.EXCHANGE_NAME} ORDER AMEND RESPONSE: {response}")
             if isinstance(response, dict):
-                print(f"AMEND ERROR BODY: {body}. Response: {response}")
-                print(f"old order size: {old_order_size}")
-                if order_id not in self.multibot.deleted_orders:
-                    await self.cancel_order(market, order_id)
+                # print(f"AMEND ERROR BODY: {body}. Response: {response}")
+                # print(f"old order size: {old_order_size}")
+                # await self.cancel_order(market, order_id)
                 return
             # print(f"{self.EXCHANGE_NAME} ORDER AMEND PING: {response[0]['timestamp'] / 1000 - time_start}")
             status = self.get_order_response_status(response)
@@ -545,6 +543,8 @@ class BtseClient(BaseClient):
 
     @try_exc_async
     async def cancel_order(self, symbol: str, order_id: str):
+        if order_id not in self.multibot.deleted_orders:
+            return
         self.multibot.deleted_orders.append(order_id)
         path = '/api/v2.1/order'
         params = {'symbol': symbol,
@@ -555,14 +555,15 @@ class BtseClient(BaseClient):
             response = await resp.json()
             if order_id in self.multibot.deleted_orders:
                 self.multibot.deleted_orders.remove(order_id)
-            if isinstance(response, list):
-                # print(f'ORDER CANCELED', order_id)
-                if 'maker' in response[0].get('clOrderID', '') and self.EXCHANGE_NAME == self.multibot.mm_exchange:
-                    coin = symbol.split('PFC')[0]
-                    if self.multibot.open_orders.get(coin + '-' + self.EXCHANGE_NAME, [''])[0] == response[0]['orderID']:
-                        self.multibot.open_orders.pop(coin + '-' + self.EXCHANGE_NAME)
-            else:
-                print(f'ORDER WAS CANCELED BEFORE {self.EXCHANGE_NAME}', response)
+            coin = symbol.split('PFC')[0]
+            if self.multibot.open_orders.get(coin + '-' + self.EXCHANGE_NAME, [''])[0] == order_id:
+                self.multibot.open_orders.pop(coin + '-' + self.EXCHANGE_NAME)
+            # if isinstance(response, list):
+            #     # print(f'ORDER CANCELED', order_id)
+            #     if 'maker' in response[0].get('clOrderID', '') and self.EXCHANGE_NAME == self.multibot.mm_exchange:
+
+            # else:
+            #     print(f'ORDER WAS CANCELED BEFORE {self.EXCHANGE_NAME}', response)
 
     # example = [{'status': 6, 'symbol': 'TRBPFC', 'orderType': 76, 'price': 118.35, 'side': 'BUY', 'size': 2,
     #       'orderID': 'cfcbcd08-bda4-487a-a261-192e24c31db4', 'timestamp': 1705925467489, 'triggerPrice': 0,
