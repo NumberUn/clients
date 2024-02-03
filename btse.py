@@ -1,3 +1,4 @@
+import random
 import time
 import traceback
 
@@ -185,7 +186,7 @@ class BtseClient(BaseClient):
     @try_exc_regular
     def get_private_headers(self, path, data=dict()):
         json_data = json.dumps(data) if data else ''
-        nonce = str(int(time.time() * 1000))
+        nonce = str(int(time.time() * 1000) + random.randint(-100, 100))
         signature = self.generate_signature(path, nonce, json_data)
         self.session.headers.update({"request-api": self.api_key,
                                      "request-nonce": nonce,
@@ -369,9 +370,10 @@ class BtseClient(BaseClient):
                     print(f"{self.EXCHANGE_NAME} ORDER CREATE RESPONSE: {response}")
                     print(f"{self.EXCHANGE_NAME} ORDER CREATE PING: {response[0]['timestamp'] / 1000 - time_start}")
             except Exception:
-                if self.EXCHANGE_NAME != self.multibot.mm_exchange:
-                    traceback.print_exc()
-                    print(resp)
+                # if self.EXCHANGE_NAME != self.multibot.mm_exchange:
+                print(body)
+                traceback.print_exc()
+                print(resp, '\n\n')
             if isinstance(response, list):
                 status = self.get_order_response_status(response)
                 self.LAST_ORDER_ID = response[0].get('orderID', 'default')
@@ -558,8 +560,8 @@ class BtseClient(BaseClient):
                     coin = symbol.split('PFC')[0]
                     if self.multibot.open_orders.get(coin + '-' + self.EXCHANGE_NAME, [''])[0] == response[0]['orderID']:
                         self.multibot.open_orders.pop(coin + '-' + self.EXCHANGE_NAME)
-            # else:
-                # print(f'ORDER HAD CANCELED BEFORE {self.EXCHANGE_NAME}', response)
+            else:
+                print(f'ORDER HAD CANCELED BEFORE {self.EXCHANGE_NAME}', response)
 
     # example = [{'status': 6, 'symbol': 'TRBPFC', 'orderType': 76, 'price': 118.35, 'side': 'BUY', 'size': 2,
     #       'orderID': 'cfcbcd08-bda4-487a-a261-192e24c31db4', 'timestamp': 1705925467489, 'triggerPrice': 0,
