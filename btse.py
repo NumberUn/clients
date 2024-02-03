@@ -308,20 +308,20 @@ class BtseClient(BaseClient):
             body.update({"value": price})
         self.get_private_headers(path, body)
         async with self.async_session.put(url=self.BASE_URL + path, headers=self.session.headers, json=body) as resp:
-            # try:
-            response = await resp.json()
-            # except:
+            try:
+                response = await resp.json()
+            except:
             #     # print(f"AMEND ERROR BODY: {body}. Response: {resp}")
             #     # print(f"old order size: {old_order_size}")
-            #     # await self.cancel_order(market, order_id)
-            #     return
-            # if isinstance(response, dict):
+                self.async_tasks.append(['cancel_order', {'order_id': order_id, 'market': market}])
+                return
+            if isinstance(response, dict):
             #     # print(f"AMEND ERROR BODY: {body}. Response: {response}")
             #     # print(f"old order size: {old_order_size}")
-            #     # await self.cancel_order(market, order_id)
-            #     return
+                self.async_tasks.append(['cancel_order', {'order_id': order_id, 'market': market}])
+                return
             # print(f"{self.EXCHANGE_NAME} ORDER AMEND PING: {response[0]['timestamp'] / 1000 - time_start}")
-            print(f"ORDER AMEND: {response}")
+            # print(f"ORDER AMEND: {response}")
             status = self.get_order_response_status(response)
             self.LAST_ORDER_ID = response[0].get('orderID', 'default')
             self.orig_sizes.update({self.LAST_ORDER_ID: response[0].get('originalSize')})
