@@ -108,10 +108,9 @@ class BtseClient(BaseClient):
                         client_id = task[1].get('client_id')
                         loop.create_task(self.create_fast_order(price, size, side, market, client_id))
                     elif task[0] == 'cancel_order':
-                        # self.multibot.deleted_orders.append(order_id)
-                        # if order_id in self.multibot.deleted_orders:
-                        #     self.multibot.deleted_orders.remove(order_id)
-                        loop.create_task(self.cancel_order(task[1]['market'], task[1]['order_id']))
+                        if not task[1]['order_id'] in self.multibot.deleted_orders:
+                            self.multibot.deleted_orders.append(task[1]['order_id'])
+                            loop.create_task(self.cancel_order(task[1]['market'], task[1]['order_id']))
                     elif task[0] == 'amend_order':
                         price = task[1]['price']
                         size = task[1]['size']
@@ -558,6 +557,8 @@ class BtseClient(BaseClient):
                     coin = symbol.split('PFC')[0]
                     if self.multibot.open_orders.get(coin + '-' + self.EXCHANGE_NAME, [''])[0] == response[0]['orderID']:
                         self.multibot.open_orders.pop(coin + '-' + self.EXCHANGE_NAME)
+        if order_id in self.multibot.deleted_orders:
+            self.multibot.deleted_orders.remove(order_id)
             # else:
             #     print(f'ORDER WAS CANCELED BEFORE {self.EXCHANGE_NAME}', response)
 
