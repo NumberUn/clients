@@ -331,16 +331,16 @@ class OkxClient(BaseClient):
     async def _update_orderbook(self, obj):
         market = obj['arg']['instId']
         contract = self.get_contract_value(market)
-        top_ask = self.orderbook.get(market, {}).get('asks', [[None, None]])[0][0]
-        top_bid = self.orderbook.get(market, {}).get('bids', [[None, None]])[0][0]
+        # top_ask = self.orderbook.get(market, {}).get('asks', [[None, None]])[0][0]
+        # top_bid = self.orderbook.get(market, {}).get('bids', [[None, None]])[0][0]
         orderbook = obj['data'][0]
         self.orderbook.update({market: {'asks': [[float(x[0]), float(x[1]) / contract] for x in orderbook['asks']],
                                         'bids': [[float(x[0]), float(x[1]) / contract] for x in orderbook['bids']],
                                         'timestamp': float(orderbook['ts']) / 1000,
                                         'ts_ms': time.time()}})
         if self.market_finder:
-            if top_ask != self.orderbook[market]['asks'][0][0] or top_bid != self.orderbook[market]['asks'][0][0]:
-                await self.market_finder.count_one_coin(market.split('-')[0], self.EXCHANGE_NAME)
+            # if top_ask != self.orderbook[market]['asks'][0][0] or top_bid != self.orderbook[market]['asks'][0][0]:
+            await self.market_finder.count_one_coin(market.split('-')[0], self.EXCHANGE_NAME)
 
     @try_exc_async
     async def _update_account(self, obj):
