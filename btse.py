@@ -311,17 +311,17 @@ class BtseClient(BaseClient):
                 response = await resp.json()
             except:
                 print(f"AMEND ERROR BODY: {body}. Response: {resp}")
-            #     if order_id not in self.multibot.deleted_orders:
-            #         await self.cancel_order(market, order_id)
-            #     return
+                print(f"old order size: {old_order_size}")
+                if order_id not in self.multibot.deleted_orders:
+                    await self.cancel_order(market, order_id)
+                return
             # print(f"{self.EXCHANGE_NAME} ORDER AMEND RESPONSE: {response}")
             if isinstance(response, dict):
                 print(f"AMEND ERROR BODY: {body}. Response: {response}")
-            #     # print(f"old order size: {old_order_size}")
-            #     # print(f"new order size: {sz}")
-            #     if order_id not in self.multibot.deleted_orders:
-            #         await self.cancel_order(market, order_id)
-            #     return
+                print(f"old order size: {old_order_size}")
+                if order_id not in self.multibot.deleted_orders:
+                    await self.cancel_order(market, order_id)
+                return
             # print(f"{self.EXCHANGE_NAME} ORDER AMEND PING: {response[0]['timestamp'] / 1000 - time_start}")
             status = self.get_order_response_status(response)
             self.LAST_ORDER_ID = response[0].get('orderID', 'default')
