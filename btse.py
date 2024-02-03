@@ -314,13 +314,13 @@ class BtseClient(BaseClient):
                 # print(f"old order size: {old_order_size}")
                 await self.cancel_order(market, order_id)
                 return
-            # print(f"{self.EXCHANGE_NAME} ORDER AMEND RESPONSE: {response}")
             if isinstance(response, dict):
                 # print(f"AMEND ERROR BODY: {body}. Response: {response}")
                 # print(f"old order size: {old_order_size}")
                 await self.cancel_order(market, order_id)
                 return
             # print(f"{self.EXCHANGE_NAME} ORDER AMEND PING: {response[0]['timestamp'] / 1000 - time_start}")
+            print(f"ORDER AMENDED: {order_id}")
             status = self.get_order_response_status(response)
             self.LAST_ORDER_ID = response[0].get('orderID', 'default')
             self.orig_sizes.update({self.LAST_ORDER_ID: response[0].get('originalSize')})
@@ -365,9 +365,9 @@ class BtseClient(BaseClient):
         async with self.async_session.post(url=self.BASE_URL + path, headers=self.session.headers, json=body) as resp:
             try:
                 response = await resp.json()
-                if self.EXCHANGE_NAME != self.multibot.mm_exchange:
-                    print(f"{self.EXCHANGE_NAME} ORDER CREATE RESPONSE: {response}")
-                    print(f"{self.EXCHANGE_NAME} ORDER CREATE PING: {response[0]['timestamp'] / 1000 - time_start}")
+                # if self.EXCHANGE_NAME != self.multibot.mm_exchange:
+                print(f"{self.EXCHANGE_NAME} ORDER CREATE RESPONSE: {response}")
+                print(f"{self.EXCHANGE_NAME} ORDER CREATE PING: {response[0]['timestamp'] / 1000 - time_start}")
             except Exception:
                 # if self.EXCHANGE_NAME != self.multibot.mm_exchange:
                 print(body)
@@ -556,7 +556,7 @@ class BtseClient(BaseClient):
             if order_id in self.multibot.deleted_orders:
                 self.multibot.deleted_orders.remove(order_id)
             if isinstance(response, list):
-                # print(f'ORDER CANCELED', order_id)
+                print(f'ORDER CANCELED', order_id)
                 if 'maker' in response[0].get('clOrderID', '') and self.EXCHANGE_NAME == self.multibot.mm_exchange:
                     coin = symbol.split('PFC')[0]
                     if self.multibot.open_orders.get(coin + '-' + self.EXCHANGE_NAME, [''])[0] == response[0]['orderID']:
