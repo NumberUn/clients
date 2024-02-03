@@ -108,8 +108,10 @@ class BtseClient(BaseClient):
                         client_id = task[1].get('client_id')
                         loop.create_task(self.create_fast_order(price, size, side, market, client_id))
                     elif task[0] == 'cancel_order':
-                        if task[1]['order_id'] not in self.multibot.deleted_orders:
-                            loop.create_task(self.cancel_order(task[1]['market'], task[1]['order_id']))
+                        # self.multibot.deleted_orders.append(order_id)
+                        # if order_id in self.multibot.deleted_orders:
+                        #     self.multibot.deleted_orders.remove(order_id)
+                        loop.create_task(self.cancel_order(task[1]['market'], task[1]['order_id']))
                     elif task[0] == 'amend_order':
                         price = task[1]['price']
                         size = task[1]['size']
@@ -307,20 +309,20 @@ class BtseClient(BaseClient):
             body.update({"value": price})
         self.get_private_headers(path, body)
         async with self.async_session.put(url=self.BASE_URL + path, headers=self.session.headers, json=body) as resp:
-            try:
-                response = await resp.json()
-            except:
-                # print(f"AMEND ERROR BODY: {body}. Response: {resp}")
-                # print(f"old order size: {old_order_size}")
-                await self.cancel_order(market, order_id)
-                return
-            if isinstance(response, dict):
-                # print(f"AMEND ERROR BODY: {body}. Response: {response}")
-                # print(f"old order size: {old_order_size}")
-                await self.cancel_order(market, order_id)
-                return
+            # try:
+            response = await resp.json()
+            # except:
+            #     # print(f"AMEND ERROR BODY: {body}. Response: {resp}")
+            #     # print(f"old order size: {old_order_size}")
+            #     # await self.cancel_order(market, order_id)
+            #     return
+            # if isinstance(response, dict):
+            #     # print(f"AMEND ERROR BODY: {body}. Response: {response}")
+            #     # print(f"old order size: {old_order_size}")
+            #     # await self.cancel_order(market, order_id)
+            #     return
             # print(f"{self.EXCHANGE_NAME} ORDER AMEND PING: {response[0]['timestamp'] / 1000 - time_start}")
-            print(f"ORDER AMENDED: {order_id}")
+            print(f"ORDER AMEND: {response}")
             status = self.get_order_response_status(response)
             self.LAST_ORDER_ID = response[0].get('orderID', 'default')
             self.orig_sizes.update({self.LAST_ORDER_ID: response[0].get('originalSize')})
@@ -543,9 +545,6 @@ class BtseClient(BaseClient):
 
     @try_exc_async
     async def cancel_order(self, symbol: str, order_id: str):
-        if order_id not in self.multibot.deleted_orders:
-            return
-        self.multibot.deleted_orders.append(order_id)
         path = '/api/v2.1/order'
         params = {'symbol': symbol,
                   'orderID': order_id}
@@ -553,10 +552,8 @@ class BtseClient(BaseClient):
         path += '?' + "&".join([f"{key}={params[key]}" for key in sorted(params)])
         async with self.async_session.delete(url=self.BASE_URL + path, headers=self.session.headers, json=params) as resp:
             response = await resp.json()
-            if order_id in self.multibot.deleted_orders:
-                self.multibot.deleted_orders.remove(order_id)
+            print(f'ORDER CANCEL', response)
             if isinstance(response, list):
-                print(f'ORDER CANCELED', order_id)
                 if 'maker' in response[0].get('clOrderID', '') and self.EXCHANGE_NAME == self.multibot.mm_exchange:
                     coin = symbol.split('PFC')[0]
                     if self.multibot.open_orders.get(coin + '-' + self.EXCHANGE_NAME, [''])[0] == response[0]['orderID']:
