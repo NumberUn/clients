@@ -550,13 +550,16 @@ class BtseClient(BaseClient):
         self.get_private_headers(path, params)
         path += '?' + "&".join([f"{key}={params[key]}" for key in sorted(params)])
         async with self.async_session.delete(url=self.BASE_URL + path, headers=self.session.headers, json=params) as resp:
-            response = await resp.json()
-            print(f'ORDER CANCEL', response)
-            if isinstance(response, list):
-                if 'maker' in response[0].get('clOrderID', '') and self.EXCHANGE_NAME == self.multibot.mm_exchange:
-                    coin = symbol.split('PFC')[0]
-                    if self.multibot.open_orders.get(coin + '-' + self.EXCHANGE_NAME, [''])[0] == response[0]['orderID']:
-                        self.multibot.open_orders.pop(coin + '-' + self.EXCHANGE_NAME)
+            try:
+                response = await resp.json()
+                print(f'ORDER CANCEL', response)
+                if isinstance(response, list):
+                    if 'maker' in response[0].get('clOrderID', '') and self.EXCHANGE_NAME == self.multibot.mm_exchange:
+                        coin = symbol.split('PFC')[0]
+                        if self.multibot.open_orders.get(coin + '-' + self.EXCHANGE_NAME, [''])[0] == response[0]['orderID']:
+                            self.multibot.open_orders.pop(coin + '-' + self.EXCHANGE_NAME)
+            except:
+                print(f'ORDER CANCEL ERROR', resp)
         if order_id in self.multibot.deleted_orders:
             self.multibot.deleted_orders.remove(order_id)
             # else:
