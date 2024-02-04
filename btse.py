@@ -599,7 +599,6 @@ class BtseClient(BaseClient):
 
     @try_exc_async
     async def cancel_order(self, symbol: str, order_id: str):
-        print(f'ORDER CANCEL', order_id)
         path = '/api/v2.1/order'
         data = {'symbol': symbol,
                 'orderID': order_id}
