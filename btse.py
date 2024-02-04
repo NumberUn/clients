@@ -132,9 +132,10 @@ class BtseClient(BaseClient):
                             old_order_size = task[1]['old_order_size']
                             loop.create_task(self.amend_order(price, size, order_id, market, old_order_size))
                     self.async_tasks.remove(task)
-                if ts_ms - self.last_keep_alive > 25:
+                if ts_ms - self.last_keep_alive > 5:
                     self.last_keep_alive = ts_ms
                     loop.create_task(self.get_balance_async())
+                    loop.create_task(self.check_extra_orders())
                 await asyncio.sleep(0.0001)
 
     @staticmethod
@@ -533,7 +534,7 @@ class BtseClient(BaseClient):
                 else:
                     self._ws_public = ws
                     await loop.create_task(self.subscribe_orderbooks())
-                loop.create_task(self._ping(ws, ws_type))
+                loop.create_task(self._ping(ws))
                 async for msg in ws:
                     data = json.loads(msg.data)
                     if 'update' in data.get('topic', ''):
@@ -551,16 +552,14 @@ class BtseClient(BaseClient):
             await ws.close()
 
     @try_exc_async
-    async def _ping(self, ws, ws_type):
+    async def _ping(self, ws):
         while True:
             await asyncio.sleep(25)  # Adjust the ping interval as needed
             await ws.ping()
-            if ws_type == 'private':
-                self.check_extra_orders()
         # print(f'PING SENT: {datetime.utcnow()}')
 
-    @try_exc_regular
-    def check_extra_orders(self):
+    @try_exc_async
+    async def check_extra_orders(self):
         orders = self.get_all_orders()
         all_legit_orders = [x[0] for x in self.multibot.open_orders.values()]
         for order in orders:
