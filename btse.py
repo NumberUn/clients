@@ -107,10 +107,8 @@ class BtseClient(BaseClient):
                 for task in self.async_tasks:
                     if ts_ms - last_request < request_pause:
                         for one in self.async_tasks:
-                            if one[0] in ['amend_order', 'create_order']:
-                                coin = one[1]['market'].split('PFC')[0]
-                                self.multibot.requests_in_progress.remove(coin + '-' + self.EXCHANGE_NAME)
-                        self.async_tasks = []
+                            if one[0] == 'create_order':
+                                self.async_tasks.remove(one)
                         break
                     elif task[0] == 'create_order':
                         last_request = ts_ms
