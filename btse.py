@@ -115,13 +115,12 @@ class BtseClient(BaseClient):
                         client_id = task[1].get('client_id')
                         loop.create_task(self.create_fast_order(price, size, side, market, client_id))
                     elif task[0] == 'cancel_order':
-                        if not task[1]['order_id'] in self.multibot.deleted_orders:
-                            if task[1]['order_id'] not in self.deleted_orders:
-                                last_request = ts_ms
-                                if len(self.deleted_orders) > 1000:
-                                    self.deleted_orders = []
-                                self.deleted_orders.append(task[1]['order_id'])
-                                loop.create_task(self.cancel_order(task[1]['market'], task[1]['order_id']))
+                        if task[1]['order_id'] not in self.deleted_orders:
+                            last_request = ts_ms
+                            if len(self.deleted_orders) > 1000:
+                                self.deleted_orders = []
+                            self.deleted_orders.append(task[1]['order_id'])
+                            loop.create_task(self.cancel_order(task[1]['market'], task[1]['order_id']))
                     elif task[0] == 'amend_order':
                         if task[1]['order_id'] not in self.deleted_orders:
                             last_request = ts_ms
