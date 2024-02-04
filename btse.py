@@ -561,10 +561,12 @@ class BtseClient(BaseClient):
     @try_exc_async
     async def check_extra_orders(self):
         orders = self.get_all_orders()
-        all_legit_orders = [x[0] for x in self.multibot.open_orders.values()]
+        # all_legit_orders = [x[0] for x in self.multibot.open_orders.values()]
+        all_markets = {}
         for order in orders:
-            if order['orderID'] not in all_legit_orders:
-                self.async_tasks.append(['cancel_order', {'market': order['symbol'], 'order_id': order['orderID']}])
+            if saved := all_markets.get(order['symbol']):
+                ord = order if order['timestamp'] < saved['timestamp'] else saved
+                self.async_tasks.append(['cancel_order', {'market': order['symbol'], 'order_id': ord['orderID']}])
                 print(f"ALERT: NON-LEGIT ORDER: {order}")
 
     @try_exc_regular
