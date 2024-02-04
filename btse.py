@@ -106,9 +106,7 @@ class BtseClient(BaseClient):
                 ts_ms = time.time()
                 for task in self.async_tasks:
                     if ts_ms - last_request < request_pause:
-                        for one in self.async_tasks:
-                            if one[0] == 'create_order':
-                                self.async_tasks.remove(one)
+                        print(f"LINE OF TASKS: {len(self.async_tasks)}")
                         break
                     elif task[0] == 'create_order':
                         last_request = ts_ms
