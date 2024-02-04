@@ -597,6 +597,7 @@ class BtseClient(BaseClient):
 
     @try_exc_async
     async def cancel_order(self, symbol: str, order_id: str):
+        print(f'ORDER CANCEL', order_id)
         path = '/api/v2.1/order'
         data = {'symbol': symbol,
                 'orderID': order_id}
@@ -605,7 +606,6 @@ class BtseClient(BaseClient):
         async with self.async_session.delete(url=self.BASE_URL + path, headers=self.session.headers, json=data) as resp:
             try:
                 response = await resp.json()
-                # print(f'ORDER CANCEL', response)
                 # if isinstance(response, list):
                 if 'maker' in response[0].get('clOrderID', '') and self.EXCHANGE_NAME == self.multibot.mm_exchange:
                     if response[0]['status'] == 6:
@@ -616,7 +616,7 @@ class BtseClient(BaseClient):
                     else:
                         print(f"CANCEL ORDER FAIL: {response}")
             except:
-                print(f'ORDER CANCEL ERROR', resp)
+                print(f'ORDER CANCEL ERROR', resp.text)
             # else:
             #     print(f'ORDER WAS CANCELED BEFORE {self.EXCHANGE_NAME}', response)
 
