@@ -134,7 +134,8 @@ class BtseClient(BaseClient):
                     self.async_tasks.remove(task)
                 if ts_ms - self.last_keep_alive > 25:
                     self.last_keep_alive = ts_ms
-                    loop.create_task(self.get_position_async())
+                    loop.create_task(self.get_balance_async())
+                    print(f"LOOP TIME: {time.time() - ts_ms}")
                 await asyncio.sleep(0.0001)
 
     @staticmethod
@@ -205,6 +206,10 @@ class BtseClient(BaseClient):
                                      "request-nonce": nonce,
                                      "request-sign": signature})
 
+    @try_exc_async
+    async def get_balance_async(self):
+        self.get_real_balance()
+
     @try_exc_regular
     def get_real_balance(self):
         path = '/api/v2.1/user/wallet'
@@ -244,7 +249,8 @@ class BtseClient(BaseClient):
                 self.positions.update({pos['symbol']: {'timestamp': int(datetime.utcnow().timestamp()),
                                                        'entry_price': pos['entryPrice'],
                                                        'amount': size_coin,
-                                                       'amount_usd': size_usd}})
+                                                       'amount_usd': size_usd,
+                                                       }})
 
     @try_exc_regular
     def get_position(self):
@@ -264,7 +270,8 @@ class BtseClient(BaseClient):
                 self.positions.update({pos['symbol']: {'timestamp': int(datetime.utcnow().timestamp()),
                                                        'entry_price': pos['entryPrice'],
                                                        'amount': size_coin,
-                                                       'amount_usd': size_usd}})
+                                                       'amount_usd': size_usd,
+                                                       'unrealised_pnl': pos['unrealizedProfitLoss']}})
         else:
             print(f"ERROR IN GET_POSITION RESPONSE BTSE: {response.text=}")
 
@@ -500,7 +507,8 @@ class BtseClient(BaseClient):
     def get_balance(self):
         if not self.balance.get('total'):
             self.get_real_balance()
-        return self.balance['total']
+        tot_unrealised_pnl = sum([x['unrealised_pnl'] for x in self.positions.values()])
+        return self.balance['total'] + tot_unrealised_pnl
 
     @try_exc_regular
     def get_available_balance(self):
@@ -684,7 +692,8 @@ class BtseClient(BaseClient):
             self.positions.update({market: {'timestamp': int(datetime.utcnow().timestamp()),
                                             'entry_price': pos['entryPrice'],
                                             'amount': size,
-                                            'amount_usd': pos['totalValue']}})
+                                            'amount_usd': pos['totalValue'],
+                                            'unrealised_pnl': pos['unrealizedProfitLoss']}})
         # positions_example = {'topic': 'allPosition', 'id': '', 'data': [
         #     {'id': 6233130152254608579, 'requestId': 0, 'username': 'nikicha', 'userCurrency': None,
         #      'marketName': 'ETHPFC-USD', 'orderType': 90, 'orderMode': 83, 'status': 65, 'originalAmount': 0.01,
