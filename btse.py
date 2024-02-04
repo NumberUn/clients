@@ -99,12 +99,13 @@ class BtseClient(BaseClient):
     @try_exc_async
     async def _run_order_loop(self, loop):
         last_request = time.time()
+        request_pause = 1.02 / self.rate_limit_orders
         async with aiohttp.ClientSession() as self.async_session:
             self.async_session.headers.update(self.headers)
             while True:
                 ts_ms = time.time()
                 for task in self.async_tasks:
-                    if ts_ms - last_request < (1.02 / self.rate_limit_orders):
+                    if ts_ms - last_request < request_pause:
                         break
                     elif task[0] == 'create_order':
                         last_request = ts_ms
@@ -591,21 +592,20 @@ class BtseClient(BaseClient):
     @try_exc_async
     async def cancel_order(self, symbol: str, order_id: str):
         path = '/api/v2.1/order'
-        params = {'symbol': symbol,
-                  'orderID': order_id}
-        self.get_private_headers(path, params)
-        path += '?' + "&".join([f"{key}={params[key]}" for key in sorted(params)])
-        async with self.async_session.delete(url=self.BASE_URL + path, headers=self.session.headers,
-                                             json=params) as resp:
+        data = {'symbol': symbol,
+                'orderID': order_id}
+        self.get_private_headers(path, data)
+        path += '?' + "&".join([f"{key}={data[key]}" for key in sorted(data)])
+        async with self.async_session.delete(url=self.BASE_URL + path, headers=self.session.headers, json=data) as resp:
             try:
                 response = await resp.json()
                 # print(f'ORDER CANCEL', response)
-                if isinstance(response, list):
-                    if 'maker' in response[0].get('clOrderID', '') and self.EXCHANGE_NAME == self.multibot.mm_exchange:
-                        coin = symbol.split('PFC')[0]
-                        ord_id = coin + '-' + self.EXCHANGE_NAME
-                        if self.multibot.open_orders.get(ord_id, [''])[0] == response[0]['orderID']:
-                            self.multibot.dump_orders.update({ord_id: self.multibot.open_orders.pop(ord_id)})
+                # if isinstance(response, list):
+                if 'maker' in response[0].get('clOrderID', '') and self.EXCHANGE_NAME == self.multibot.mm_exchange:
+                    coin = symbol.split('PFC')[0]
+                    ord_id = coin + '-' + self.EXCHANGE_NAME
+                    if self.multibot.open_orders.get(ord_id, [''])[0] == response[0]['orderID']:
+                        self.multibot.dump_orders.update({ord_id: self.multibot.open_orders.pop(ord_id)})
             except:
                 print(f'ORDER CANCEL ERROR', resp)
             # else:
@@ -782,12 +782,7 @@ class BtseClient(BaseClient):
                 new_ob['asks'][new_ask[0]] = new_ask[1]
         self.orderbook[symbol] = new_ob
         if self.market_finder and flag_market:
-            # if self.multibot.mm_exchange == self.EXCHANGE_NAME:
-            # if ts_ms - ts_ob < 0.035:
             await self.market_finder.count_one_coin(symbol.split('PFC')[0], self.EXCHANGE_NAME)
-            # else:
-            #     # if ts_ms - ts_ob < 0.120:
-            #     await self.market_finder.count_one_coin(symbol.split('PFC')[0], self.EXCHANGE_NAME)
         if flag and ts_ms - ts_ob < 0.035 and self.finder:
             coin = symbol.split('PFC')[0]
             if self.state == 'Bot':
