@@ -135,7 +135,6 @@ class BtseClient(BaseClient):
                 if ts_ms - self.last_keep_alive > 25:
                     self.last_keep_alive = ts_ms
                     loop.create_task(self.get_balance_async())
-                    print(f"LOOP TIME: {time.time() - ts_ms}")
                 await asyncio.sleep(0.0001)
 
     @staticmethod
