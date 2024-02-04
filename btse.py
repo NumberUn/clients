@@ -1,7 +1,6 @@
 import random
 import time
 import traceback
-
 import aiohttp
 import json
 import requests
@@ -87,16 +86,6 @@ class BtseClient(BaseClient):
             loop.run_until_complete(self._run_order_loop(loop))
 
     @try_exc_async
-    async def cancel_all_tasks(self, loop):
-        tasks = [t for t in asyncio.all_tasks(loop) if t is not asyncio.current_task()]
-        for task in tasks:
-            task.cancel()
-            try:
-                await task  # Wait for the task to be cancelled
-            except asyncio.CancelledError:
-                pass
-
-    @try_exc_async
     async def _run_order_loop(self, loop):
         last_request = time.time()
         request_pause = 1.02 / self.rate_limit_orders
@@ -106,7 +95,6 @@ class BtseClient(BaseClient):
                 ts_ms = time.time()
                 for task in self.async_tasks:
                     if ts_ms - last_request < request_pause:
-                        print(f"LINE OF TASKS: {len(self.async_tasks)}")
                         break
                     elif task[0] == 'create_order':
                         last_request = ts_ms
@@ -610,13 +598,12 @@ class BtseClient(BaseClient):
                 response = await resp.json()
                 # if isinstance(response, list):
                 if 'maker' in response[0].get('clOrderID', '') and self.EXCHANGE_NAME == self.multibot.mm_exchange:
-                    if response[0]['status'] == 6:
-                        coin = symbol.split('PFC')[0]
-                        ord_id = coin + '-' + self.EXCHANGE_NAME
-                        if self.multibot.open_orders.get(ord_id, [''])[0] == response[0]['orderID']:
-                            self.multibot.dump_orders.update({ord_id: self.multibot.open_orders.pop(ord_id)})
-                    else:
-                        print(f"CANCEL ORDER FAIL: {response}")
+                    coin = symbol.split('PFC')[0]
+                    ord_id = coin + '-' + self.EXCHANGE_NAME
+                    self.multibot.open_orders.pop(ord_id)
+                        # if self.multibot.open_orders.get(ord_id, [''])[0] == response[0]['orderID']:
+                        #     self.multibot.dump_orders.update({ord_id: self.multibot.open_orders.pop(ord_id)})
+
             except:
                 pass
                 # print(f'ORDER CANCEL ERROR', resp.text)
