@@ -77,6 +77,7 @@ class BtseClient(BaseClient):
         self.last_websocket_ping = 0
         self.async_tasks = []
         self.responses = {}
+        self.deleted_orders = []
         if multibot:
             self.cancel_all_orders()
 
@@ -97,16 +98,16 @@ class BtseClient(BaseClient):
 
     @try_exc_async
     async def _run_order_loop(self, loop):
-        counter = 0
-        ts = time.time()
+        last_request = time.time()
         async with aiohttp.ClientSession() as self.async_session:
             self.async_session.headers.update(self.headers)
             while True:
+                ts_ms = time.time()
                 for task in self.async_tasks:
-                    if counter >= self.rate_limit_orders - 3:
-                        pass
+                    if ts_ms - last_request < (1.02 / self.rate_limit_orders):
+                        break
                     elif task[0] == 'create_order':
-                        counter += 1
+                        last_request = ts_ms
                         price = task[1]['price']
                         size = task[1]['size']
                         side = task[1]['side']
@@ -115,22 +116,22 @@ class BtseClient(BaseClient):
                         loop.create_task(self.create_fast_order(price, size, side, market, client_id))
                     elif task[0] == 'cancel_order':
                         if not task[1]['order_id'] in self.multibot.deleted_orders:
-                            counter += 1
-                            self.multibot.deleted_orders.append(task[1]['order_id'])
-                            loop.create_task(self.cancel_order(task[1]['market'], task[1]['order_id']))
+                            if task[1]['order_id'] not in self.deleted_orders:
+                                last_request = ts_ms
+                                if len(self.deleted_orders) > 1000:
+                                    self.deleted_orders = []
+                                self.deleted_orders.append(task[1]['order_id'])
+                                loop.create_task(self.cancel_order(task[1]['market'], task[1]['order_id']))
                     elif task[0] == 'amend_order':
-                        counter += 1
-                        price = task[1]['price']
-                        size = task[1]['size']
-                        order_id = task[1]['order_id']
-                        market = task[1]['market']
-                        old_order_size = task[1]['old_order_size']
-                        loop.create_task(self.amend_order(price, size, order_id, market, old_order_size))
+                        if task[1]['order_id'] not in self.deleted_orders:
+                            last_request = ts_ms
+                            price = task[1]['price']
+                            size = task[1]['size']
+                            order_id = task[1]['order_id']
+                            market = task[1]['market']
+                            old_order_size = task[1]['old_order_size']
+                            loop.create_task(self.amend_order(price, size, order_id, market, old_order_size))
                     self.async_tasks.remove(task)
-                ts_ms = time.time()
-                if ts_ms - ts > 1:
-                    counter = 0
-                    ts = ts_ms
                 if ts_ms - self.last_keep_alive > 25:
                     self.last_keep_alive = ts_ms
                     loop.create_task(self.get_position_async())
@@ -608,8 +609,6 @@ class BtseClient(BaseClient):
                             self.multibot.open_orders.pop(coin + '-' + self.EXCHANGE_NAME)
             except:
                 print(f'ORDER CANCEL ERROR', resp)
-        if order_id in self.multibot.deleted_orders:
-            self.multibot.deleted_orders.remove(order_id)
             # else:
             #     print(f'ORDER WAS CANCELED BEFORE {self.EXCHANGE_NAME}', response)
 
