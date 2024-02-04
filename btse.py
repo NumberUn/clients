@@ -617,7 +617,8 @@ class BtseClient(BaseClient):
                     else:
                         print(f"CANCEL ORDER FAIL: {response}")
             except:
-                print(f'ORDER CANCEL ERROR', resp.text)
+                pass
+                # print(f'ORDER CANCEL ERROR', resp.text)
             # else:
             #     print(f'ORDER WAS CANCELED BEFORE {self.EXCHANGE_NAME}', response)
 
