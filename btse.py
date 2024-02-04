@@ -603,9 +603,9 @@ class BtseClient(BaseClient):
                 if isinstance(response, list):
                     if 'maker' in response[0].get('clOrderID', '') and self.EXCHANGE_NAME == self.multibot.mm_exchange:
                         coin = symbol.split('PFC')[0]
-                        if self.multibot.open_orders.get(coin + '-' + self.EXCHANGE_NAME, [''])[0] == response[0][
-                            'orderID']:
-                            self.multibot.open_orders.pop(coin + '-' + self.EXCHANGE_NAME)
+                        ord_id = coin + '-' + self.EXCHANGE_NAME
+                        if self.multibot.open_orders.get(ord_id, [''])[0] == response[0]['orderID']:
+                            self.multibot.dump_orders.update({ord_id: self.multibot.open_orders.pop(ord_id)})
             except:
                 print(f'ORDER CANCEL ERROR', resp)
             # else:
