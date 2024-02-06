@@ -124,7 +124,7 @@ class BtseClient(BaseClient):
                 if ts_ms - self.last_keep_alive > 5:
                     self.last_keep_alive = ts_ms
                     loop.create_task(self.get_balance_async())
-                    loop.create_task(self.check_extra_orders())
+                    # loop.create_task(self.check_extra_orders())
                 await asyncio.sleep(0.0001)
 
     @staticmethod
