@@ -76,6 +76,7 @@ class BtseClient(BaseClient):
         self.last_websocket_ping = 0
         self.async_tasks = []
         self.responses = {}
+        self.cancel_responses = {}
         self.deleted_orders = []
         if multibot:
             self.cancel_all_orders()
@@ -597,16 +598,16 @@ class BtseClient(BaseClient):
             try:
                 response = await resp.json()
                 # if isinstance(response, list):
-                if 'maker' in response[0].get('clOrderID', '') and self.EXCHANGE_NAME == self.multibot.mm_exchange:
-                    coin = symbol.split('PFC')[0]
-                    ord_id = coin + '-' + self.EXCHANGE_NAME
-                    self.multibot.open_orders.pop(ord_id)
+                # if 'maker' in response[0].get('clOrderID', '') and self.EXCHANGE_NAME == self.multibot.mm_exchange:
+                #     coin = symbol.split('PFC')[0]
+                #     ord_id = coin + '-' + self.EXCHANGE_NAME
+                #     self.multibot.open_orders.pop(ord_id)
+                self.cancel_responses.update({order_id: response[0]})
                         # if self.multibot.open_orders.get(ord_id, [''])[0] == response[0]['orderID']:
                         #     self.multibot.dump_orders.update({ord_id: self.multibot.open_orders.pop(ord_id)})
 
             except:
-                pass
-                # print(f'ORDER CANCEL ERROR', resp.text)
+                print(f'ORDER CANCEL ERROR', resp)
             # else:
             #     print(f'ORDER WAS CANCELED BEFORE {self.EXCHANGE_NAME}', response)
 
