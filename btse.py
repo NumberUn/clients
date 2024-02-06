@@ -321,14 +321,8 @@ class BtseClient(BaseClient):
             try:
                 response = await resp.json()
             except:
-                #     # print(f"AMEND ERROR BODY: {body}. Response: {resp}")
-                #     # print(f"old order size: {old_order_size}")
-                self.async_tasks.append(['cancel_order', {'order_id': order_id, 'market': market}])
                 return
             if isinstance(response, dict):
-                #     # print(f"AMEND ERROR BODY: {body}. Response: {response}")
-                #     # print(f"old order size: {old_order_size}")
-                self.async_tasks.append(['cancel_order', {'order_id': order_id, 'market': market}])
                 return
             # print(f"{self.EXCHANGE_NAME} ORDER AMEND PING: {response[0]['timestamp'] / 1000 - time_start}")
             # print(f"ORDER AMEND: {response}")
