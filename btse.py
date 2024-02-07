@@ -522,17 +522,16 @@ class BtseClient(BaseClient):
                     await loop.create_task(self.subscribe_orderbooks())
                 loop.create_task(self._ping(ws))
                 async for msg in ws:
-                    await self.got_fill.wait()
-                    loop.create_task(self.process_ws_msg(msg))
+                    data = json.loads(msg.data)
+                    if data.get('topic') == 'fills':
+                        own_ts = time.time()
+                        await self.upd_fills(data, own_ts)
+                    loop.create_task(self.process_ws_msg(data))
             await ws.close()
 
     @try_exc_async
-    async def process_ws_msg(self, msg):
-        data = json.loads(msg.data)
-        if data.get('topic') == 'fills':
-            own_ts = time.time()
-            await self.upd_fills(data, own_ts)
-        elif 'update' in data.get('topic', ''):
+    async def process_ws_msg(self, data):
+        if 'update' in data.get('topic', ''):
             if data.get('data') and data['data']['type'] == 'delta':
                 await self.upd_ob(data)
             elif data.get('data') and data['data']['type'] == 'snapshot':
@@ -674,7 +673,7 @@ class BtseClient(BaseClient):
                           'datetime_update': datetime.utcnow(),
                           'ts_update': fill['timestamp']}
             self.orders.update({order_id: result_new})
-        await loop.create_task(self.multibot.update_all_av_balances())
+        loop.create_task(self.multibot.update_all_av_balances())
 
         # fills_example = {'topic': 'fills', 'id': '', 'data': [
         #     {'orderId': '04e64f39-b715-44e5-a2b8-e60b3379c2f3', 'serialId': 4260246, 'clOrderId': '', 'type': '76',
