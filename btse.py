@@ -523,7 +523,7 @@ class BtseClient(BaseClient):
                 loop.create_task(self._ping(ws))
                 async for msg in ws:
                     await self.got_fill.wait()
-                    loop.create_task(self.process_ws_msg(msg, loop))
+                    loop.create_task(self.process_ws_msg(msg))
             await ws.close()
 
     @try_exc_async
@@ -539,9 +539,6 @@ class BtseClient(BaseClient):
                 await self.upd_ob_snapshot(data)
         elif data.get('topic') == 'allPosition':
             await self.upd_positions(data)
-        # elif data.get('topic') == 'fills':
-        #     loop.create_task(upd_fills(data))
-        # print(f'FILLS {self.EXCHANGE_NAME} WS MESSAGE {datetime.utcnow()}:', data)
         else:
             print(data)
 
