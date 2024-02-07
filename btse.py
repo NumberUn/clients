@@ -125,7 +125,7 @@ class BtseClient(BaseClient):
                 if ts_ms - self.last_keep_alive > 5:
                     self.last_keep_alive = ts_ms
                     loop.create_task(self.get_balance_async())
-                    # loop.create_task(self.check_extra_orders())
+                    loop.create_task(self.check_extra_orders())
                 await asyncio.sleep(0.0001)
 
     @staticmethod
@@ -553,8 +553,12 @@ class BtseClient(BaseClient):
         for order in orders:
             if saved := all_markets.get(order['symbol']):
                 ord = order if order['timestamp'] < saved['timestamp'] else saved
+                keep = order if order != ord else saved
                 self.async_tasks.append(['cancel_order', {'market': order['symbol'], 'order_id': ord['orderID']}])
                 print(f"ALERT: NON-LEGIT ORDER: {order}")
+                all_markets.update({order['symbol']: keep})
+            else:
+                all_markets.update({order['symbol']: order})
 
     @try_exc_regular
     def get_all_orders(self):

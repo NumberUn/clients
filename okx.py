@@ -468,26 +468,6 @@ class OkxClient(BaseClient):
         price = round(rounded_price, price_precision)
         return price, amount
 
-    @try_exc_regular
-    def get_order_response(self):
-        if self.create_order_response:
-            response = {
-                'exchange_name': self.EXCHANGE_NAME,
-                'exchange_order_id': self.LAST_ORDER_ID,
-                'timestamp': int(round((datetime.utcnow().timestamp()) * 1000)),
-                'status': ResponseStatus.SUCCESS
-            }
-            self.create_order_response = False
-        else:
-            response = {
-                'exchange_name': self.EXCHANGE_NAME,
-                'exchange_order_id': None,
-                'timestamp': int(round((datetime.utcnow().timestamp()) * 1000)),
-                'status': ResponseStatus.ERROR
-            }
-            self.error_info = "WS DOESN'T GIVE ANY DATA ABOUT ERROR"
-        return response
-
     @staticmethod
     @try_exc_regular
     def get_timestamp():
