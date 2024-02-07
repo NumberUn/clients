@@ -56,6 +56,8 @@ class OkxClient(BaseClient):
         self.time_sent = 0
         self.orders_timestamps = {}
         self.receiving = asyncio.Event()
+        self.hedging = asyncio.Event()
+        self.hedging.set()
         self.receiving.set()
         if multibot:
             self.cancel_all_orders()
@@ -108,7 +110,12 @@ class OkxClient(BaseClient):
                             side = task[1]['side']
                             market = task[1]['market']
                             client_id = task[1].get('client_id')
-                            loop.create_task(self._send_order(market, size, price, side, ws, client_id))
+                            if task[1].get('hedge'):
+                                self.hedging.clear()
+                                await loop.create_task(self._send_order(market, size, price, side, ws, client_id))
+                                self.hedging.set()
+                            else:
+                                loop.create_task(self._send_order(market, size, price, side, ws, client_id))
                         elif task[0] == 'cancel_order':
                             loop.create_task(self.cancel_order(task[1]['market'], task[1]['order_id'], ws))
                         elif task[0] == 'amend_order':
@@ -271,6 +278,7 @@ class OkxClient(BaseClient):
                     await loop.create_task(self._subscribe_orderbooks(ws))
                 loop.create_task(self._ping(ws))
                 async for msg in ws:
+                    await self.hedging.wait()
                     loop.create_task(self._process_msg(msg))
 
     @try_exc_async

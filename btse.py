@@ -78,6 +78,8 @@ class BtseClient(BaseClient):
         self.responses = {}
         self.cancel_responses = {}
         self.deleted_orders = []
+        self.got_fill = asyncio.Event()
+        self.got_fill.set()
         if multibot:
             self.cancel_all_orders()
 
@@ -93,6 +95,7 @@ class BtseClient(BaseClient):
         async with aiohttp.ClientSession() as self.async_session:
             self.async_session.headers.update(self.headers)
             while True:
+                await self.got_fill.wait()
                 ts_ms = time.time()
                 for task in self.async_tasks:
                     if ts_ms - last_request < request_pause:
@@ -175,8 +178,7 @@ class BtseClient(BaseClient):
     @try_exc_regular
     def _run_ws_forever(self, ws_type, loop):
         while True:
-            loop.run_until_complete(self._run_ws_loop(ws_type, self.upd_ob_snapshot, self.upd_ob,
-                                                      self.upd_positions, self.upd_fills, loop))
+            loop.run_until_complete(self._run_ws_loop(ws_type, loop))
 
     @try_exc_regular
     def generate_signature(self, path, nonce, data=''):
@@ -503,7 +505,7 @@ class BtseClient(BaseClient):
             balance=self.balance)
 
     @try_exc_async
-    async def _run_ws_loop(self, ws_type, upd_ob_snapshot, upd_ob, upd_positions, upd_fills, loop):
+    async def _run_ws_loop(self, ws_type, loop):
         async with aiohttp.ClientSession() as s:
             if ws_type == 'private':
                 endpoint = self.PRIVATE_WS_ENDPOINT
@@ -520,23 +522,28 @@ class BtseClient(BaseClient):
                     await loop.create_task(self.subscribe_orderbooks())
                 loop.create_task(self._ping(ws))
                 async for msg in ws:
-                    data = json.loads(msg.data)
-                    if data.get('topic') == 'fills':
-                        own_ts = time.time()
-                        await loop.create_task(upd_fills(data, own_ts))
-                    elif 'update' in data.get('topic', ''):
-                        if data.get('data') and data['data']['type'] == 'delta':
-                            loop.create_task(upd_ob(data))
-                        elif data.get('data') and data['data']['type'] == 'snapshot':
-                            loop.create_task(upd_ob_snapshot(data))
-                    elif data.get('topic') == 'allPosition':
-                        loop.create_task(upd_positions(data))
-                    # elif data.get('topic') == 'fills':
-                    #     loop.create_task(upd_fills(data))
-                        # print(f'FILLS {self.EXCHANGE_NAME} WS MESSAGE {datetime.utcnow()}:', data)
-                    else:
-                        print(data)
+                    await self.got_fill.wait()
+                    loop.create_task(self.process_ws_msg(msg, loop))
             await ws.close()
+
+    @try_exc_async
+    async def process_ws_msg(self, msg):
+        data = json.loads(msg.data)
+        if data.get('topic') == 'fills':
+            own_ts = time.time()
+            await self.upd_fills(data, own_ts)
+        elif 'update' in data.get('topic', ''):
+            if data.get('data') and data['data']['type'] == 'delta':
+                await self.upd_ob(data)
+            elif data.get('data') and data['data']['type'] == 'snapshot':
+                await self.upd_ob_snapshot(data)
+        elif data.get('topic') == 'allPosition':
+            await self.upd_positions(data)
+        # elif data.get('topic') == 'fills':
+        #     loop.create_task(upd_fills(data))
+        # print(f'FILLS {self.EXCHANGE_NAME} WS MESSAGE {datetime.utcnow()}:', data)
+        else:
+            print(data)
 
     @try_exc_async
     async def _ping(self, ws):
@@ -638,6 +645,7 @@ class BtseClient(BaseClient):
             order_id = fill['orderId']
             size = float(fill['size']) * self.instruments[fill['symbol']]['contract_value']
             if 'maker' in fill.get('clOrderId', '') and self.multibot.mm_exchange == self.EXCHANGE_NAME:
+                self.got_fill.clear()
                 deal = {'side': fill['side'].lower(),
                         'size': size,
                         'coin': fill['symbol'].split('PFC')[0],
@@ -647,6 +655,7 @@ class BtseClient(BaseClient):
                         'order_id': order_id,
                         'type': 'maker' if fill['maker'] else 'taker'}
                 await loop.create_task(self.multibot.hedge_maker_position(deal))
+                self.got_fill.set()
             size_usd = size * float(fill['price'])
             if order := self.orders.get(order_id):
                 avg_price = (order['factual_amount_usd'] + size_usd) / (size + order['factual_amount_coin'])
@@ -668,7 +677,7 @@ class BtseClient(BaseClient):
                           'datetime_update': datetime.utcnow(),
                           'ts_update': fill['timestamp']}
             self.orders.update({order_id: result_new})
-        loop.create_task(self.multibot.update_all_av_balances())
+        await loop.create_task(self.multibot.update_all_av_balances())
 
         # fills_example = {'topic': 'fills', 'id': '', 'data': [
         #     {'orderId': '04e64f39-b715-44e5-a2b8-e60b3379c2f3', 'serialId': 4260246, 'clOrderId': '', 'type': '76',
