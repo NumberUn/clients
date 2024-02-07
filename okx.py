@@ -274,7 +274,6 @@ class OkxClient(BaseClient):
                     await loop.create_task(self._subscribe_orderbooks(ws))
                 loop.create_task(self._ping(ws))
                 async for msg in ws:
-                    await self.hedging.wait()
                     loop.create_task(self._process_msg(msg))
 
     @try_exc_async
