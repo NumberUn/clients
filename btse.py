@@ -138,8 +138,8 @@ class BtseClient(BaseClient):
 
     @try_exc_async
     async def keep_alive_order(self):
-        market = self.markets[self.markets_list[0]]
-        price = self.get_orderbook(market)['bids'][0][0] * 0.95
+        market = self.markets[self.markets_list[random.randint(0, len(self.markets_list))]]
+        price = self.get_orderbook(market)['bids'][0][0] * 0.97
         size = self.instruments[market]['min_size']
         rand_id = self.id_generator()
         await self.create_fast_order(price, size, 'buy', market, 'keepxxxalivexxx' + rand_id)
