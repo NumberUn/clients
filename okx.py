@@ -343,10 +343,10 @@ class OkxClient(BaseClient):
                                         'bids': [[float(x[0]), float(x[1])] for x in orderbook['bids']],
                                         'timestamp': ts_ob,
                                         'ts_ms': ts_ms}})
-        if top_ask > self.orderbook[market]['asks'][0][0]:
+        if top_ask and top_ask > self.orderbook[market]['asks'][0][0]:
             flag = True
             side = 'buy'
-        elif top_bid < self.orderbook[market]['asks'][0][0]:
+        elif top_bid and top_bid < self.orderbook[market]['asks'][0][0]:
             flag = True
             side = 'sell'
         if self.finder and flag and ts_ms - ts_ob < 0.035:
