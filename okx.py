@@ -169,11 +169,11 @@ class OkxClient(BaseClient):
                          "tdMode": "cross",
                          "sz": int(amount * contract_value),
                          }]}
-        if 'maker' in client_id:
+        if 'taker' in client_id:
+            msg['args'][0].update({"ordType": 'market'})
+        else:
             msg['args'][0].update({"ordType": 'limit',
                                    "px": price})
-        else:
-            msg['args'][0].update({"ordType": 'market'})
         await ws.send_json(msg)
         await self.receiving.wait()
         self.receiving.clear()

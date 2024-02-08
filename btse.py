@@ -377,11 +377,11 @@ class BtseClient(BaseClient):
         body = {"symbol": market,
                 "side": side.upper(),
                 'size': sz if sz else 1}
-        if 'maker' in client_id:
+        if 'taker' in client_id:
+            body.update({"type": "MARKET"})
+        else:
             body.update({"price": price,
                          'type': 'LIMIT'})
-        else:
-            body.update({"type": "MARKET"})
         # if client_id:
         #     body.update({'clOrderID': client_id})
         # print(f"{self.EXCHANGE_NAME} SENDING ORDER: {body}")
