@@ -139,8 +139,8 @@ class BtseClient(BaseClient):
     @try_exc_async
     async def keep_alive_order(self):
         market = self.markets[self.markets_list[random.randint(0, len(self.markets_list))]]
-        price = self.get_orderbook(market)['bids'][0][0] * 0.97
-        size = self.instruments[market]['min_size']
+        price = self.get_orderbook(market)['bids'][0][0] * 0.95
+        price, size = self.fit_sizes(price, self.instruments[market]['min_size'], market)
         rand_id = self.id_generator()
         await self.create_fast_order(price, size, 'buy', market, 'keepxxxalivexxx' + rand_id)
         resp = self.responses.get('keepxxxalivexxx' + rand_id)
@@ -388,9 +388,9 @@ class BtseClient(BaseClient):
         async with self.async_session.post(url=self.BASE_URL + path, headers=self.session.headers, json=body) as resp:
             try:
                 response = await resp.json()
-                if self.EXCHANGE_NAME != self.multibot.mm_exchange:
-                    print(f"{self.EXCHANGE_NAME} ORDER CREATE RESPONSE: {response}")
-                    print(f"{self.EXCHANGE_NAME} ORDER CREATE PING: {response[0]['timestamp'] / 1000 - time_start}")
+                # if self.EXCHANGE_NAME != self.multibot.mm_exchange:
+                print(f"{self.EXCHANGE_NAME} ORDER CREATE RESPONSE: {response}")
+                print(f"{self.EXCHANGE_NAME} ORDER CREATE PING: {response[0]['timestamp'] / 1000 - time_start}")
             except Exception:
                 # if self.EXCHANGE_NAME != self.multibot.mm_exchange:
                 print(body)
