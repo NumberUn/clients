@@ -167,8 +167,7 @@ class OkxClient(BaseClient):
                "args": [{"side": side,
                          "instId": symbol,
                          "tdMode": "cross",
-                         "sz": int(amount * contract_value),
-                         }]}
+                         "sz": int(amount * contract_value)}]}
         if 'taker' in client_id:
             msg['args'][0].update({"ordType": 'market'})
         else:
@@ -183,6 +182,9 @@ class OkxClient(BaseClient):
         order_id = response['data'][0]['ordId'] if response['code'] == '0' else 'default'
         if client_id:
             self.clients_ids.update({order_id: client_id})
+            if response['code'] == '0':
+                await asyncio.sleep(0.1)
+                self.responses.update({client_id: self.orders.get(order_id)})
         self.LAST_ORDER_ID = order_id
         if not order_id:
             self.error_info = response
