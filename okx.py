@@ -393,7 +393,7 @@ class OkxClient(BaseClient):
                     'status': status,
                     'factual_price': float(order['avgPx']) if order['avgPx'] else 0,
                     'price': float(order['avgPx']) if order['avgPx'] else 0,
-                    'limit_price': float(order['px']),
+                    'limit_price': float(order['px']) if order['px'],
                     'factual_amount_coin': float(order['fillSz']) / contract_value if order['fillSz'] else 0,
                     'size': float(order['fillSz']) / contract_value if order['fillSz'] else 0,
                     'factual_amount_usd': float(order['fillNotionalUsd']) if order['fillNotionalUsd'] else 0,
