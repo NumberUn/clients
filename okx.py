@@ -57,6 +57,8 @@ class OkxClient(BaseClient):
         self.orders_timestamps = {}
         self.receiving = asyncio.Event()
         self.receiving.set()
+        self.clients_ids = dict()
+        self.top_ws_ping = 0.005
         if multibot:
             self.cancel_all_orders()
 
@@ -67,7 +69,7 @@ class OkxClient(BaseClient):
 
     @staticmethod
     @try_exc_regular
-    def id_generator(size=6, chars=string.ascii_letters):
+    def id_generator(size=4, chars=string.ascii_letters):
         return ''.join(random.choice(chars) for _ in range(size))
 
     @try_exc_regular
@@ -159,16 +161,19 @@ class OkxClient(BaseClient):
     async def _send_order(self, symbol, amount, price, side, ws, client_id, expire=100):
         self.time_sent = time.time()
         contract_value = self.instruments[symbol]['contract_value']
-        msg = {"id": self.id_generator(),
+        rand_id = self.id_generator()
+        msg = {"id": rand_id,
                "op": "order",
                "args": [{"side": side,
                          "instId": symbol,
                          "tdMode": "cross",
-                         "ordType": 'limit',
                          "sz": int(amount * contract_value),
-                         "px": price}]}
-        if client_id:
-            msg['args'][0].update({'clOrdId': client_id})
+                         }]}
+        if 'maker' in client_id:
+            msg['args'][0].update({"ordType": 'limit',
+                                   "px": price})
+        else:
+            msg['args'][0].update({"ordType": 'market'})
         await ws.send_json(msg)
         await self.receiving.wait()
         self.receiving.clear()
@@ -176,6 +181,8 @@ class OkxClient(BaseClient):
         self.receiving.set()
         response = json.loads(response.data)
         order_id = response['data'][0]['ordId'] if response['code'] == '0' else 'default'
+        if client_id:
+            self.clients_ids.update({order_id: client_id})
         self.LAST_ORDER_ID = order_id
         if not order_id:
             self.error_info = response
@@ -332,13 +339,13 @@ class OkxClient(BaseClient):
 
     @try_exc_async
     async def _update_orderbook(self, obj):
+        orderbook = obj['data'][0]
+        ts_ms = time.time()
+        ts_ob = float(orderbook['ts']) / 1000
         market = obj['arg']['instId']
         flag = False
         top_ask = self.orderbook.get(market, {}).get('asks', [[None, None]])[0][0]
         top_bid = self.orderbook.get(market, {}).get('bids', [[None, None]])[0][0]
-        orderbook = obj['data'][0]
-        ts_ms = time.time()
-        ts_ob = float(orderbook['ts']) / 1000
         self.orderbook.update({market: {'asks': [[float(x[0]), float(x[1])] for x in orderbook['asks']],
                                         'bids': [[float(x[0]), float(x[1])] for x in orderbook['bids']],
                                         'timestamp': ts_ob,
@@ -349,7 +356,7 @@ class OkxClient(BaseClient):
         elif top_bid and top_bid < self.orderbook[market]['asks'][0][0]:
             flag = True
             side = 'sell'
-        if self.finder and flag and ts_ms - ts_ob < 0.035:
+        if self.finder and flag and ts_ms - ts_ob < self.top_ws_ping:
             coin = market.split('-')[0]
             if self.state == 'Bot':
                 await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, self.multibot.run_arbitrage)
@@ -396,7 +403,7 @@ class OkxClient(BaseClient):
                     'create_order_time': float(order['uTime']) / 1000 - self.time_sent}
                 if result['size']:
                     print(f"OKEX FILL: {order}\n")
-                if client_id := order.get("clOrdId"):
+                if client_id := self.clients_ids.get(order['ordId']):
                     self.responses.update({client_id: result})
                 self.orders.update({order['ordId']: result})
         # example = {'accFillSz': '0', 'algoClOrdId': '', 'algoId': '', 'amendResult': '', 'amendSource': '',
@@ -795,4 +802,4 @@ if __name__ == '__main__':
 
     while True:
         time.sleep(5)
-        print(client.get_all_tops())
+        # print(client.get_all_tops())

@@ -79,6 +79,7 @@ class BtseClient(BaseClient):
         self.responses = {}
         self.cancel_responses = {}
         self.deleted_orders = []
+        self.top_ws_ping = 0.012
         if multibot:
             self.cancel_all_orders()
 
@@ -376,21 +377,23 @@ class BtseClient(BaseClient):
         body = {"symbol": market,
                 "side": side.upper(),
                 'size': sz if sz else 1}
-        if self.EXCHANGE_NAME == self.multibot.mm_exchange:
+        if 'maker' in client_id:
             body.update({"price": price,
                          'type': 'LIMIT'})
         else:
             body.update({"type": "MARKET"})
-        if client_id:
-            body.update({'clOrderID': client_id})
+        # if client_id:
+        #     body.update({'clOrderID': client_id})
         # print(f"{self.EXCHANGE_NAME} SENDING ORDER: {body}")
         self.get_private_headers(path, body)
         async with self.async_session.post(url=self.BASE_URL + path, headers=self.session.headers, json=body) as resp:
             try:
                 response = await resp.json()
-                if 'keep' not in response[0].get("clOrderID", ''):
-                    print(f"{self.EXCHANGE_NAME} ORDER CREATE RESPONSE: {response}")
-                    print(f"{self.EXCHANGE_NAME} ORDER CREATE PING: {response[0]['timestamp'] / 1000 - time_start}")
+                # if 'keep' not in response[0].get("clOrderID", ''):
+                print(body)
+                print(f"{self.EXCHANGE_NAME} ORDER CREATE RESPONSE: {response}")
+                print(f"{self.EXCHANGE_NAME} ORDER CREATE PING: {response[0]['timestamp'] / 1000 - time_start}")
+                print()
             except Exception:
                 # if self.EXCHANGE_NAME != self.multibot.mm_exchange:
                 print(body)
@@ -409,11 +412,11 @@ class BtseClient(BaseClient):
                              'price': response[0]['avgFillPrice'],
                              'time_order_sent': time_start,
                              'create_order_time': response[0]['timestamp'] / 1000 - time_start}
-                if response[0].get("clOrderID"):
-                    self.responses.update({response[0]["clOrderID"]: order_res})
+                if client_id:
+                    self.responses.update({client_id: order_res})
                     self.LAST_ORDER_ID = response[0].get('orderID', 'default')
                 else:
-                    self.responses.update({response[0]['orderId']: order_res})
+                    self.responses.update({response[0]['orderID']: order_res})
             else:
                 print(response)
             # res_example = [{'status': 2, 'symbol': 'BTCPFC', 'orderType': 76, 'price': 43490, 'side': 'BUY', 'size': 1,
@@ -757,15 +760,17 @@ class BtseClient(BaseClient):
 
     @try_exc_async
     async def upd_ob(self, data):
+        ts_ms = time.time()
+        ts_ob = data['data']['timestamp']
+        if isinstance(ts_ob, int):
+            ts_ob = ts_ob / 1000
+        # print(f"OB UPD PING: {ts_ms - ts_ob}")
         flag = False
         flag_market = False
         symbol = data['data']['symbol']
         new_ob = self.orderbook[symbol].copy()
-        ts_ms = time.time()
         new_ob['ts_ms'] = ts_ms
-        ts_ob = data['data']['timestamp']
-        if isinstance(ts_ob, int):
-            ts_ob = ts_ob / 1000
+
         new_ob['timestamp'] = ts_ob
         for new_bid in data['data']['bids']:
             if float(new_bid[0]) >= new_ob['top_bid'][0]:
@@ -804,7 +809,7 @@ class BtseClient(BaseClient):
         self.orderbook[symbol] = new_ob
         if self.market_finder and flag_market:
             await self.market_finder.count_one_coin(symbol.split('PFC')[0], self.EXCHANGE_NAME)
-        if flag and ts_ms - ts_ob < 0.035 and self.finder:
+        if flag and ts_ms - ts_ob < self.top_ws_ping and self.finder:
             coin = symbol.split('PFC')[0]
             if self.state == 'Bot':
                 await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, self.multibot.run_arbitrage)
@@ -824,14 +829,9 @@ class BtseClient(BaseClient):
                                   'ts_ms': time.time()}
 
     @try_exc_regular
-    def get_orderbook(self, symbol, necessary=False) -> dict:
+    def get_orderbook(self, symbol) -> dict:
         if not self.orderbook.get(symbol):
             return {}
-        if necessary:
-            orderbook = None
-            while not orderbook:
-                orderbook = self.get_orderbook(symbol)
-            return orderbook
         snap = self.orderbook[symbol].copy()
         if isinstance(snap['asks'], list):
             return snap
@@ -839,7 +839,6 @@ class BtseClient(BaseClient):
             print(f"ALARM! ORDERBOOK ERROR {self.EXCHANGE_NAME}: {snap}")
             return {}
         c_v = self.instruments[symbol]['contract_value']
-
         ob = {'timestamp': snap['timestamp'],
               'asks': sorted([[float(x), y] for x, y in snap['asks'].copy().items()])[:self.ob_len],
               'bids': sorted([[float(x), y] for x, y in snap['bids'].copy().items()])[::-1][:self.ob_len],
@@ -882,7 +881,6 @@ class BtseClient(BaseClient):
             self.wst_private.daemon = True
             self.wst_private.start()
 
-
     @try_exc_regular
     def get_fills(self, symbol: str, order_id: str):
         path = '/api/v2.1/user/trade_history'
@@ -906,14 +904,13 @@ if __name__ == '__main__':
     client = BtseClient(keys=config['BTSE'], state='Bot')
     client.markets_list = list(client.markets.keys())
     client.run_updater()
-    # time.sleep(3)
-    # ob = client.get_orderbook('MANAPFC')
-    # client.amount = client.instruments['MANAPFC']['min_size']
-    # client.fit_sizes(ob['asks'][2][0], 'MANAPFC')
-    # client.order_loop.create_task(client.create_fast_order('MANAPFC', 'buy'))
+    time.sleep(3)
+    ob = client.get_orderbook('MANAPFC')
+    amount = client.instruments['MANAPFC']['min_size']
+    price, amount = client.fit_sizes(ob['bids'][0][0] * 0.95, amount, 'MANAPFC')
     while True:
         time.sleep(5)
-        client.get_all_orders()
+        client.order_loop.create_task(client.create_fast_order(price, amount, 'buy', 'MANAPFC'))
         client.cancel_all_orders()
         # for symbol in client.markets.values():
         #     print(client.get_orderbook(symbol))
