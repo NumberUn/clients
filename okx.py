@@ -36,7 +36,7 @@ class OkxClient(BaseClient):
         self.leverage = leverage
         self.state = state
         self.ob_len = ob_len
-        self.taker_fee = 0.0005
+        self.taker_fee = 0.0005 * 0.5
         self.maker_fee = 0.0002
         if keys:
             self.public_key = keys['API_KEY']
@@ -333,16 +333,29 @@ class OkxClient(BaseClient):
     @try_exc_async
     async def _update_orderbook(self, obj):
         market = obj['arg']['instId']
-        contract = self.get_contract_value(market)
-        # top_ask = self.orderbook.get(market, {}).get('asks', [[None, None]])[0][0]
-        # top_bid = self.orderbook.get(market, {}).get('bids', [[None, None]])[0][0]
+        flag = False
+        top_ask = self.orderbook.get(market, {}).get('asks', [[None, None]])[0][0]
+        top_bid = self.orderbook.get(market, {}).get('bids', [[None, None]])[0][0]
         orderbook = obj['data'][0]
-        self.orderbook.update({market: {'asks': [[float(x[0]), float(x[1]) / contract] for x in orderbook['asks']],
-                                        'bids': [[float(x[0]), float(x[1]) / contract] for x in orderbook['bids']],
-                                        'timestamp': float(orderbook['ts']) / 1000,
-                                        'ts_ms': time.time()}})
+        ts_ms = time.time()
+        ts_ob = float(orderbook['ts']) / 1000
+        self.orderbook.update({market: {'asks': [[float(x[0]), float(x[1])] for x in orderbook['asks']],
+                                        'bids': [[float(x[0]), float(x[1])] for x in orderbook['bids']],
+                                        'timestamp': ts_ob,
+                                        'ts_ms': ts_ms}})
+        if top_ask > self.orderbook[market]['asks'][0][0]:
+            flag = True
+            side = 'buy'
+        elif top_bid < self.orderbook[market]['asks'][0][0]:
+            flag = True
+            side = 'sell'
+        if self.finder and flag and ts_ms - ts_ob < 0.035:
+            coin = market.split('-')[0]
+            if self.state == 'Bot':
+                await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, self.multibot.run_arbitrage)
+            else:
+                await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side)
         if self.market_finder:
-            # if top_ask != self.orderbook[market]['asks'][0][0] or top_bid != self.orderbook[market]['asks'][0][0]:
             await self.market_finder.count_one_coin(market.split('-')[0], self.EXCHANGE_NAME)
 
     @try_exc_async
@@ -547,8 +560,13 @@ class OkxClient(BaseClient):
         requests.post(url=self.BASE_URL + way, headers=headers, data=body_json).json()
 
     @try_exc_regular
-    def get_orderbook(self, symbol):
-        return self.orderbook.get(symbol, {})
+    def get_orderbook(self, market):
+        contract = self.get_contract_value(market)
+        ob = self.orderbook.get(market, {})
+        if ob:
+            ob.update({'asks': [[x, y / contract] for x, y in ob['asks']],
+                       'bids': [[x, y / contract] for x, y in ob['bids']]})
+        return ob
 
     @try_exc_async
     async def get_all_orders(self, symbol=None, session=None):
