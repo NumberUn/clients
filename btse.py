@@ -12,6 +12,7 @@ from clients.core.enums import ResponseStatus, OrderStatus
 from core.wrappers import try_exc_regular, try_exc_async
 from clients.core.base_client import BaseClient
 import asyncio
+import string
 
 
 class BtseClient(BaseClient):
@@ -78,8 +79,6 @@ class BtseClient(BaseClient):
         self.responses = {}
         self.cancel_responses = {}
         self.deleted_orders = []
-        self.got_fill = asyncio.Event()
-        self.got_fill.set()
         if multibot:
             self.cancel_all_orders()
 
@@ -95,7 +94,6 @@ class BtseClient(BaseClient):
         async with aiohttp.ClientSession() as self.async_session:
             self.async_session.headers.update(self.headers)
             while True:
-                await self.got_fill.wait()
                 ts_ms = time.time()
                 for task in self.async_tasks:
                     if ts_ms - last_request < request_pause:
@@ -127,9 +125,27 @@ class BtseClient(BaseClient):
                     self.async_tasks.remove(task)
                 if ts_ms - self.last_keep_alive > 5:
                     self.last_keep_alive = ts_ms
+                    loop.create_task(self.keep_alive_order())
                     loop.create_task(self.get_balance_async())
-                    loop.create_task(self.check_extra_orders())
+                    if self.market_finder:
+                        loop.create_task(self.check_extra_orders())
                 await asyncio.sleep(0.0001)
+
+    @staticmethod
+    @try_exc_regular
+    def id_generator(size=6, chars=string.ascii_letters):
+        return ''.join(random.choice(chars) for _ in range(size))
+
+    @try_exc_async
+    async def keep_alive_order(self):
+        market = self.markets[self.markets_list[0]]
+        price = self.get_orderbook(market)['bids'][0][0] * 0.95
+        size = self.instruments[market]['min_size']
+        rand_id = self.id_generator()
+        await self.create_fast_order(price, size, 'buy', market, 'keepxxxalivexxx' + rand_id)
+        resp = self.responses.get('keepxxxalivexxx' + rand_id)
+        ex_order_id = resp['exchange_order_id']
+        await self.cancel_order(market, ex_order_id)
 
     @staticmethod
     @try_exc_regular
@@ -382,10 +398,9 @@ class BtseClient(BaseClient):
                 print(resp, '\n\n')
             if isinstance(response, list):
                 status = self.get_order_response_status(response)
-                self.LAST_ORDER_ID = response[0].get('orderID', 'default')
                 self.orig_sizes.update({self.LAST_ORDER_ID: response[0].get('originalSize')})
                 order_res = {'exchange_name': self.EXCHANGE_NAME,
-                             'exchange_order_id': self.LAST_ORDER_ID,
+                             'exchange_order_id': response[0].get('orderID', 'default'),
                              'timestamp': response[0]['timestamp'] / 1000 if response[0].get(
                                  'timestamp') else time.time(),
                              'status': status,
@@ -396,6 +411,7 @@ class BtseClient(BaseClient):
                              'create_order_time': response[0]['timestamp'] / 1000 - time_start}
                 if response[0].get("clOrderID"):
                     self.responses.update({response[0]["clOrderID"]: order_res})
+                    self.LAST_ORDER_ID = response[0].get('orderID', 'default')
                 else:
                     self.responses.update({response[0]['orderId']: order_res})
             else:
@@ -609,7 +625,6 @@ class BtseClient(BaseClient):
                 self.cancel_responses.update({order_id: response[0]})
                         # if self.multibot.open_orders.get(ord_id, [''])[0] == response[0]['orderID']:
                         #     self.multibot.dump_orders.update({ord_id: self.multibot.open_orders.pop(ord_id)})
-
             except:
                 print(f'ORDER CANCEL ERROR', resp)
             # else:
@@ -641,7 +656,6 @@ class BtseClient(BaseClient):
             order_id = fill['orderId']
             size = float(fill['size']) * self.instruments[fill['symbol']]['contract_value']
             if 'maker' in fill.get('clOrderId', '') and self.multibot.mm_exchange == self.EXCHANGE_NAME:
-                self.got_fill.clear()
                 deal = {'side': fill['side'].lower(),
                         'size': size,
                         'coin': fill['symbol'].split('PFC')[0],
@@ -651,7 +665,6 @@ class BtseClient(BaseClient):
                         'order_id': order_id,
                         'type': 'maker' if fill['maker'] else 'taker'}
                 await loop.create_task(self.multibot.hedge_maker_position(deal))
-                self.got_fill.set()
             size_usd = size * float(fill['price'])
             if order := self.orders.get(order_id):
                 avg_price = (order['factual_amount_usd'] + size_usd) / (size + order['factual_amount_coin'])
@@ -858,16 +871,17 @@ class BtseClient(BaseClient):
     def run_updater(self):
         self.wst_public.daemon = True
         self.wst_public.start()
-        if self.state == 'Bot':
-            self.orders_thread.daemon = True
-            self.orders_thread.start()
-            self.wst_private.daemon = True
-            self.wst_private.start()
         while True:
             if set(self.orderbook) == set([y for x, y in self.markets.items() if x in self.markets_list]):
                 print(f"{self.EXCHANGE_NAME} ALL MARKETS FETCHED")
                 break
             time.sleep(0.1)
+        if self.state == 'Bot':
+            self.orders_thread.daemon = True
+            self.orders_thread.start()
+            self.wst_private.daemon = True
+            self.wst_private.start()
+
 
     @try_exc_regular
     def get_fills(self, symbol: str, order_id: str):
