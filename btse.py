@@ -388,9 +388,9 @@ class BtseClient(BaseClient):
         async with self.async_session.post(url=self.BASE_URL + path, headers=self.session.headers, json=body) as resp:
             try:
                 response = await resp.json()
-                # if self.EXCHANGE_NAME != self.multibot.mm_exchange:
-                print(f"{self.EXCHANGE_NAME} ORDER CREATE RESPONSE: {response}")
-                print(f"{self.EXCHANGE_NAME} ORDER CREATE PING: {response[0]['timestamp'] / 1000 - time_start}")
+                if 'keep' not in response[0].get("clOrderID", ''):
+                    print(f"{self.EXCHANGE_NAME} ORDER CREATE RESPONSE: {response}")
+                    print(f"{self.EXCHANGE_NAME} ORDER CREATE PING: {response[0]['timestamp'] / 1000 - time_start}")
             except Exception:
                 # if self.EXCHANGE_NAME != self.multibot.mm_exchange:
                 print(body)
