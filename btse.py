@@ -123,7 +123,7 @@ class BtseClient(BaseClient):
                             old_order_size = task[1]['old_order_size']
                             loop.create_task(self.amend_order(price, size, order_id, market, old_order_size))
                     self.async_tasks.remove(task)
-                if ts_ms - self.last_keep_alive > 5:
+                if ts_ms - self.last_keep_alive > 3:
                     self.last_keep_alive = ts_ms
                     loop.create_task(self.keep_alive_order())
                     loop.create_task(self.get_balance_async())
@@ -138,7 +138,7 @@ class BtseClient(BaseClient):
 
     @try_exc_async
     async def keep_alive_order(self):
-        market = self.markets[self.markets_list[random.randint(0, len(self.markets_list))]]
+        market = self.markets[self.markets_list[random.randint(0, len(self.markets_list) - 1)]]
         price = self.get_orderbook(market)['bids'][0][0] * 0.95
         price, size = self.fit_sizes(price, self.instruments[market]['min_size'], market)
         rand_id = self.id_generator()
