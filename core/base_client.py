@@ -28,16 +28,19 @@ class BaseClient(ABC):
         position_value_abs = 0
         available_margin = balance['total'] * leverage
         avl_margin_per_market = available_margin / 100 * max_pos_part
+        tot_av_for_opening = available_margin - position_value_abs
         for symbol, position in positions.items():
             if position.get('amount_usd'):
                 # position_value += position['amount_usd']
                 position_value_abs += abs(position['amount_usd'])
-                available_balances.update({symbol: {'buy': avl_margin_per_market - position['amount_usd'],
-                                                    'sell': avl_margin_per_market + position['amount_usd']}})
+                max_buy_per_market = min(avl_margin_per_market - position['amount_usd'], tot_av_for_opening)
+                max_sell_per_market = min(avl_margin_per_market + position['amount_usd'], tot_av_for_opening)
+                available_balances.update({symbol: {'buy': max_buy_per_market,
+                                                    'sell': max_sell_per_market}})
         if position_value_abs <= available_margin:
             # Это по сути доступный баланс для открытия новых позиций
-            available_balances['buy'] = available_margin - position_value_abs
-            available_balances['sell'] = available_margin - position_value_abs
+            available_balances['buy'] = tot_av_for_opening
+            available_balances['sell'] = tot_av_for_opening
         else:
             for symbol, position in positions.items():
                 if position.get('amount_usd'):
