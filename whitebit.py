@@ -204,16 +204,14 @@ class WhiteBitClient(BaseClient):
     def get_auth_for_request(self, params, uri):
         params['request'] = uri
         nonce = int(time.time() * 1000)
-        # if self.EXCHANGE_NAME == self.multibot.mm_exchange:
-        #     if nonce not in self.nonces:
-        #         self.nonces.append(nonce)
-        #         if len(self.nonces) >= 100:
-        #             self.nonces = self.nonces[::-1][:30]
-        #     else:
-        #         while nonce in self.nonces:
-        #             nonce += 1
-        # else:
-        nonce += random.randint(-5000, 5000)
+        nonce += random.randint(-4000, 4000)
+        if nonce not in self.nonces:
+            self.nonces.append(nonce)
+            if len(self.nonces) >= 100:
+                self.nonces = self.nonces[::-1][:30]
+        else:
+            while nonce in self.nonces:
+                nonce += 1
         params['nonce'] = nonce
         params['nonceWindow'] = True
         signature, payload = self.get_signature(params)
@@ -619,34 +617,36 @@ class WhiteBitClient(BaseClient):
         async with self.async_session.post(url=self.BASE_URL + path, headers=self.session.headers, json=body) as resp:
             try:
                 response = await resp.json()
+                if self.EXCHANGE_NAME != self.multibot.mm_exchange:
+                    if not client_id or 'taker' in client_id:
+                        print(f"{self.EXCHANGE_NAME} ORDER CREATE RESPONSE: {response}")
+                        print(f"{self.EXCHANGE_NAME} ORDER CREATE PING: {response['timestamp'] - time_start}")
+                        self.update_order_after_deal(response)
+                if response.get('code'):
+                    print(f"CREATE ORDER RESPONSE: {body=}")
+                    print(response)
+                    return
+                price = float(response['dealMoney']) / float(response['dealStock']) if response[
+                                                                                           'dealStock'] != '0' else 0
+                order_res = {'exchange_name': self.EXCHANGE_NAME,
+                             'exchange_order_id': response.get('orderId'),
+                             'timestamp': response.get('timestamp', time.time()),
+                             'status': self.get_order_response_status(response),
+                             'api_response': response,
+                             'size': float(response['dealStock']),
+                             'price': price,
+                             'time_order_sent': time_start,
+                             'create_order_time': response['timestamp'] - time_start}
+                if client_id:
+                    self.responses.update({client_id: order_res})
+                else:
+                    self.responses.update({response['orderId']: order_res})
             except:
                 # if self.EXCHANGE_NAME != self.multibot.mm_exchange:
                 # print(message)
                 # print(f"{self.EXCHANGE_NAME} ORDER CREATE FAILURE\nBODY: {body}\nRESP: {resp.text}")
                 return
-            if self.EXCHANGE_NAME != self.multibot.mm_exchange:
-                if not client_id or 'taker' in client_id:
-                    print(f"{self.EXCHANGE_NAME} ORDER CREATE RESPONSE: {response}")
-                    print(f"{self.EXCHANGE_NAME} ORDER CREATE PING: {response['timestamp'] - time_start}")
-                    self.update_order_after_deal(response)
-            if response.get('code'):
-                print(f"CREATE ORDER RESPONSE: {body=}")
-                print(response)
-                return
-            price = float(response['dealMoney']) / float(response['dealStock']) if response['dealStock'] != '0' else 0
-            order_res = {'exchange_name': self.EXCHANGE_NAME,
-                         'exchange_order_id': response.get('orderId'),
-                         'timestamp': response.get('timestamp', time.time()),
-                         'status': self.get_order_response_status(response),
-                         'api_response': response,
-                         'size': float(response['dealStock']),
-                         'price': price,
-                         'time_order_sent': time_start,
-                         'create_order_time': response['timestamp'] - time_start}
-            if client_id:
-                self.responses.update({client_id: order_res})
-            else:
-                self.responses.update({response['orderId']: order_res})
+
             # example_executed = {'orderId': 395248275015, 'clientOrderId': '', 'market': 'BTC_PERP', 'side': 'buy',
             # 'type': 'margin limit',
             #  'timestamp': 1703664697.619855, 'dealMoney': '42.509', 'dealStock': '0.001', 'amount': '0.001',
