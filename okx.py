@@ -463,7 +463,11 @@ class OkxClient(BaseClient):
     async def _update_trades(self, data):
         market = data['arg']['instId']
         data = data['data'][0]
-        ob = self.orderbook.get(market).copy()
+        ob = self.orderbook.get(market)
+        if ob:
+            ob = ob.copy()
+        else:
+            return
         flag = False
         side = data['side']
         size = float(data['size'])
