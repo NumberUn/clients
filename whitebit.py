@@ -242,11 +242,12 @@ class WhiteBitClient(BaseClient):
                 market = pos['market']
                 ob = self.get_orderbook(market)
                 change = (ob['asks'][0][0] + ob['bids'][0][0]) / 2
+                unrealised_pnl = pos['pnl']
                 self.positions.update({market: {'timestamp': int(datetime.utcnow().timestamp()),
                                                 'entry_price': float(pos['basePrice']) if pos['basePrice'] else 0,
                                                 'amount': float(pos['amount']),
                                                 'amount_usd': change * float(pos['amount']),
-                                                'unrealised_pnl': float(pos.get('pnl', 0))}})
+                                                'unrealised_pnl': float(unrealised_pnl) if unrealised_pnl else 0}})
 
     @try_exc_regular
     def get_position(self):
@@ -265,11 +266,12 @@ class WhiteBitClient(BaseClient):
             if not ob:
                 ob = self.get_orderbook_http_reg(market)
             change = (ob['asks'][0][0] + ob['bids'][0][0]) / 2
+            unrealised_pnl = pos['pnl']
             self.positions.update({market: {'timestamp': int(datetime.utcnow().timestamp()),
                                             'entry_price': float(pos['basePrice']) if pos['basePrice'] else 0,
                                             'amount': float(pos['amount']),
                                             'amount_usd': change * float(pos['amount']),
-                                            'unrealised_pnl': float(pos.get('pnl', 0))}})
+                                            'unrealised_pnl': float(unrealised_pnl) if unrealised_pnl else 0}})
         # example = [{'positionId': 3634420, 'market': 'BTC_PERP', 'openDate': 1703664697.619855,
         #             'modifyDate': 1703664697.619855,
         #             'amount': '0.001', 'basePrice': '42523.8', 'liquidationPrice': '0', 'pnl': '0.2',
