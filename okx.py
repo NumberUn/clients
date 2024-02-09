@@ -370,7 +370,7 @@ class OkxClient(BaseClient):
         elif top_bid and top_bid < self.orderbook[market]['asks'][0][0]:
             flag = True
             side = 'sell'
-        if self.finder and flag and ts_ms - ts_ob < self.top_ws_ping:
+        if self.finder and flag:  # and ts_ms - ts_ob < self.top_ws_ping:
             coin = market.split('-')[0]
             if self.state == 'Bot':
                 await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, self.multibot.run_arbitrage)
