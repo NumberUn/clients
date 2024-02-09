@@ -671,7 +671,7 @@ class OkxClient(BaseClient):
             for order in res['data']:
                 return {
                     'exchange_order_id': order_id,
-                    'exchange': self.EXCHANGE_NAME,
+                    'exchange_name': self.EXCHANGE_NAME,
                     'status': OrderStatus.FULLY_EXECUTED if order.get(
                         'state') == 'filled' else OrderStatus.NOT_EXECUTED,
                     'factual_price': float(order['avgPx']) if order['avgPx'] else 0,

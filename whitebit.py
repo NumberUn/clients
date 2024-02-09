@@ -558,7 +558,7 @@ class WhiteBitClient(BaseClient):
                 else:
                     break
         return {'exchange_order_id': order_id,
-                'exchange': self.EXCHANGE_NAME,
+                'exchange_name': self.EXCHANGE_NAME,
                 'status': self.get_order_status(right_order, 0),
                 'factual_price': factual_price,
                 'factual_amount_coin': float(right_order.get('dealStock', 0)),
