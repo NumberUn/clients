@@ -59,6 +59,7 @@ class OkxClient(BaseClient):
         self.receiving.set()
         self.clients_ids = dict()
         self.top_ws_ping = 0.005
+        self.public_trades = dict()
         if multibot:
             self.cancel_all_orders()
 
@@ -254,6 +255,15 @@ class OkxClient(BaseClient):
                 await ws.send_json(msg)
 
     @try_exc_async
+    async def _subscribe_trades(self, ws):
+        for symbol in self.markets_list:
+            if market := self.markets.get(symbol):
+                msg = {"op": "subscribe",
+                       "args": [{"channel": "trades",
+                                 "instId": market}]}
+                await ws.send_json(msg)
+
+    @try_exc_async
     async def _subscribe_orders(self, ws):
         for symbol in self.markets_list:
             if market := self.markets.get(symbol):
@@ -281,6 +291,7 @@ class OkxClient(BaseClient):
                     await loop.create_task(self._subscribe_orders(ws))
                 else:
                     await loop.create_task(self._subscribe_orderbooks(ws))
+                    await loop.create_task(self._subscribe_trades(ws))
                 loop.create_task(self._ping(ws))
                 async for msg in ws:
                     loop.create_task(self._process_msg(msg))
@@ -433,7 +444,6 @@ class OkxClient(BaseClient):
     async def _process_msg(self, msg: aiohttp.WSMessage):
         obj = json.loads(msg.data)
         if obj.get('event'):
-            # print(obj)
             return
         if obj.get('arg'):
             if obj['arg']['channel'] == 'account':
@@ -444,6 +454,24 @@ class OkxClient(BaseClient):
                 await self._update_positions(obj)
             elif obj['arg']['channel'] == 'orders':
                 await self._update_orders(obj)
+            elif obj['arg']['channel'] == 'trades':
+                await self._update_trades(obj)
+
+    @try_exc_async
+    async def _update_trades(self, data):
+        market = data['arg']['instId']
+        data = data['data'][0]
+        # print(f"PING {time.time() - float(data['ts']) / 1000}")
+        # print(data)
+        # print(self.orderbook.get(market)['timestamp'])
+        # print()
+        ob = self.orderbook.get(market)
+        self.public_trades.update({market: {'price': data['px'],
+                                            'size': data['sz'],
+                                            'ob': ob,
+                                            'side': data['side'],
+                                            'count': data['count'],
+                                            'ob_outrun': float(data['ts']) / 1000 - ob['timestamp']}})
 
     @try_exc_regular
     def get_contract_value(self, symbol):

@@ -80,6 +80,7 @@ class BtseClient(BaseClient):
         self.cancel_responses = {}
         self.deleted_orders = []
         self.top_ws_ping = 0.015
+        self.public_trades = dict()
         if multibot:
             self.cancel_all_orders()
 
