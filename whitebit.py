@@ -102,7 +102,7 @@ class WhiteBitClient(BaseClient):
                     elif task[0] == 'amend_order':
                         market = task[1]['market']
                         loop.create_task(self.cancel_order(market, task[1]['order_id']))
-                        loop.create_task(self.create_fast_order(task[1]['price'],  task[1]['size'], task[1]['side'],
+                        loop.create_task(self.create_fast_order(task[1]['price'], task[1]['size'], task[1]['side'],
                                                                 market, task[1]['client_id'], amend=True))
                     self.async_tasks.remove(task)
                 ts_ms = time.time()
@@ -197,6 +197,7 @@ class WhiteBitClient(BaseClient):
                 self.cancel_all_orders()
                 if self.EXCHANGE_NAME == self.multibot.mm_exchange:
                     self.multibot.open_orders = {}
+
     # example = {'orderId': 422806159063, 'clientOrderId': 'maker-WHITEBIT-XRP-1003947', 'market': 'XRP_PERP',
     #            'side': 'buy', 'type': 'margin limit', 'timestamp': 1705924757.295865, 'dealMoney': '0',
     #            'dealStock': '0', 'amount': '110', 'takerFee': '0.00035', 'makerFee': '0.0001', 'left': '110',
@@ -244,9 +245,10 @@ class WhiteBitClient(BaseClient):
                 self.positions.update({market: {'timestamp': int(datetime.utcnow().timestamp()),
                                                 'entry_price': float(pos['basePrice']) if pos['basePrice'] else 0,
                                                 'amount': float(pos['amount']),
-                                                'amount_usd': change * float(pos['amount'])}})
+                                                'amount_usd': change * float(pos['amount']),
+                                                'unrealised_pnl': float(pos['pnl'])}})
 
-    @try_exc_regular
+    @ try_exc_regular
     def get_position(self):
         self.positions = {}
         path = "/api/v4/collateral-account/positions/open"
@@ -266,7 +268,8 @@ class WhiteBitClient(BaseClient):
             self.positions.update({market: {'timestamp': int(datetime.utcnow().timestamp()),
                                             'entry_price': float(pos['basePrice']) if pos['basePrice'] else 0,
                                             'amount': float(pos['amount']),
-                                            'amount_usd': change * float(pos['amount'])}})
+                                            'amount_usd': change * float(pos['amount']),
+                                            'unrealised_pnl': float(pos['pnl'])}})
         # example = [{'positionId': 3634420, 'market': 'BTC_PERP', 'openDate': 1703664697.619855,
         #             'modifyDate': 1703664697.619855,
         #             'amount': '0.001', 'basePrice': '42523.8', 'liquidationPrice': '0', 'pnl': '0.2',
@@ -391,7 +394,8 @@ class WhiteBitClient(BaseClient):
     def get_balance(self):
         if not self.balance.get('total'):
             self.get_real_balance()
-        return self.balance['total']
+        # tot_unrealised_pnl = sum([x['unrealised_pnl'] for x in self.positions.values()])
+        return self.balance['total']  # + tot_unrealised_pnl
 
     @try_exc_async
     async def _run_ws_loop(self, update_orders, update_orderbook, update_balances, update_orderbook_snapshot, loop):
