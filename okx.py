@@ -470,8 +470,8 @@ class OkxClient(BaseClient):
             return
         flag = False
         side = data['side']
-        size = float(data['size'])
-        price = float(data['price'])
+        size = float(data['sz'])
+        price = float(data['px'])
         timestamp = float(data['ts']) / 1000
         tick = self.instruments[market]['tick_size']
         if side == 'buy':
