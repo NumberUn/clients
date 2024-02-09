@@ -466,12 +466,13 @@ class OkxClient(BaseClient):
         # print(self.orderbook.get(market)['timestamp'])
         # print()
         ob = self.orderbook.get(market)
-        self.public_trades.update({market: {'price': data['px'],
-                                            'size': data['sz'],
-                                            'ob': ob,
-                                            'side': data['side'],
-                                            'count': data['count'],
-                                            'ob_outrun': float(data['ts']) / 1000 - ob['timestamp']}})
+        if ob:
+            self.public_trades.update({market: {'price': data['px'],
+                                                'size': data['sz'],
+                                                'ob': ob,
+                                                'side': data['side'],
+                                                'count': data['count'],
+                                                'ob_outrun': float(data['ts']) / 1000 - ob['timestamp']}})
 
     @try_exc_regular
     def get_contract_value(self, symbol):
