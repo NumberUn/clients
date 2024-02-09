@@ -462,7 +462,7 @@ class WhiteBitClient(BaseClient):
             else:
                 factual_price = 0
             result = {'exchange_order_id': order['id'],
-                      'exchange': self.EXCHANGE_NAME,
+                      'exchange_name': self.EXCHANGE_NAME,
                       'status': self.get_order_status(order, status_id),
                       'factual_price': factual_price,
                       'factual_amount_coin': float(order['deal_stock']),
@@ -660,7 +660,7 @@ class WhiteBitClient(BaseClient):
     def update_order_after_deal(self, resp):
         factual_price = 0 if resp.get('dealStock', '0') == '0' else float(resp['dealMoney']) / float(resp['dealStock'])
         self.orders.update({resp.get('orderId'): {'exchange_order_id': resp.get('orderId', 'default'),
-                                                  'exchange': self.EXCHANGE_NAME,
+                                                  'exchange_name': self.EXCHANGE_NAME,
                                                   'status': self.get_order_status(resp, 0),
                                                   'factual_price': factual_price,
                                                   'factual_amount_coin': float(resp.get('dealStock', 0)),

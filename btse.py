@@ -684,7 +684,7 @@ class BtseClient(BaseClient):
                 self.orders[order_id].update(result_exist)
                 continue
             result_new = {'exchange_order_id': order_id,
-                          'exchange': self.EXCHANGE_NAME,
+                          'exchange_name': self.EXCHANGE_NAME,
                           'status': self.get_order_status_by_fill(order_id, size),
                           'factual_price': float(fill['price']),
                           'factual_amount_coin': size,
