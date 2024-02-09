@@ -625,9 +625,10 @@ class WhiteBitClient(BaseClient):
                 # print(f"{self.EXCHANGE_NAME} ORDER CREATE FAILURE\nBODY: {body}\nRESP: {resp.text}")
                 return
             if self.EXCHANGE_NAME != self.multibot.mm_exchange:
-                print(f"{self.EXCHANGE_NAME} ORDER CREATE RESPONSE: {response}")
-                print(f"{self.EXCHANGE_NAME} ORDER CREATE PING: {response['timestamp'] - time_start}")
-                self.update_order_after_deal(response)
+                if not client_id or 'taker' in client_id:
+                    print(f"{self.EXCHANGE_NAME} ORDER CREATE RESPONSE: {response}")
+                    print(f"{self.EXCHANGE_NAME} ORDER CREATE PING: {response['timestamp'] - time_start}")
+                    self.update_order_after_deal(response)
             if response.get('code'):
                 print(f"CREATE ORDER RESPONSE: {body=}")
                 print(response)
