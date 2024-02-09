@@ -147,6 +147,7 @@ class OkxClient(BaseClient):
             coin = market.split('-')[0]
             if self.multibot.open_orders.get(coin + '-' + self.EXCHANGE_NAME, [''])[0] == response[0]['orderID']:
                 self.multibot.open_orders.pop(coin + '-' + self.EXCHANGE_NAME)
+
     # error_example = {'id': 'RrkaMm', 'op': 'cancel-order', 'code': '1', 'msg': '', 'data': [
     #     {'ordId': 'makerxxxOKXxxxXoSXQmxxxETH', 'clOrdId': '', 'sCode': '51000', 'sMsg': 'Parameter ordId  error'}],
     #                  'inTime': '1706890754843769', 'outTime': '1706890754843819'}
@@ -341,7 +342,8 @@ class OkxClient(BaseClient):
             if not position.get('notionalUsd'):
                 continue
             market = obj['arg']['instId']
-            amount_usd = float(position['notionalUsd']) if float(position['pos']) > 0 else -float(position['notionalUsd'])
+            amount_usd = float(position['notionalUsd']) if float(position['pos']) > 0 else -float(
+                position['notionalUsd'])
             self.positions.update({market: {'side': 'LONG' if float(position['pos']) > 0 else 'SHORT',
                                             'amount_usd': amount_usd,
                                             'amount': amount_usd / float(position['markPx']),
@@ -373,9 +375,9 @@ class OkxClient(BaseClient):
         if self.finder and flag:  # and ts_ms - ts_ob < self.top_ws_ping:
             coin = market.split('-')[0]
             if self.state == 'Bot':
-                await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, self.multibot.run_arbitrage)
+                await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, self.multibot.run_arbitrage, 'ob')
             else:
-                await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side)
+                await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, 'ob')
         if self.market_finder:
             await self.market_finder.count_one_coin(market.split('-')[0], self.EXCHANGE_NAME)
 
@@ -461,18 +463,44 @@ class OkxClient(BaseClient):
     async def _update_trades(self, data):
         market = data['arg']['instId']
         data = data['data'][0]
-        # print(f"PING {time.time() - float(data['ts']) / 1000}")
-        # print(data)
-        # print(self.orderbook.get(market)['timestamp'])
-        # print()
-        ob = self.orderbook.get(market)
-        if ob:
-            self.public_trades.update({market: {'price': data['px'],
-                                                'size': data['sz'],
-                                                'ob': ob,
-                                                'side': data['side'],
-                                                'count': data['count'],
-                                                'ts': float(data['ts']) / 1000}})
+        ob = self.orderbook.get(market).copy()
+        flag = False
+        side = data['side']
+        size = float(data['size'])
+        price = float(data['price'])
+        timestamp = float(data['ts']) / 1000
+        tick = self.instruments[market]['tick_size']
+        if side == 'buy':
+            if price != ob['asks'][0][0]:
+                ob['asks'][0] = [price, size]
+                ob.update({'timestamp': timestamp, 'ts_ms': time.time()})
+                if price < ob['asks'][0][0]:
+                    flag = True
+            else:
+                if size == ob['asks'][0][1]:
+                    ob['bids'][0] = [price, size]
+                    ob['asks'][0] = [price + tick, size]
+                    flag = True
+                    side = 'sell'
+        if side == 'sell':
+            if price != ob['bids'][0][0]:
+                ob['bids'][0] = [price, size]
+                ob.update({'timestamp': timestamp, 'ts_ms': time.time()})
+                if price > ob['bids'][0][0]:
+                    flag = True
+            else:
+                if size == ob['bids'][0][1]:
+                    ob['asks'][0] = [price, size]
+                    ob['bids'][0] = [price - tick, size]
+                    flag = True
+                    side = 'buy'
+        self.orderbook[market] = ob
+        if self.finder and flag:  # and ts_ms - ts_ob < self.top_ws_ping:
+            coin = market.split('-')[0]
+            if self.state == 'Bot':
+                await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, self.multibot.run_arbitrage, 'trade')
+            else:
+                await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, 'trade')
 
     @try_exc_regular
     def get_contract_value(self, symbol):

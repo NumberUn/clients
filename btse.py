@@ -824,9 +824,9 @@ class BtseClient(BaseClient):
         if flag and self.finder:  # and ts_ms - ts_ob < self.top_ws_ping:
             coin = symbol.split('PFC')[0]
             if self.state == 'Bot':
-                await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, self.multibot.run_arbitrage)
+                await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, self.multibot.run_arbitrage, 'ob')
             else:
-                await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side)
+                await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, 'ob')
 
     @try_exc_async
     async def upd_ob_snapshot(self, data):
