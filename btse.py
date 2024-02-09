@@ -79,7 +79,7 @@ class BtseClient(BaseClient):
         self.responses = {}
         self.cancel_responses = {}
         self.deleted_orders = []
-        self.top_ws_ping = 0.012
+        self.top_ws_ping = 0.015
         if multibot:
             self.cancel_all_orders()
 
@@ -389,7 +389,7 @@ class BtseClient(BaseClient):
         async with self.async_session.post(url=self.BASE_URL + path, headers=self.session.headers, json=body) as resp:
             try:
                 response = await resp.json()
-                if 'taker' in client_id or not client_id:
+                if not client_id or 'taker' in client_id:
                     print(f"{self.EXCHANGE_NAME} ORDER CREATE RESPONSE: {response}")
                     print(f"{self.EXCHANGE_NAME} ORDER CREATE PING: {response[0]['timestamp'] / 1000 - time_start}")
             except Exception:

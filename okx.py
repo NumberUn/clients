@@ -344,6 +344,7 @@ class OkxClient(BaseClient):
         orderbook = obj['data'][0]
         ts_ms = time.time()
         ts_ob = float(orderbook['ts']) / 1000
+        # print(f"OB UPD PING: {ts_ms - ts_ob}")
         market = obj['arg']['instId']
         flag = False
         top_ask = self.orderbook.get(market, {}).get('asks', [[None, None]])[0][0]
