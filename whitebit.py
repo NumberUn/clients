@@ -13,7 +13,8 @@ from clients.core.enums import ResponseStatus, OrderStatus
 from core.wrappers import try_exc_regular, try_exc_async
 from clients.core.base_client import BaseClient
 from aiohttp.client_exceptions import ContentTypeError
-from random import randint
+import random
+import string
 
 
 class WhiteBitClient(BaseClient):
@@ -58,7 +59,7 @@ class WhiteBitClient(BaseClient):
         self.order_loop = asyncio.new_event_loop()
         self.orders_thread = threading.Thread(target=self.deals_thread_func, args=[self.order_loop])
         self.LAST_ORDER_ID = 'default'
-        self.taker_fee = float(keys['TAKER_FEE']) * 0.6
+        self.taker_fee = 0.00035 * 0.6
         self.maker_fee = 0.0001 * 0.6
         self.last_keep_alive = 0
         self.last_websocket_ping = 0
@@ -107,7 +108,24 @@ class WhiteBitClient(BaseClient):
                 if ts_ms - self.last_keep_alive > 5:
                     self.last_keep_alive = ts_ms
                     loop.create_task(self.get_position_async())
+                    loop.create_task(self.keep_alive_order())
                 await asyncio.sleep(0.0001)
+
+    @staticmethod
+    @try_exc_regular
+    def id_generator(size=6, chars=string.ascii_letters):
+        return ''.join(random.choice(chars) for _ in range(size))
+
+    @try_exc_async
+    async def keep_alive_order(self):
+        market = self.markets[self.markets_list[random.randint(0, len(self.markets_list) - 1)]]
+        price = self.get_orderbook(market)['bids'][0][0] * 0.95
+        price, size = self.fit_sizes(price, self.instruments[market]['min_size'], market)
+        rand_id = self.id_generator()
+        await self.create_fast_order(price, size, 'buy', market, 'keepxxxalivexxx' + rand_id)
+        resp = self.responses.get('keepxxxalivexxx' + rand_id)
+        ex_order_id = resp['exchange_order_id']
+        await self.cancel_order(market, ex_order_id)
 
     @try_exc_regular
     def get_markets(self):
@@ -195,7 +213,7 @@ class WhiteBitClient(BaseClient):
         #         while nonce in self.nonces:
         #             nonce += 1
         # else:
-        nonce += randint(-5000, 5000)
+        nonce += random.randint(-5000, 5000)
         params['nonce'] = nonce
         params['nonceWindow'] = True
         signature, payload = self.get_signature(params)
@@ -387,6 +405,7 @@ class WhiteBitClient(BaseClient):
                 for symbol in self.markets_list:
                     if market := self.markets.get(symbol):
                         await loop.create_task(self.subscribe_orderbooks(market))
+                loop.create_task(self._ping(ws))
                 async for msg in ws:
                     data = json.loads(msg.data)
                     if data.get('method') == 'depth_update':
@@ -396,21 +415,16 @@ class WhiteBitClient(BaseClient):
                             loop.create_task(update_orderbook(data))
                     elif data.get('method') == 'balanceMargin_update':
                         loop.create_task(update_balances(data))
-                        loop.create_task(self.ping_websocket(ws))
                     elif data.get('method') in ['ordersExecuted_update', 'ordersPending_update']:
                         loop.create_task(update_orders(data))
                         print(data, datetime.utcnow())
-                        loop.create_task(self.ping_websocket(ws))
                 await ws.close()
 
     @try_exc_async
-    async def ping_websocket(self, ws):
-        ts = time.time()
-        if ts - self.last_websocket_ping > 10:
+    async def _ping(self, ws):
+        while True:
+            await asyncio.sleep(25)  # Adjust the ping interval as needed
             await ws.ping()
-            self.last_websocket_ping = ts
-
-        # print(f'PING SENT: {datetime.utcnow()}')
 
     @try_exc_async
     async def update_balances(self, data):
@@ -587,7 +601,7 @@ class WhiteBitClient(BaseClient):
                     'status': status}
 
     @try_exc_async
-    async def create_fast_order(self, price, sz, side, market, client_id=None, amend=False):
+    async def create_fast_order(self, price, sz, side, market, client_id=None):
         time_start = time.time()
         # message = f'ORDER CREATE ERROR\n'
         # message += f"{time_start=}\n"
@@ -600,8 +614,6 @@ class WhiteBitClient(BaseClient):
                 "side": side,
                 "amount": sz,
                 "price": price}
-        if client_id and not amend:
-            body.update({'clientOrderId': client_id})
         body = self.get_auth_for_request(body, path)
         path += self._create_uri(body)
         async with self.async_session.post(url=self.BASE_URL + path, headers=self.session.headers, json=body) as resp:
@@ -630,9 +642,7 @@ class WhiteBitClient(BaseClient):
                          'price': price,
                          'time_order_sent': time_start,
                          'create_order_time': response['timestamp'] - time_start}
-            if response.get("clientOrderId"):
-                self.responses.update({response["clientOrderId"]: order_res})
-            elif amend:
+            if client_id:
                 self.responses.update({client_id: order_res})
             else:
                 self.responses.update({response['orderId']: order_res})

@@ -22,5 +22,5 @@ ALL_CLIENTS = {
     # 'BITMAKE': BitmakeClient,
     # 'GLOBE': GlobeClient,
     # 'BIT': BitClient,
-    'BTSE': BtseClient}
-    # 'WHITEBIT': WhiteBitClient}
+    'BTSE': BtseClient,
+    'WHITEBIT': WhiteBitClient}
