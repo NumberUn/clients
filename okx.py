@@ -58,7 +58,7 @@ class OkxClient(BaseClient):
         self.receiving = asyncio.Event()
         self.receiving.set()
         self.clients_ids = dict()
-        self.top_ws_ping = 0.005
+        self.top_ws_ping = 0.07
         self.public_trades = dict()
         if multibot:
             self.cancel_all_orders()
@@ -399,7 +399,7 @@ class OkxClient(BaseClient):
         if obj.get('data') and obj.get('arg'):
             for order in obj.get('data'):
                 status = self.get_order_status(order, 'WS')
-                self.get_taker_fee(order)
+                # self.get_taker_fee(order)
                 contract_value = self.get_contract_value(order['instId'])
                 result = {
                     'exchange_order_id': order['ordId'],

@@ -70,6 +70,7 @@ class WhiteBitClient(BaseClient):
         self.requests_counter = 0
         self.total_requests = 0
         self.total_start_time = time.time()
+        self.top_ws_ping = 0.035
         self.cancel_all_orders()
 
     @try_exc_regular
@@ -247,12 +248,12 @@ class WhiteBitClient(BaseClient):
 
     @try_exc_regular
     def get_position(self):
+        self.positions = {}
         path = "/api/v4/collateral-account/positions/open"
         params = self.get_auth_for_request({}, path)
         path += self._create_uri(params)
         res = self.session.post(url=self.BASE_URL + path, json=params)
         response = res.json()
-        self.positions = {}
         for pos in response:
             if isinstance(pos, str):
                 print(f"{self.EXCHANGE_NAME} position update in get_position mistake {response}")
@@ -769,7 +770,7 @@ class WhiteBitClient(BaseClient):
             # else:
             #     if ts_ms - ts_ob < 0.120:
             await self.market_finder.count_one_coin(symbol.split('_')[0], self.EXCHANGE_NAME)
-        if flag and ts_ms - ts_ob < 0.035 and self.finder:
+        if flag and self.finder and ts_ms - ts_ob < 0.035:
             coin = symbol.split('_')[0]
             if self.state == 'Bot':
                 await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, self.multibot.run_arbitrage)

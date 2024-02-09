@@ -79,7 +79,7 @@ class BtseClient(BaseClient):
         self.responses = {}
         self.cancel_responses = {}
         self.deleted_orders = []
-        self.top_ws_ping = 0.015
+        self.top_ws_ping = 0.07
         self.public_trades = dict()
         if multibot:
             self.cancel_all_orders()
@@ -264,10 +264,10 @@ class BtseClient(BaseClient):
 
     @try_exc_regular
     def get_position(self):
+        self.positions = {}
         path = "/api/v2.1/user/positions"
         self.get_private_headers(path)
         response = self.session.get(self.BASE_URL + path)
-        self.positions = {}
         if response.status_code in ['200', 200, '201', 201]:
             for pos in response.json():
                 contract_value = self.instruments[pos['symbol']]['contract_value']
