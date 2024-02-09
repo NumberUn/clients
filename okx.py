@@ -472,7 +472,7 @@ class OkxClient(BaseClient):
                                                 'ob': ob,
                                                 'side': data['side'],
                                                 'count': data['count'],
-                                                'ob_outrun': float(data['ts']) / 1000 - ob['timestamp']}})
+                                                'ts': float(data['ts']) / 1000}})
 
     @try_exc_regular
     def get_contract_value(self, symbol):
