@@ -394,8 +394,8 @@ class WhiteBitClient(BaseClient):
     def get_balance(self):
         if not self.balance.get('total'):
             self.get_real_balance()
-        # tot_unrealised_pnl = sum([x['unrealised_pnl'] for x in self.positions.values()])
-        return self.balance['total']  # + tot_unrealised_pnl
+        tot_unrealised_pnl = sum([x['unrealised_pnl'] for x in self.positions.values()])
+        return self.balance['total'] + tot_unrealised_pnl
 
     @try_exc_async
     async def _run_ws_loop(self, update_orders, update_orderbook, update_balances, update_orderbook_snapshot, loop):
