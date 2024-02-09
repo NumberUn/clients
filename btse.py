@@ -538,24 +538,28 @@ class BtseClient(BaseClient):
                 else:
                     self._ws_public = ws
                     await loop.create_task(self.subscribe_orderbooks())
+                    # await loop.create_task(self.subscribe_public_trades())
                 loop.create_task(self._ping(ws))
                 async for msg in ws:
                     data = json.loads(msg.data)
-                    if data.get('topic') == 'fills':
+                    topic = data.get('topic', '')
+                    if topic == 'fills':
                         own_ts = time.time()
                         await self.upd_fills(data, own_ts)
-                    loop.create_task(self.process_ws_msg(data))
+                    loop.create_task(self.process_ws_msg(data, topic))
             await ws.close()
 
     @try_exc_async
-    async def process_ws_msg(self, data):
-        if 'update' in data.get('topic', ''):
+    async def process_ws_msg(self, data, topic):
+        if 'update' in topic:
             if data.get('data') and data['data']['type'] == 'delta':
                 await self.upd_ob(data)
             elif data.get('data') and data['data']['type'] == 'snapshot':
                 await self.upd_ob_snapshot(data)
         elif data.get('topic') == 'allPosition':
             await self.upd_positions(data)
+        elif 'tradeHistoryApi' in topic:
+            print(data)
         else:
             print(data)
 
@@ -735,6 +739,15 @@ class BtseClient(BaseClient):
         await self._connected.wait()
         await self._ws_public.send_json(method)
 
+    @try_exc_async
+    async def subscribe_public_trades(self):
+        args = [f"tradeHistoryApi:{self.markets[x]}" for x in self.markets_list if self.markets.get(x)]
+        method = {"op": "subscribe",
+                  "args": args}
+        print(method)
+        await self._connected.wait()
+        await self._ws_public.send_json(method)
+
     @try_exc_regular
     def get_wss_auth(self):
         url = "/ws/futures"
@@ -901,16 +914,16 @@ if __name__ == '__main__':
     config = configparser.ConfigParser()
     config.read('config.ini', "utf-8")
     client = BtseClient(keys=config['BTSE'], state='Bot')
-    client.markets_list = list(client.markets.keys())
+    client.markets_list = list(client.markets.keys())[:30]
     client.run_updater()
-    time.sleep(3)
-    ob = client.get_orderbook('MANAPFC')
-    amount = client.instruments['MANAPFC']['min_size']
-    price, amount = client.fit_sizes(ob['bids'][0][0] * 0.95, amount, 'MANAPFC')
+    # time.sleep(3)
+    # ob = client.get_orderbook('MANAPFC')
+    # amount = client.instruments['MANAPFC']['min_size']
+    # price, amount = client.fit_sizes(ob['bids'][0][0] * 0.95, amount, 'MANAPFC')
     while True:
         time.sleep(5)
-        client.order_loop.create_task(client.create_fast_order(price, amount, 'buy', 'MANAPFC'))
-        client.cancel_all_orders()
+        # client.order_loop.create_task(client.create_fast_order(price, amount, 'buy', 'MANAPFC'))
+        # client.cancel_all_orders()
         # for symbol in client.markets.values():
         #     print(client.get_orderbook(symbol))
 
