@@ -246,9 +246,9 @@ class WhiteBitClient(BaseClient):
                                                 'entry_price': float(pos['basePrice']) if pos['basePrice'] else 0,
                                                 'amount': float(pos['amount']),
                                                 'amount_usd': change * float(pos['amount']),
-                                                'unrealised_pnl': float(pos['pnl'])}})
+                                                'unrealised_pnl': float(pos.get('pnl', 0))}})
 
-    @ try_exc_regular
+    @try_exc_regular
     def get_position(self):
         self.positions = {}
         path = "/api/v4/collateral-account/positions/open"
@@ -269,7 +269,7 @@ class WhiteBitClient(BaseClient):
                                             'entry_price': float(pos['basePrice']) if pos['basePrice'] else 0,
                                             'amount': float(pos['amount']),
                                             'amount_usd': change * float(pos['amount']),
-                                            'unrealised_pnl': float(pos['pnl'])}})
+                                            'unrealised_pnl': float(pos.get('pnl', 0))}})
         # example = [{'positionId': 3634420, 'market': 'BTC_PERP', 'openDate': 1703664697.619855,
         #             'modifyDate': 1703664697.619855,
         #             'amount': '0.001', 'basePrice': '42523.8', 'liquidationPrice': '0', 'pnl': '0.2',
