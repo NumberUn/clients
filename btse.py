@@ -821,7 +821,7 @@ class BtseClient(BaseClient):
         self.orderbook[symbol] = new_ob
         if self.market_finder and flag_market:
             await self.market_finder.count_one_coin(symbol.split('PFC')[0], self.EXCHANGE_NAME)
-        if flag and self.finder:  # and ts_ms - ts_ob < self.top_ws_ping:
+        if flag and self.finder and not self.multibot.arbitrage_processing:  # and ts_ms - ts_ob < self.top_ws_ping:
             coin = symbol.split('PFC')[0]
             if self.state == 'Bot':
                 await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, self.multibot.run_arbitrage, 'ob')
