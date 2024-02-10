@@ -241,6 +241,8 @@ class WhiteBitClient(BaseClient):
                     continue
                 market = pos['market']
                 ob = self.get_orderbook(market)
+                if not ob:
+                    ob = self.get_orderbook_http_reg(market)
                 change = (ob['asks'][0][0] + ob['bids'][0][0]) / 2
                 if pos['basePrice'] and pos['amount']:
                     unrealised_pnl = (change - float(pos['basePrice'])) * float(pos['amount'])
