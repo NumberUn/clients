@@ -783,9 +783,9 @@ class WhiteBitClient(BaseClient):
         if side and self.finder and ts_ms - ts_ob < self.top_ws_ping and not self.multibot.arbitrage_processing:
             coin = symbol.split('_')[0]
             if self.state == 'Bot':
-                await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, self.multibot.run_arbitrage)
+                await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, self.multibot.run_arbitrage, 'ob')
             else:
-                await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side)
+                await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, 'ob')
 
     @try_exc_regular
     def cut_extra_orders_from_ob(self, symbol, data, new_ob):
