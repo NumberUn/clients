@@ -538,7 +538,6 @@ class BtseClient(BaseClient):
                 else:
                     self._ws_public = ws
                     await loop.create_task(self.subscribe_orderbooks())
-                    # await loop.create_task(self.subscribe_public_trades())
                 loop.create_task(self._ping(ws))
                 async for msg in ws:
                     data = json.loads(msg.data)
@@ -558,10 +557,6 @@ class BtseClient(BaseClient):
                 await self.upd_ob_snapshot(data)
         elif data.get('topic') == 'allPosition':
             await self.upd_positions(data)
-        elif 'tradeHistoryApi' in topic:
-            print(data)
-        else:
-            print(data)
 
     @try_exc_async
     async def _ping(self, ws):
@@ -776,52 +771,46 @@ class BtseClient(BaseClient):
         ts_ob = data['data']['timestamp']
         if isinstance(ts_ob, int):
             ts_ob = ts_ob / 1000
-        # print(f"OB UPD PING: {ts_ms - ts_ob}")
-        flag = False
-        flag_market = False
+        # flag_market = False
+        side = None
         symbol = data['data']['symbol']
         new_ob = self.orderbook[symbol].copy()
         new_ob['ts_ms'] = ts_ms
-
         new_ob['timestamp'] = ts_ob
         for new_bid in data['data']['bids']:
             if float(new_bid[0]) >= new_ob['top_bid'][0]:
                 new_ob['top_bid'] = [float(new_bid[0]), float(new_bid[1])]
-                new_ob['top_bid_timestamp'] = data['data']['timestamp']
-                flag = True
-                flag_market = True
+                new_ob['top_bid_timestamp'] = ts_ob
                 side = 'sell'
+                # flag_market = True
             if new_ob['bids'].get(new_bid[0]) and new_bid[1] == '0':
                 del new_ob['bids'][new_bid[0]]
                 if float(new_bid[0]) == new_ob['top_bid'][0] and len(new_ob['bids']):
                     top = sorted(new_ob['bids'])[-1]
                     new_ob['top_bid'] = [float(top), float(new_ob['bids'][top])]
-                    new_ob['top_bid_timestamp'] = data['data']['timestamp']
-                    flag_market = True
-                    side = 'sell'
+                    new_ob['top_bid_timestamp'] = ts_ob
+                    # flag_market = True
             elif new_bid[1] != '0':
                 new_ob['bids'][new_bid[0]] = new_bid[1]
         for new_ask in data['data']['asks']:
             if float(new_ask[0]) <= new_ob['top_ask'][0]:
                 new_ob['top_ask'] = [float(new_ask[0]), float(new_ask[1])]
-                new_ob['top_ask_timestamp'] = data['data']['timestamp']
-                flag_market = True
-                flag = True
+                new_ob['top_ask_timestamp'] = ts_ob
+                # flag_market = True
                 side = 'buy'
             if new_ob['asks'].get(new_ask[0]) and new_ask[1] == '0':
                 del new_ob['asks'][new_ask[0]]
                 if float(new_ask[0]) == new_ob['top_ask'][0] and len(new_ob['asks']):
                     top = sorted(new_ob['asks'])[0]
                     new_ob['top_ask'] = [float(top), float(new_ob['asks'][top])]
-                    new_ob['top_ask_timestamp'] = data['data']['timestamp']
-                    flag_market = True
-                    side = 'buy'
+                    new_ob['top_ask_timestamp'] = ts_ob
+                    # flag_market = True
             elif new_ask[1] != '0':
                 new_ob['asks'][new_ask[0]] = new_ask[1]
         self.orderbook[symbol] = new_ob
-        if self.market_finder and flag_market:
-            await self.market_finder.count_one_coin(symbol.split('PFC')[0], self.EXCHANGE_NAME)
-        if flag and self.finder and not self.multibot.arbitrage_processing:  # and ts_ms - ts_ob < self.top_ws_ping:
+        # if self.market_finder and flag_market:
+        #     await self.market_finder.count_one_coin(symbol.split('PFC')[0], self.EXCHANGE_NAME)
+        if side and self.finder and not self.multibot.arbitrage_processing and ts_ms - ts_ob < self.top_ws_ping:
             coin = symbol.split('PFC')[0]
             if self.state == 'Bot':
                 await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, self.multibot.run_arbitrage, 'ob')

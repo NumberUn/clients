@@ -70,7 +70,7 @@ class WhiteBitClient(BaseClient):
         self.requests_counter = 0
         self.total_requests = 0
         self.total_start_time = time.time()
-        self.top_ws_ping = 0.035
+        self.top_ws_ping = 0.07
         self.cancel_all_orders()
 
     @try_exc_regular
@@ -242,12 +242,12 @@ class WhiteBitClient(BaseClient):
                 market = pos['market']
                 ob = self.get_orderbook(market)
                 change = (ob['asks'][0][0] + ob['bids'][0][0]) / 2
-                unrealised_pnl = pos['pnl']
+                unrealised_pnl = (change - float(pos['basePrice'])) * float(pos['amount'])
                 self.positions.update({market: {'timestamp': int(datetime.utcnow().timestamp()),
                                                 'entry_price': float(pos['basePrice']) if pos['basePrice'] else 0,
                                                 'amount': float(pos['amount']),
                                                 'amount_usd': change * float(pos['amount']),
-                                                'unrealised_pnl': float(unrealised_pnl) if unrealised_pnl else 0}})
+                                                'unrealised_pnl': unrealised_pnl}})
 
     @try_exc_regular
     def get_position(self):
@@ -266,12 +266,12 @@ class WhiteBitClient(BaseClient):
             if not ob:
                 ob = self.get_orderbook_http_reg(market)
             change = (ob['asks'][0][0] + ob['bids'][0][0]) / 2
-            unrealised_pnl = pos['pnl']
+            unrealised_pnl = (change - float(pos['basePrice'])) * float(pos['amount'])
             self.positions.update({market: {'timestamp': int(datetime.utcnow().timestamp()),
                                             'entry_price': float(pos['basePrice']) if pos['basePrice'] else 0,
                                             'amount': float(pos['amount']),
                                             'amount_usd': change * float(pos['amount']),
-                                            'unrealised_pnl': float(unrealised_pnl) if unrealised_pnl else 0}})
+                                            'unrealised_pnl': unrealised_pnl}})
         # example = [{'positionId': 3634420, 'market': 'BTC_PERP', 'openDate': 1703664697.619855,
         #             'modifyDate': 1703664697.619855,
         #             'amount': '0.001', 'basePrice': '42523.8', 'liquidationPrice': '0', 'pnl': '0.2',
@@ -332,8 +332,8 @@ class WhiteBitClient(BaseClient):
                         'asks': [[float(ask[0]), float(ask[1])] for ask in ob['asks']],
                         'bids': [[float(bid[0]), float(bid[1])] for bid in ob['bids']],
                         'timestamp': datetime.utcnow().timestamp(),
-                        'top_ask_timestamp': datetime.utcnow().timestamp(),
-                        'top_bid_timestamp': datetime.utcnow().timestamp()}
+                        'top_ask_ts': datetime.utcnow().timestamp(),
+                        'top_bid_ts': datetime.utcnow().timestamp()}
                     return orderbook
 
     @try_exc_regular
@@ -724,8 +724,8 @@ class WhiteBitClient(BaseClient):
 
     @try_exc_async
     async def update_orderbook(self, data):
-        flag = False
-        flag_market = False
+        side = None
+        # flag_market = False
         symbol = data['params'][2]
         new_ob = self.orderbook[symbol].copy()
         ts_ms = time.time()
@@ -735,48 +735,46 @@ class WhiteBitClient(BaseClient):
         for new_bid in data['params'][1].get('bids', []):
             if float(new_bid[0]) >= new_ob['top_bid'][0]:
                 new_ob['top_bid'] = [float(new_bid[0]), float(new_bid[1])]
-                new_ob['top_bid_timestamp'] = data['params'][1]['timestamp']
-                flag = True
-                flag_market = True
+                new_ob['top_bid_ts'] = ts_ob
+                # flag_market = True
                 side = 'sell'
             if new_ob['bids'].get(new_bid[0]) and new_bid[1] == '0':
                 del new_ob['bids'][new_bid[0]]
                 if float(new_bid[0]) == new_ob['top_bid'][0] and len(new_ob['bids']):
                     top = sorted(new_ob['bids'])[-1]
                     new_ob['top_bid'] = [float(top), float(new_ob['bids'][top])]
-                    new_ob['top_bid_timestamp'] = data['params'][1]['timestamp']
-                    flag_market = True
-                    side = 'sell'
+                    new_ob['top_bid_ts'] = ts_ob
+                    # flag_market = True
+                    # side = 'sell'
             elif new_bid[1] != '0':
                 new_ob['bids'][new_bid[0]] = new_bid[1]
         for new_ask in data['params'][1].get('asks', []):
             if float(new_ask[0]) <= new_ob['top_ask'][0]:
                 new_ob['top_ask'] = [float(new_ask[0]), float(new_ask[1])]
-                new_ob['top_ask_timestamp'] = data['params'][1]['timestamp']
-                flag_market = True
-                flag = True
+                new_ob['top_ask_ts'] = ts_ob
+                # flag_market = True
                 side = 'buy'
             if new_ob['asks'].get(new_ask[0]) and new_ask[1] == '0':
                 del new_ob['asks'][new_ask[0]]
                 if float(new_ask[0]) == new_ob['top_ask'][0] and len(new_ob['asks']):
                     top = sorted(new_ob['asks'])[0]
                     new_ob['top_ask'] = [float(top), float(new_ob['asks'][top])]
-                    new_ob['top_ask_timestamp'] = data['params'][1]['timestamp']
-                    flag_market = True
-                    side = 'buy'
+                    new_ob['top_ask_ts'] = ts_ob
+                    # flag_market = True
+                    # side = 'buy'
             elif new_ask[1] != '0':
                 new_ob['asks'][new_ask[0]] = new_ask[1]
         if new_ob['top_ask'][0] <= new_ob['top_bid'][0]:
             new_ob = self.cut_extra_orders_from_ob(symbol, data, new_ob)
         self.orderbook[symbol] = new_ob
-        if self.market_finder and flag_market:
-            # if self.multibot.mm_exchange == self.EXCHANGE_NAME:
-            #     if ts_ms - ts_ob < 0.035:
-            #         await self.market_finder.count_one_coin(symbol.split('_')[0], self.EXCHANGE_NAME)
-            # else:
-            #     if ts_ms - ts_ob < 0.120:
-            await self.market_finder.count_one_coin(symbol.split('_')[0], self.EXCHANGE_NAME)
-        if flag and self.finder and ts_ms - ts_ob < 0.035 and not self.multibot.arbitrage_processing:
+        # if self.market_finder and flag_market:
+        #     # if self.multibot.mm_exchange == self.EXCHANGE_NAME:
+        #     #     if ts_ms - ts_ob < 0.035:
+        #     #         await self.market_finder.count_one_coin(symbol.split('_')[0], self.EXCHANGE_NAME)
+        #     # else:
+        #     #     if ts_ms - ts_ob < 0.120:
+        #     await self.market_finder.count_one_coin(symbol.split('_')[0], self.EXCHANGE_NAME)
+        if side and self.finder and ts_ms - ts_ob < self.top_ws_ping and not self.multibot.arbitrage_processing:
             coin = symbol.split('_')[0]
             if self.state == 'Bot':
                 await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, self.multibot.run_arbitrage)
@@ -785,7 +783,7 @@ class WhiteBitClient(BaseClient):
 
     @try_exc_regular
     def cut_extra_orders_from_ob(self, symbol, data, new_ob):
-        if new_ob['top_ask_timestamp'] < new_ob['top_bid_timestamp']:
+        if new_ob['top_ask_ts'] < new_ob['top_bid_ts']:
             top_ask = [999999999, 0]
             new_asks = {}
             for new_ask in data['params'][1].get('asks', []):
@@ -798,7 +796,7 @@ class WhiteBitClient(BaseClient):
                         top_ask = [float(new_ask[0]), float(new_ask[1])]
             new_ob.update({'asks': new_asks,
                            'top_ask': top_ask,
-                           'top_ask_timestamp': data['params'][1]['timestamp']})
+                           'top_ask_ts': data['params'][1]['timestamp']})
         else:
             top_bid = [0, 0]
             new_bids = {}
@@ -812,7 +810,7 @@ class WhiteBitClient(BaseClient):
                         top_bid = [float(new_bid[0]), float(new_bid[1])]
             new_ob.update({'bids': new_bids,
                            'top_bid': top_bid,
-                           'top_bid_timestamp': data['params'][1]['timestamp']})
+                           'top_bid_ts': data['params'][1]['timestamp']})
         return new_ob
 
     @try_exc_async
@@ -825,8 +823,8 @@ class WhiteBitClient(BaseClient):
                                       'timestamp': data['params'][1]['timestamp'],
                                       'top_ask': [float(ob['asks'][0][0]), float(ob['asks'][0][1])],
                                       'top_bid': [float(ob['bids'][0][0]), float(ob['bids'][0][1])],
-                                      'top_ask_timestamp': data['params'][1]['timestamp'],
-                                      'top_bid_timestamp': data['params'][1]['timestamp'],
+                                      'top_ask_ts': data['params'][1]['timestamp'],
+                                      'top_bid_ts': data['params'][1]['timestamp'],
                                       'ts_ms': time.time()}
 
     @try_exc_regular
@@ -846,8 +844,8 @@ class WhiteBitClient(BaseClient):
         ob = {'timestamp': snap['timestamp'],
               'asks': sorted([[float(x), float(y)] for x, y in snap['asks'].copy().items()])[:self.ob_len],
               'bids': sorted([[float(x), float(y)] for x, y in snap['bids'].copy().items()])[::-1][:self.ob_len],
-              'top_ask_timestamp': snap['top_ask_timestamp'],
-              'top_bid_timestamp': snap['top_bid_timestamp'],
+              'top_ask_ts': snap['top_ask_ts'],
+              'top_bid_ts': snap['top_bid_ts'],
               'ts_ms': snap['ts_ms']}
         return ob
 

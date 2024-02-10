@@ -359,27 +359,25 @@ class OkxClient(BaseClient):
         ts_ob = float(orderbook['ts']) / 1000
         # print(f"OB UPD PING: {ts_ms - ts_ob}")
         market = obj['arg']['instId']
-        flag = False
+        side = None
         top_ask = self.orderbook.get(market, {}).get('asks', [[None, None]])[0][0]
         top_bid = self.orderbook.get(market, {}).get('bids', [[None, None]])[0][0]
-        self.orderbook.update({market: {'asks': [[float(x[0]), float(x[1])] for x in orderbook['asks']],
-                                        'bids': [[float(x[0]), float(x[1])] for x in orderbook['bids']],
+        self.orderbook.update({market: {'asks': [[float(x[0]), x[1]] for x in orderbook['asks']],
+                                        'bids': [[float(x[0]), x[1]] for x in orderbook['bids']],
                                         'timestamp': ts_ob,
                                         'ts_ms': ts_ms}})
         if top_ask and top_ask > self.orderbook[market]['asks'][0][0]:
-            flag = True
             side = 'buy'
         elif top_bid and top_bid < self.orderbook[market]['asks'][0][0]:
-            flag = True
             side = 'sell'
-        if self.finder and flag and not self.multibot.arbitrage_processing:  # and ts_ms - ts_ob < self.top_ws_ping:
+        if self.finder and side and not self.multibot.arbitrage_processing and ts_ms - ts_ob < self.top_ws_ping:
             coin = market.split('-')[0]
             if self.state == 'Bot':
                 await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, self.multibot.run_arbitrage, 'ob')
             else:
                 await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, 'ob')
-        if self.market_finder:
-            await self.market_finder.count_one_coin(market.split('-')[0], self.EXCHANGE_NAME)
+        # if self.market_finder:
+        #     await self.market_finder.count_one_coin(market.split('-')[0], self.EXCHANGE_NAME)
 
     @try_exc_async
     async def _update_account(self, obj):
@@ -635,8 +633,8 @@ class OkxClient(BaseClient):
         contract = self.get_contract_value(market)
         ob = self.orderbook.get(market, {})
         if ob:
-            ob.update({'asks': [[x, y / contract] for x, y in ob['asks']],
-                       'bids': [[x, y / contract] for x, y in ob['bids']]})
+            ob.update({'asks': [[x, float(y) / contract] for x, y in ob['asks']],
+                       'bids': [[x, float(y) / contract] for x, y in ob['bids']]})
         return ob
 
     @try_exc_async
