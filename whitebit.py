@@ -106,7 +106,7 @@ class WhiteBitClient(BaseClient):
                                                                 market, task[1]['client_id'], amend=True))
                     self.async_tasks.remove(task)
                 ts_ms = time.time()
-                if ts_ms - self.last_keep_alive > 5:
+                if ts_ms - self.last_keep_alive > 15:
                     self.last_keep_alive = ts_ms
                     loop.create_task(self.get_position_async())
                     loop.create_task(self.keep_alive_order())
@@ -242,7 +242,10 @@ class WhiteBitClient(BaseClient):
                 market = pos['market']
                 ob = self.get_orderbook(market)
                 change = (ob['asks'][0][0] + ob['bids'][0][0]) / 2
-                unrealised_pnl = (change - float(pos['basePrice'])) * float(pos['amount'])
+                if pos['basePrice'] and pos['amount']:
+                    unrealised_pnl = (change - float(pos['basePrice'])) * float(pos['amount'])
+                else:
+                    unrealised_pnl = 0
                 self.positions.update({market: {'timestamp': int(datetime.utcnow().timestamp()),
                                                 'entry_price': float(pos['basePrice']) if pos['basePrice'] else 0,
                                                 'amount': float(pos['amount']),
@@ -266,7 +269,10 @@ class WhiteBitClient(BaseClient):
             if not ob:
                 ob = self.get_orderbook_http_reg(market)
             change = (ob['asks'][0][0] + ob['bids'][0][0]) / 2
-            unrealised_pnl = (change - float(pos['basePrice'])) * float(pos['amount'])
+            if pos['basePrice'] and pos['amount']:
+                unrealised_pnl = (change - float(pos['basePrice'])) * float(pos['amount'])
+            else:
+                unrealised_pnl = 0
             self.positions.update({market: {'timestamp': int(datetime.utcnow().timestamp()),
                                             'entry_price': float(pos['basePrice']) if pos['basePrice'] else 0,
                                             'amount': float(pos['amount']),

@@ -125,12 +125,12 @@ class BtseClient(BaseClient):
                             old_order_size = task[1]['old_order_size']
                             loop.create_task(self.amend_order(price, size, order_id, market, old_order_size))
                     self.async_tasks.remove(task)
-                if ts_ms - self.last_keep_alive > 3:
+                if ts_ms - self.last_keep_alive > 15:
                     self.last_keep_alive = ts_ms
                     loop.create_task(self.keep_alive_order())
                     loop.create_task(self.get_balance_async())
-                    if self.market_finder:
-                        loop.create_task(self.check_extra_orders())
+                    # if self.market_finder:
+                    #     loop.create_task(self.check_extra_orders())
                 await asyncio.sleep(0.0001)
 
     @staticmethod
