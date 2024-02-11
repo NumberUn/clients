@@ -95,8 +95,8 @@ class BtseClient(BaseClient):
         # request_pause = 1.02 / self.rate_limit_orders
         async with aiohttp.ClientSession() as self.async_session:
             self.async_session.headers.update(self.headers)
+            loop.create_task(self.keep_alive_order())
             while True:
-                ts_ms = time.time()
                 for task in self.async_tasks:
                     if task[0] == 'create_order':
                         price = task[1]['price']
@@ -123,12 +123,6 @@ class BtseClient(BaseClient):
                             old_order_size = task[1]['old_order_size']
                             loop.create_task(self.amend_order(price, size, order_id, market, old_order_size))
                     self.async_tasks.remove(task)
-                if ts_ms - self.last_keep_alive > 3:
-                    self.last_keep_alive = ts_ms
-                    loop.create_task(self.keep_alive_order())
-                    loop.create_task(self.get_balance_async())
-                    # if self.market_finder:
-                    #     loop.create_task(self.check_extra_orders())
                 await asyncio.sleep(0.0001)
 
     @staticmethod
@@ -138,14 +132,18 @@ class BtseClient(BaseClient):
 
     @try_exc_async
     async def keep_alive_order(self):
-        market = self.markets[self.markets_list[random.randint(0, len(self.markets_list) - 1)]]
-        price = self.get_orderbook(market)['bids'][0][0] * 0.95
-        price, size = self.fit_sizes(price, self.instruments[market]['min_size'], market)
-        rand_id = self.id_generator()
-        await self.create_fast_order(price, size, 'buy', market, 'keepxxxalivexxx' + rand_id)
-        resp = self.responses.get('keepxxxalivexxx' + rand_id)
-        ex_order_id = resp['exchange_order_id']
-        await self.cancel_order(market, ex_order_id)
+        while True:
+            # if self.market_finder:
+            #     loop.create_task(self.check_extra_orders())
+            await self.get_balance_async()
+            market = self.markets[self.markets_list[random.randint(0, len(self.markets_list) - 1)]]
+            price = self.get_orderbook(market)['bids'][0][0] * 0.95
+            price, size = self.fit_sizes(price, self.instruments[market]['min_size'], market)
+            await self.create_fast_order(price, size, 'buy', market, 'keep-alive')
+            resp = self.responses.get('keep-alive')
+            ex_order_id = resp['exchange_order_id']
+            await self.cancel_order(market, ex_order_id)
+            await asyncio.sleep(3)
 
     @staticmethod
     @try_exc_regular

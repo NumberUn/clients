@@ -92,6 +92,7 @@ class WhiteBitClient(BaseClient):
     async def _run_order_loop(self, loop):
         async with aiohttp.ClientSession() as self.async_session:
             self.async_session.headers.update(self.headers)
+            loop.create_task(self.keep_alive_order())
             while True:
                 for task in self.async_tasks:
                     if task[0] == 'create_order':
@@ -112,28 +113,25 @@ class WhiteBitClient(BaseClient):
                         loop.create_task(self.create_fast_order(task[1]['price'], task[1]['size'], task[1]['side'],
                                                                 market, task[1]['client_id'], amend=True))
                     self.async_tasks.remove(task)
-                ts_ms = time.time()
-                if ts_ms - self.last_keep_alive > 3:
-                    self.last_keep_alive = ts_ms
-                    loop.create_task(self.get_position_async())
-                    loop.create_task(self.keep_alive_order())
                 await asyncio.sleep(0.0001)
+
+    @try_exc_async
+    async def keep_alive_order(self):
+        while True:
+            await self.get_position_async()
+            market = self.markets[self.markets_list[random.randint(0, len(self.markets_list) - 1)]]
+            price = self.get_orderbook(market)['bids'][0][0] * 0.95
+            price, size = self.fit_sizes(price, self.instruments[market]['min_size'], market)
+            await self.create_fast_order(price, size, 'buy', market, 'keep-alive')
+            resp = self.responses.get('keep-alive')
+            ex_order_id = resp['exchange_order_id']
+            await self.cancel_order(market, ex_order_id)
+            await asyncio.sleep(3)
 
     @staticmethod
     @try_exc_regular
     def id_generator(size=6, chars=string.ascii_letters):
         return ''.join(random.choice(chars) for _ in range(size))
-
-    @try_exc_async
-    async def keep_alive_order(self):
-        market = self.markets[self.markets_list[random.randint(0, len(self.markets_list) - 1)]]
-        price = self.get_orderbook(market)['bids'][0][0] * 0.95
-        price, size = self.fit_sizes(price, self.instruments[market]['min_size'], market)
-        rand_id = self.id_generator()
-        await self.create_fast_order(price, size, 'buy', market, 'keepxxxalivexxx' + rand_id)
-        resp = self.responses.get('keepxxxalivexxx' + rand_id)
-        ex_order_id = resp['exchange_order_id']
-        await self.cancel_order(market, ex_order_id)
 
     @try_exc_regular
     def get_markets(self):
@@ -249,7 +247,7 @@ class WhiteBitClient(BaseClient):
                 market = pos['market']
                 ob = self.get_orderbook(market)
                 if not ob:
-                    ob = self.get_orderbook_http_reg(market)
+                    ob = await self.get_orderbook_by_symbol(market)
                 change = (ob['asks'][0][0] + ob['bids'][0][0]) / 2
                 if pos['basePrice'] and pos['amount']:
                     unrealised_pnl = (change - float(pos['basePrice'])) * float(pos['amount'])
