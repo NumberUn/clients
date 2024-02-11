@@ -123,7 +123,7 @@ class BtseClient(BaseClient):
                             old_order_size = task[1]['old_order_size']
                             loop.create_task(self.amend_order(price, size, order_id, market, old_order_size))
                     self.async_tasks.remove(task)
-                await asyncio.sleep(0.0001)
+                await asyncio.sleep(0.00001)
 
     @staticmethod
     @try_exc_regular

@@ -126,7 +126,7 @@ class OkxClient(BaseClient):
                             market = task[1]['market']
                             loop.create_task(self.amend_order(price, size, order_id, market))
                         self.async_tasks.remove(task)
-                    await asyncio.sleep(0.0001)
+                    await asyncio.sleep(0.00001)
 
     @try_exc_async
     async def cancel_order(self, market, order_id, ws):

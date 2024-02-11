@@ -114,7 +114,7 @@ class WhiteBitClient(BaseClient):
                         loop.create_task(self.create_fast_order(task[1]['price'], task[1]['size'], task[1]['side'],
                                                                 market, task[1]['client_id'], amend=True))
                     self.async_tasks.remove(task)
-                await asyncio.sleep(0.0001)
+                await asyncio.sleep(0.00001)
 
     @try_exc_async
     async def keep_alive_order(self):
