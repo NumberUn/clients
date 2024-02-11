@@ -58,9 +58,8 @@ class OkxClient(BaseClient):
         self.receiving = asyncio.Event()
         self.receiving.set()
         self.clients_ids = dict()
-        self.top_ws_ping = 0.007
+        self.top_ws_ping = 0.006
         self.public_trades = dict()
-        self.stop_all = False
         if multibot:
             self.cancel_all_orders()
 
@@ -297,10 +296,7 @@ class OkxClient(BaseClient):
                     await loop.create_task(self._subscribe_trades(ws))
                 loop.create_task(self._ping(ws))
                 async for msg in ws:
-                    if self.stop_all:
-                        await asyncio.sleep(0.01)
-                        self.stop_all = False
-                    loop.create_task(self.process_ws_msg(msg))
+                    await self.process_ws_msg(msg)
 
     @try_exc_async
     async def process_ws_msg(self, msg: aiohttp.WSMessage):

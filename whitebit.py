@@ -71,7 +71,6 @@ class WhiteBitClient(BaseClient):
         self.total_requests = 0
         self.total_start_time = time.time()
         self.top_ws_ping = 0.06
-        self.stop_all = False
         self.cancel_all_orders()
 
     @try_exc_regular
@@ -422,10 +421,7 @@ class WhiteBitClient(BaseClient):
                         await loop.create_task(self.subscribe_orderbooks(market))
                 loop.create_task(self._ping(ws))
                 async for msg in ws:
-                    if self.stop_all:
-                        await asyncio.sleep(0.01)
-                        self.stop_all = False
-                    loop.create_task(self.process_ws_msg(msg))
+                    await self.process_ws_msg(msg)
                 await ws.close()
 
     @try_exc_async
