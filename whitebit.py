@@ -113,7 +113,7 @@ class WhiteBitClient(BaseClient):
                                                                 market, task[1]['client_id'], amend=True))
                     self.async_tasks.remove(task)
                 ts_ms = time.time()
-                if ts_ms - self.last_keep_alive > 10:
+                if ts_ms - self.last_keep_alive > 3:
                     self.last_keep_alive = ts_ms
                     loop.create_task(self.get_position_async())
                     loop.create_task(self.keep_alive_order())
