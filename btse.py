@@ -91,17 +91,14 @@ class BtseClient(BaseClient):
 
     @try_exc_async
     async def _run_order_loop(self, loop):
-        last_request = time.time()
-        request_pause = 1.02 / self.rate_limit_orders
+        # last_request = time.time()
+        # request_pause = 1.02 / self.rate_limit_orders
         async with aiohttp.ClientSession() as self.async_session:
             self.async_session.headers.update(self.headers)
             while True:
                 ts_ms = time.time()
                 for task in self.async_tasks:
-                    if ts_ms - last_request < request_pause:
-                        break
-                    elif task[0] == 'create_order':
-                        last_request = ts_ms
+                    if task[0] == 'create_order':
                         price = task[1]['price']
                         size = task[1]['size']
                         side = task[1]['side']
@@ -113,14 +110,12 @@ class BtseClient(BaseClient):
                             loop.create_task(self.create_fast_order(price, size, side, market, client_id))
                     elif task[0] == 'cancel_order':
                         if task[1]['order_id'] not in self.deleted_orders:
-                            last_request = ts_ms
                             if len(self.deleted_orders) > 1000:
                                 self.deleted_orders = []
                             self.deleted_orders.append(task[1]['order_id'])
                             loop.create_task(self.cancel_order(task[1]['market'], task[1]['order_id']))
                     elif task[0] == 'amend_order':
                         if task[1]['order_id'] not in self.deleted_orders:
-                            last_request = ts_ms
                             price = task[1]['price']
                             size = task[1]['size']
                             order_id = task[1]['order_id']
