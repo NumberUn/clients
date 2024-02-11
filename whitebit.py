@@ -71,6 +71,7 @@ class WhiteBitClient(BaseClient):
         self.total_requests = 0
         self.total_start_time = time.time()
         self.top_ws_ping = 0.06
+        self.stop_all = False
         self.cancel_all_orders()
 
     @try_exc_regular
@@ -384,11 +385,7 @@ class WhiteBitClient(BaseClient):
     @try_exc_regular
     def _run_ws_forever(self, loop):
         while True:
-            self._loop.run_until_complete(self._run_ws_loop(self.update_orders,
-                                                            self.update_orderbook,
-                                                            self.update_balances,
-                                                            self.update_orderbook_snapshot,
-                                                            loop))
+            self._loop.run_until_complete(self._run_ws_loop(loop))
 
     @try_exc_regular
     def run_updater(self):
@@ -413,7 +410,7 @@ class WhiteBitClient(BaseClient):
         return self.balance['total'] + tot_unrealised_pnl
 
     @try_exc_async
-    async def _run_ws_loop(self, update_orders, update_orderbook, update_balances, update_orderbook_snapshot, loop):
+    async def _run_ws_loop(self, loop):
         async with aiohttp.ClientSession() as session:
             async with session.ws_connect(self.PUBLIC_WS_ENDPOINT) as ws:
                 self._connected.set()
@@ -425,18 +422,25 @@ class WhiteBitClient(BaseClient):
                         await loop.create_task(self.subscribe_orderbooks(market))
                 loop.create_task(self._ping(ws))
                 async for msg in ws:
-                    data = json.loads(msg.data)
-                    if data.get('method') == 'depth_update':
-                        if data['params'][0]:
-                            loop.create_task(update_orderbook_snapshot(data))
-                        else:
-                            loop.create_task(update_orderbook(data))
-                    elif data.get('method') == 'balanceMargin_update':
-                        loop.create_task(update_balances(data))
-                    elif data.get('method') in ['ordersExecuted_update', 'ordersPending_update']:
-                        loop.create_task(update_orders(data))
-                        print(data, datetime.utcnow())
+                    if self.stop_all:
+                        await asyncio.sleep(0.01)
+                        self.stop_all = False
+                    loop.create_task(self.process_ws_msg(msg))
                 await ws.close()
+
+    @try_exc_async
+    async def process_ws_msg(self, msg: aiohttp.WSMessage):
+        data = json.loads(msg.data)
+        if data.get('method') == 'depth_update':
+            if data['params'][0]:
+                await self.update_orderbook_snapshot(data)
+            else:
+                await self.update_orderbook(data)
+        elif data.get('method') == 'balanceMargin_update':
+            await self.update_balances(data)
+        elif data.get('method') in ['ordersExecuted_update', 'ordersPending_update']:
+            await self.update_orders(data)
+            print(data, datetime.utcnow())
 
     @try_exc_async
     async def _ping(self, ws):
@@ -619,7 +623,7 @@ class WhiteBitClient(BaseClient):
                     'status': status}
 
     @try_exc_async
-    async def create_fast_order(self, price, sz, side, market, client_id=None):
+    async def create_fast_order(self, price, sz, side, market, client_id=None, session=None):
         time_start = time.time()
         # message = f'ORDER CREATE ERROR\n'
         # message += f"{time_start=}\n"

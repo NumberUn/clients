@@ -60,6 +60,7 @@ class OkxClient(BaseClient):
         self.clients_ids = dict()
         self.top_ws_ping = 0.007
         self.public_trades = dict()
+        self.stop_all = False
         if multibot:
             self.cancel_all_orders()
 
@@ -102,6 +103,7 @@ class OkxClient(BaseClient):
         async with aiohttp.ClientSession() as s:
             async with s.ws_connect(self.WS_PRV) as ws:
                 await loop.create_task(self.login_ws_message(loop, ws, 'orders_processing'))
+                self.orders_ws = ws
                 loop.create_task(self._ping(ws))
                 while True:
                     for task in self.async_tasks:
@@ -112,9 +114,9 @@ class OkxClient(BaseClient):
                             market = task[1]['market']
                             client_id = task[1].get('client_id')
                             if task[1].get('hedge'):
-                                await loop.create_task(self._send_order(market, size, price, side, ws, client_id))
+                                await loop.create_task(self.create_fast_order(market, size, price, side, client_id))
                             else:
-                                loop.create_task(self._send_order(market, size, price, side, ws, client_id))
+                                loop.create_task(self.create_fast_order(market, size, price, side, client_id))
                         elif task[0] == 'cancel_order':
                             loop.create_task(self.cancel_order(task[1]['market'], task[1]['order_id'], ws))
                         elif task[0] == 'amend_order':
@@ -160,7 +162,7 @@ class OkxClient(BaseClient):
         pass
 
     @try_exc_async
-    async def _send_order(self, symbol, amount, price, side, ws, client_id, expire=100):
+    async def create_fast_order(self, symbol, amount, price, side, client_id, session=None):
         self.time_sent = time.time()
         contract_value = self.instruments[symbol]['contract_value']
         rand_id = self.id_generator()
@@ -175,10 +177,10 @@ class OkxClient(BaseClient):
         # if 'taker' in client_id:
         #     msg['args'][0].update({"ordType": 'market'})
         # else:
-        await ws.send_json(msg)
+        await self.orders_ws.send_json(msg)
         await self.receiving.wait()
         self.receiving.clear()
-        response = await ws.receive()
+        response = await self.orders_ws.receive()
         self.receiving.set()
         response = json.loads(response.data)
         order_id = response['data'][0]['ordId'] if response['code'] == '0' else 'default'
@@ -295,7 +297,27 @@ class OkxClient(BaseClient):
                     await loop.create_task(self._subscribe_trades(ws))
                 loop.create_task(self._ping(ws))
                 async for msg in ws:
-                    loop.create_task(self._process_msg(msg))
+                    if self.stop_all:
+                        await asyncio.sleep(0.01)
+                        self.stop_all = False
+                    loop.create_task(self.process_ws_msg(msg))
+
+    @try_exc_async
+    async def process_ws_msg(self, msg: aiohttp.WSMessage):
+        obj = json.loads(msg.data)
+        if obj.get('event'):
+            return
+        if obj.get('arg'):
+            if obj['arg']['channel'] == 'account':
+                await self._update_account(obj)
+            elif obj['arg']['channel'] in ['bbo-tbt', 'books50-l2-tbt', 'books5']:
+                await self._update_orderbook(obj)
+            elif obj['arg']['channel'] == 'positions':
+                await self._update_positions(obj)
+            elif obj['arg']['channel'] == 'orders':
+                await self._update_orders(obj)
+            elif obj['arg']['channel'] == 'trades':
+                await self._update_trades(obj)
 
     @try_exc_async
     async def login_ws_message(self, loop, ws, connection_type):
@@ -439,23 +461,6 @@ class OkxClient(BaseClient):
         if not self.taker_fee:
             if order['fillNotionalUsd']:
                 self.taker_fee = abs(float(order['fillFee'])) / float(order['fillNotionalUsd'])
-
-    @try_exc_async
-    async def _process_msg(self, msg: aiohttp.WSMessage):
-        obj = json.loads(msg.data)
-        if obj.get('event'):
-            return
-        if obj.get('arg'):
-            if obj['arg']['channel'] == 'account':
-                await self._update_account(obj)
-            elif obj['arg']['channel'] in ['bbo-tbt', 'books50-l2-tbt', 'books5']:
-                await self._update_orderbook(obj)
-            elif obj['arg']['channel'] == 'positions':
-                await self._update_positions(obj)
-            elif obj['arg']['channel'] == 'orders':
-                await self._update_orders(obj)
-            elif obj['arg']['channel'] == 'trades':
-                await self._update_trades(obj)
 
     @try_exc_async
     async def _update_trades(self, data):

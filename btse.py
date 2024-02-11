@@ -80,7 +80,7 @@ class BtseClient(BaseClient):
         self.cancel_responses = {}
         self.deleted_orders = []
         self.top_ws_ping = 0.02
-        self.public_trades = dict()
+        self.stop_all = False
         if multibot:
             self.cancel_all_orders()
 
@@ -366,7 +366,7 @@ class BtseClient(BaseClient):
             #             'positionDirection': None, 'positionId': 'BTCPFC-USD', 'time_in_force': 'GTC'}]
 
     @try_exc_async
-    async def create_fast_order(self, price, sz, side, market, client_id=None):
+    async def create_fast_order(self, price, sz, side, market, client_id=None, session=None):
         time_start = time.time()
         path = '/api/v2.1/order'
         contract_value = self.instruments[market]['contract_value']
@@ -536,22 +536,25 @@ class BtseClient(BaseClient):
                     await loop.create_task(self.subscribe_orderbooks())
                 loop.create_task(self._ping(ws))
                 async for msg in ws:
-                    data = json.loads(msg.data)
-                    topic = data.get('topic', '')
-                    if topic == 'fills':
-                        own_ts = time.time()
-                        await self.upd_fills(data, own_ts)
-                    loop.create_task(self.process_ws_msg(data, topic))
+                    if self.stop_all:
+                        await asyncio.sleep(0.01)
+                        self.stop_all = False
+                    loop.create_task(self.process_ws_msg(msg))
             await ws.close()
 
     @try_exc_async
-    async def process_ws_msg(self, data, topic):
+    async def process_ws_msg(self, msg: aiohttp.WSMessage):
+        data = json.loads(msg.data)
+        topic = data.get('topic', '')
+        if topic == 'fills':
+            own_ts = time.time()
+            await self.upd_fills(data, own_ts)
         if 'update' in topic:
             if data.get('data') and data['data']['type'] == 'delta':
                 await self.upd_ob(data)
             elif data.get('data') and data['data']['type'] == 'snapshot':
                 await self.upd_ob_snapshot(data)
-        elif data.get('topic') == 'allPosition':
+        elif topic == 'allPosition':
             await self.upd_positions(data)
 
     @try_exc_async
