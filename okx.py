@@ -60,6 +60,7 @@ class OkxClient(BaseClient):
         self.clients_ids = dict()
         self.top_ws_ping = 0.005
         self.public_trades = dict()
+        self.stop_all = False
         if multibot:
             self.cancel_all_orders()
 
@@ -296,6 +297,9 @@ class OkxClient(BaseClient):
                     await loop.create_task(self._subscribe_trades(ws))
                 loop.create_task(self._ping(ws))
                 async for msg in ws:
+                    if self.stop_all:
+                        await asyncio.sleep(0.001)
+                        self.stop_all = False
                     await self.process_ws_msg(msg)
 
     @try_exc_async

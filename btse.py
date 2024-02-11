@@ -80,6 +80,7 @@ class BtseClient(BaseClient):
         self.cancel_responses = {}
         self.deleted_orders = []
         self.top_ws_ping = 0.012
+        self.stop_all = False
         if multibot:
             self.cancel_all_orders()
 
@@ -535,6 +536,9 @@ class BtseClient(BaseClient):
                     await loop.create_task(self.subscribe_orderbooks())
                 loop.create_task(self._ping(ws))
                 async for msg in ws:
+                    if self.stop_all:
+                        await asyncio.sleep(0.001)
+                        self.stop_all = False
                     await self.process_ws_msg(msg)
             await ws.close()
 
