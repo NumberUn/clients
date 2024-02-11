@@ -107,7 +107,10 @@ class BtseClient(BaseClient):
                         side = task[1]['side']
                         market = task[1]['market']
                         client_id = task[1].get('client_id')
-                        loop.create_task(self.create_fast_order(price, size, side, market, client_id))
+                        if task[1].get('hedge'):
+                            await loop.create_task(self.create_fast_order(price, size, side, market, client_id))
+                        else:
+                            loop.create_task(self.create_fast_order(price, size, side, market, client_id))
                     elif task[0] == 'cancel_order':
                         if task[1]['order_id'] not in self.deleted_orders:
                             last_request = ts_ms

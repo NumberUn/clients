@@ -36,8 +36,8 @@ class OkxClient(BaseClient):
         self.leverage = leverage
         self.state = state
         self.ob_len = ob_len
-        self.taker_fee = 0.0005 * 0.5
-        self.maker_fee = 0.0002
+        self.taker_fee = 0.0005 * 0.65
+        self.maker_fee = 0.0002 * 0.65
         if keys:
             self.public_key = keys['API_KEY']
             self.secret_key = keys['API_SECRET']

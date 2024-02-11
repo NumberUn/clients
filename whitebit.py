@@ -95,8 +95,15 @@ class WhiteBitClient(BaseClient):
             while True:
                 for task in self.async_tasks:
                     if task[0] == 'create_order':
-                        loop.create_task(self.create_fast_order(task[1]['price'], task[1]['size'], task[1]['side'],
-                                                                task[1]['market'], task[1].get('client_id')))
+                        price = task[1]['price']
+                        size = task[1]['size']
+                        side = task[1]['side']
+                        market = task[1]['market']
+                        client_id = task[1].get('client_id')
+                        if task[1].get('hedge'):
+                            await loop.create_task(self.create_fast_order(price, size, side, market, client_id))
+                        else:
+                            loop.create_task(self.create_fast_order(price, size, side, market, client_id))
                     elif task[0] == 'cancel_order':
                         loop.create_task(self.cancel_order(task[1]['market'], task[1]['order_id']))
                     elif task[0] == 'amend_order':
