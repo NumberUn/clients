@@ -72,7 +72,6 @@ class WhiteBitClient(BaseClient):
         self.total_start_time = time.time()
         self.top_ws_ping = 0.06
         self.stop_all = False
-        self.pipes = dict()
         self.cancel_all_orders()
 
     @try_exc_regular
@@ -94,37 +93,28 @@ class WhiteBitClient(BaseClient):
     async def _run_order_loop(self, loop):
         async with aiohttp.ClientSession() as self.async_session:
             self.async_session.headers.update(self.headers)
-            # loop.create_task(self.keep_alive_order())
+            loop.create_task(self.keep_alive_order())
             while True:
-                await self.get_position_async()
-                market = self.markets[self.markets_list[random.randint(0, len(self.markets_list) - 1)]]
-                price = self.get_orderbook(market)['bids'][0][0] * 0.95
-                price, size = self.fit_sizes(price, self.instruments[market]['min_size'], market)
-                await self.create_fast_order(price, size, 'buy', market, 'keep-alive')
-                resp = self.responses.get('keep-alive')
-                ex_order_id = resp['exchange_order_id']
-                await self.cancel_order(market, ex_order_id)
-                await asyncio.sleep(3)
-                # for task in self.async_tasks:
-                #     if task[0] == 'create_order':
-                #         price = task[1]['price']
-                #         size = task[1]['size']
-                #         side = task[1]['side']
-                #         market = task[1]['market']
-                #         client_id = task[1].get('client_id')
-                #         if task[1].get('hedge'):
-                #             await self.create_fast_order(price, size, side, market, client_id)
-                #         else:
-                #             loop.create_task(self.create_fast_order(price, size, side, market, client_id))
-                #     elif task[0] == 'cancel_order':
-                #         loop.create_task(self.cancel_order(task[1]['market'], task[1]['order_id']))
-                #     elif task[0] == 'amend_order':
-                #         market = task[1]['market']
-                #         loop.create_task(self.cancel_order(market, task[1]['order_id']))
-                #         loop.create_task(self.create_fast_order(task[1]['price'], task[1]['size'], task[1]['side'],
-                #                                                 market, task[1]['client_id'], amend=True))
-                #     self.async_tasks.remove(task)
-                # await asyncio.sleep(0.00001)
+                for task in self.async_tasks:
+                    if task[0] == 'create_order':
+                        price = task[1]['price']
+                        size = task[1]['size']
+                        side = task[1]['side']
+                        market = task[1]['market']
+                        client_id = task[1].get('client_id')
+                        if task[1].get('hedge'):
+                            await self.create_fast_order(price, size, side, market, client_id)
+                        else:
+                            loop.create_task(self.create_fast_order(price, size, side, market, client_id))
+                    elif task[0] == 'cancel_order':
+                        loop.create_task(self.cancel_order(task[1]['market'], task[1]['order_id']))
+                    elif task[0] == 'amend_order':
+                        market = task[1]['market']
+                        loop.create_task(self.cancel_order(market, task[1]['order_id']))
+                        loop.create_task(self.create_fast_order(task[1]['price'], task[1]['size'], task[1]['side'],
+                                                                market, task[1]['client_id'], amend=True))
+                    self.async_tasks.remove(task)
+                await asyncio.sleep(0.00001)
 
     @try_exc_async
     async def keep_alive_order(self):
