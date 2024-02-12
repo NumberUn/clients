@@ -301,7 +301,7 @@ class OkxClient(BaseClient):
                 loop.create_task(self._ping(ws))
                 async for msg in ws:
                     if self.stop_all:
-                        await asyncio.sleep(0.0005)
+                        await asyncio.sleep(0.0015)
                         self.stop_all = False
                     await self.process_ws_msg(msg)
 
