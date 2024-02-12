@@ -61,6 +61,7 @@ class OkxClient(BaseClient):
         self.clients_ids = dict()
         self.top_ws_ping = 0.005
         self.public_trades = dict()
+        self.stop_all = False
         if multibot:
             self.cancel_all_orders()
 
@@ -93,7 +94,6 @@ class OkxClient(BaseClient):
             wst_orders.start()
         self.change_leverage()
 
-
     @try_exc_regular
     def _run_order_loop(self, loop):
         while True:
@@ -105,29 +105,31 @@ class OkxClient(BaseClient):
             async with s.ws_connect(self.WS_PRV) as ws:
                 await loop.create_task(self.login_ws_message(loop, ws, 'orders_processing'))
                 self.orders_ws = ws
-                loop.create_task(self._ping(ws))
                 while True:
-                    for task in self.async_tasks:
-                        if task[0] == 'create_order':
-                            price = task[1]['price']
-                            size = task[1]['size']
-                            side = task[1]['side']
-                            market = task[1]['market']
-                            client_id = task[1].get('client_id')
-                            if task[1].get('hedge'):
-                                await self.create_fast_order(market, size, price, side, client_id)
-                            else:
-                                loop.create_task(self.create_fast_order(market, size, price, side, client_id))
-                        elif task[0] == 'cancel_order':
-                            loop.create_task(self.cancel_order(task[1]['market'], task[1]['order_id'], ws))
-                        elif task[0] == 'amend_order':
-                            price = task[1]['price']
-                            size = task[1]['size']
-                            order_id = task[1]['order_id']
-                            market = task[1]['market']
-                            loop.create_task(self.amend_order(price, size, order_id, market))
-                        self.async_tasks.remove(task)
-                    await asyncio.sleep(0.00001)
+                    await asyncio.sleep(25)
+                    await ws.ping()
+                # while True:
+                #     for task in self.async_tasks:
+                #         if task[0] == 'create_order':
+                #             price = task[1]['price']
+                #             size = task[1]['size']
+                #             side = task[1]['side']
+                #             market = task[1]['market']
+                #             client_id = task[1].get('client_id')
+                #             if task[1].get('hedge'):
+                #                 await self.create_fast_order(price, size, side, market, client_id)
+                #             else:
+                #                 loop.create_task(self.create_fast_order(price, size, side, market, client_id))
+                #         elif task[0] == 'cancel_order':
+                #             loop.create_task(self.cancel_order(task[1]['market'], task[1]['order_id'], ws))
+                #         elif task[0] == 'amend_order':
+                #             price = task[1]['price']
+                #             size = task[1]['size']
+                #             order_id = task[1]['order_id']
+                #             market = task[1]['market']
+                #             loop.create_task(self.amend_order(price, size, order_id, market))
+                #         self.async_tasks.remove(task)
+                #     await asyncio.sleep(0.001)
 
     @try_exc_async
     async def cancel_order(self, market, order_id, ws):
@@ -163,16 +165,16 @@ class OkxClient(BaseClient):
         pass
 
     @try_exc_async
-    async def create_fast_order(self, symbol, amount, price, side, client_id, session=None):
+    async def create_fast_order(self, price, size, side, market, client_id, session=None):
         self.time_sent = time.time()
-        contract_value = self.instruments[symbol]['contract_value']
+        contract_value = self.instruments[market]['contract_value']
         rand_id = self.id_generator()
         msg = {"id": rand_id,
                "op": "order",
                "args": [{"side": side,
-                         "instId": symbol,
+                         "instId": market,
                          "tdMode": "cross",
-                         "sz": int(amount * contract_value),
+                         "sz": int(size * contract_value),
                          "ordType": 'limit',
                          "px": price}]}
         # if 'taker' in client_id:
@@ -298,6 +300,9 @@ class OkxClient(BaseClient):
                     await loop.create_task(self._subscribe_trades(ws))
                 loop.create_task(self._ping(ws))
                 async for msg in ws:
+                    if self.stop_all:
+                        await asyncio.sleep(0.0005)
+                        self.stop_all = False
                     await self.process_ws_msg(msg)
 
     @try_exc_async
