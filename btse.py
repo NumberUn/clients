@@ -80,7 +80,6 @@ class BtseClient(BaseClient):
         self.cancel_responses = {}
         self.deleted_orders = []
         self.top_ws_ping = 0.012
-        self.stop_all = False
         if multibot:
             self.cancel_all_orders()
 
@@ -105,7 +104,7 @@ class BtseClient(BaseClient):
                         market = task[1]['market']
                         client_id = task[1].get('client_id')
                         if task[1].get('hedge'):
-                            await loop.create_task(self.create_fast_order(price, size, side, market, client_id))
+                            await self.create_fast_order(price, size, side, market, client_id)
                         else:
                             loop.create_task(self.create_fast_order(price, size, side, market, client_id))
                     elif task[0] == 'cancel_order':
@@ -536,9 +535,6 @@ class BtseClient(BaseClient):
                     await loop.create_task(self.subscribe_orderbooks())
                 loop.create_task(self._ping(ws))
                 async for msg in ws:
-                    if self.stop_all:
-                        await asyncio.sleep(0.001)
-                        self.stop_all = False
                     await self.process_ws_msg(msg)
             await ws.close()
 
@@ -811,10 +807,7 @@ class BtseClient(BaseClient):
         #     await self.market_finder.count_one_coin(symbol.split('PFC')[0], self.EXCHANGE_NAME)
         if side and self.finder and ts_ms - ts_ob < self.top_ws_ping:
             coin = symbol.split('PFC')[0]
-            if self.state == 'Bot':
-                await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, self.multibot.run_arbitrage, 'ob')
-            else:
-                await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, 'ob')
+            await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, 'ob')
 
     @try_exc_async
     async def upd_ob_snapshot(self, data):

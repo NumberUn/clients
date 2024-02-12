@@ -71,7 +71,6 @@ class WhiteBitClient(BaseClient):
         self.total_requests = 0
         self.total_start_time = time.time()
         self.top_ws_ping = 0.06
-        self.stop_all = False
         self.cancel_all_orders()
 
     @try_exc_regular
@@ -103,7 +102,7 @@ class WhiteBitClient(BaseClient):
                         market = task[1]['market']
                         client_id = task[1].get('client_id')
                         if task[1].get('hedge'):
-                            await loop.create_task(self.create_fast_order(price, size, side, market, client_id))
+                            await self.create_fast_order(price, size, side, market, client_id)
                         else:
                             loop.create_task(self.create_fast_order(price, size, side, market, client_id))
                     elif task[0] == 'cancel_order':
@@ -422,9 +421,6 @@ class WhiteBitClient(BaseClient):
                         await loop.create_task(self.subscribe_orderbooks(market))
                 loop.create_task(self._ping(ws))
                 async for msg in ws:
-                    if self.stop_all:
-                        await asyncio.sleep(0.001)
-                        self.stop_all = False
                     await self.process_ws_msg(msg)
                 await ws.close()
 
@@ -793,10 +789,7 @@ class WhiteBitClient(BaseClient):
         #     await self.market_finder.count_one_coin(symbol.split('_')[0], self.EXCHANGE_NAME)
         if side and self.finder and ts_ms - ts_ob < self.top_ws_ping:
             coin = symbol.split('_')[0]
-            if self.state == 'Bot':
-                await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, self.multibot.run_arbitrage, 'ob')
-            else:
-                await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, 'ob')
+            await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, 'ob')
 
     @try_exc_regular
     def cut_extra_orders_from_ob(self, symbol, data, new_ob):

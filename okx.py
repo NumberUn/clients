@@ -60,7 +60,6 @@ class OkxClient(BaseClient):
         self.clients_ids = dict()
         self.top_ws_ping = 0.005
         self.public_trades = dict()
-        self.stop_all = False
         if multibot:
             self.cancel_all_orders()
 
@@ -114,7 +113,7 @@ class OkxClient(BaseClient):
                             market = task[1]['market']
                             client_id = task[1].get('client_id')
                             if task[1].get('hedge'):
-                                await loop.create_task(self.create_fast_order(market, size, price, side, client_id))
+                                await self.create_fast_order(market, size, price, side, client_id)
                             else:
                                 loop.create_task(self.create_fast_order(market, size, price, side, client_id))
                         elif task[0] == 'cancel_order':
@@ -297,9 +296,6 @@ class OkxClient(BaseClient):
                     await loop.create_task(self._subscribe_trades(ws))
                 loop.create_task(self._ping(ws))
                 async for msg in ws:
-                    if self.stop_all:
-                        await asyncio.sleep(0.001)
-                        self.stop_all = False
                     await self.process_ws_msg(msg)
 
     @try_exc_async
@@ -394,10 +390,7 @@ class OkxClient(BaseClient):
             side = 'sell'
         if self.finder and side and ts_ms - ts_ob < self.top_ws_ping:
             coin = market.split('-')[0]
-            if self.state == 'Bot':
-                await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, self.multibot.run_arbitrage, 'ob')
-            else:
-                await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, 'ob')
+            await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, 'ob')
         # if self.market_finder:
         #     await self.market_finder.count_one_coin(market.split('-')[0], self.EXCHANGE_NAME)
 
@@ -475,12 +468,12 @@ class OkxClient(BaseClient):
         side = data['side']
         size = float(data['sz'])
         price = float(data['px'])
-        timestamp = float(data['ts']) / 1000
+        ts_ob = float(data['ts']) / 1000
+        ts_ms =  time.time()
         tick = self.instruments[market]['tick_size']
         if side == 'buy':
             if price != ob['asks'][0][0]:
                 ob['asks'][0] = [price, size]
-                ob.update({'timestamp': timestamp, 'ts_ms': time.time()})
                 if price < ob['asks'][0][0]:
                     flag = True
             else:
@@ -492,7 +485,6 @@ class OkxClient(BaseClient):
         if side == 'sell':
             if price != ob['bids'][0][0]:
                 ob['bids'][0] = [price, size]
-                ob.update({'timestamp': timestamp, 'ts_ms': time.time()})
                 if price > ob['bids'][0][0]:
                     flag = True
             else:
@@ -502,12 +494,10 @@ class OkxClient(BaseClient):
                     flag = True
                     side = 'buy'
         self.orderbook[market] = ob
-        if self.finder and flag and not self.multibot.arbitrage_processing:  # and ts_ms - ts_ob < self.top_ws_ping:
+        ob.update({'timestamp': ts_ob, 'ts_ms': ts_ms})
+        if self.finder and flag and ts_ms - ts_ob < self.top_ws_ping:
             coin = market.split('-')[0]
-            if self.state == 'Bot':
-                await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, self.multibot.run_arbitrage, 'trade')
-            else:
-                await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, 'trade')
+            await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, 'trade')
 
     @try_exc_regular
     def get_contract_value(self, symbol):
