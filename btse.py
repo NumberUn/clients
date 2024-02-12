@@ -47,6 +47,7 @@ class BtseClient(BaseClient):
         self.markets_list = markets_list
         self.session = requests.session()
         self.session.headers.update(self.headers)
+        self.order_loop = asyncio.new_event_loop()
         self.instruments = {}
         self.markets = self.get_markets()
         self.orderbook = {}
@@ -59,13 +60,6 @@ class BtseClient(BaseClient):
             self.get_position()
         self.ob_len = ob_len
         self.error_info = None
-        self._connected = asyncio.Event()
-        self._loop = asyncio.new_event_loop()
-        self._loop_private = asyncio.new_event_loop()
-        self.wst_public = threading.Thread(target=self._run_ws_forever, args=['public', self._loop])
-        self.wst_private = threading.Thread(target=self._run_ws_forever, args=['private', self._loop_private])
-        self.order_loop = asyncio.new_event_loop()
-        self.orders_thread = threading.Thread(target=self.deals_thread_func, args=[self.order_loop])
         self.orderbook = {}
         self.orders = {}
         self.rate_limit_orders = 75
@@ -526,7 +520,6 @@ class BtseClient(BaseClient):
                 endpoint = self.PUBLIC_WS_ENDPOINT
             async with s.ws_connect(endpoint) as ws:
                 print(f"BTSE: connected {ws_type}")
-                self._connected.set()
                 if ws_type == 'private':
                     self._ws_private = ws
                     await loop.create_task(self.subscribe_privates())
@@ -726,7 +719,6 @@ class BtseClient(BaseClient):
         args = [f"update:{self.markets[x]}_0" for x in self.markets_list if self.markets.get(x)]
         method = {"op": "subscribe",
                   "args": args}
-        await self._connected.wait()
         await self._ws_public.send_json(method)
 
     @try_exc_async
@@ -735,7 +727,6 @@ class BtseClient(BaseClient):
         method = {"op": "subscribe",
                   "args": args}
         print(method)
-        await self._connected.wait()
         await self._ws_public.send_json(method)
 
     @try_exc_regular
@@ -755,7 +746,6 @@ class BtseClient(BaseClient):
         method_fills = {"op": "subscribe",
                         "args": ["fills"]}
         auth = self.get_wss_auth()
-        await self._connected.wait()
         await self._ws_private.send_json(auth)
         await self._ws_private.send_json(method_pos)
         await self._ws_private.send_json(method_fills)
@@ -861,18 +851,21 @@ class BtseClient(BaseClient):
 
     @try_exc_regular
     def run_updater(self):
-        self.wst_public.daemon = True
-        self.wst_public.start()
+        wst_public = threading.Thread(target=self._run_ws_forever, args=['public', asyncio.new_event_loop()])
+        wst_public.daemon = True
+        wst_public.start()
         while True:
             if set(self.orderbook) == set([y for x, y in self.markets.items() if x in self.markets_list]):
                 print(f"{self.EXCHANGE_NAME} ALL MARKETS FETCHED")
                 break
             time.sleep(0.1)
         if self.state == 'Bot':
-            self.orders_thread.daemon = True
-            self.orders_thread.start()
-            self.wst_private.daemon = True
-            self.wst_private.start()
+            orders_thread = threading.Thread(target=self.deals_thread_func, args=[self.order_loop])
+            orders_thread.daemon = True
+            orders_thread.start()
+            wst_private = threading.Thread(target=self._run_ws_forever, args=['private', asyncio.new_event_loop()])
+            wst_private.daemon = True
+            wst_private.start()
 
     @try_exc_regular
     def get_fills(self, symbol: str, order_id: str):

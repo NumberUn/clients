@@ -42,6 +42,7 @@ class OkxClient(BaseClient):
             self.public_key = keys['API_KEY']
             self.secret_key = keys['API_SECRET']
             self.passphrase = keys['PASSPHRASE']
+        self.order_loop = asyncio.new_event_loop()
         self.get_position()
         self.instruments = self.get_instruments()
         self.markets = self.get_markets()
@@ -78,19 +79,20 @@ class OkxClient(BaseClient):
         wst_public = threading.Thread(target=self._run_ws, args=['public', asyncio.new_event_loop(), self.WS_PBL])
         wst_public.daemon = True
         wst_public.start()
-        if self.state == 'Bot':
-            wst_private = threading.Thread(target=self._run_ws, args=['private', asyncio.new_event_loop(), self.WS_PRV])
-            wst_private.daemon = True
-            wst_private.start()
-            wst_orders = threading.Thread(target=self._run_order_loop, args=[asyncio.new_event_loop()])
-            wst_orders.daemon = True
-            wst_orders.start()
-        self.change_leverage()
         while True:
             if set(self.orderbook) == set([y for x, y in self.markets.items() if x in self.markets_list]):
                 print(f"{self.EXCHANGE_NAME} ALL MARKETS FETCHED")
                 break
             time.sleep(0.1)
+        if self.state == 'Bot':
+            wst_private = threading.Thread(target=self._run_ws, args=['private', asyncio.new_event_loop(), self.WS_PRV])
+            wst_private.daemon = True
+            wst_private.start()
+            wst_orders = threading.Thread(target=self._run_order_loop, args=[self.order_loop])
+            wst_orders.daemon = True
+            wst_orders.start()
+        self.change_leverage()
+
 
     @try_exc_regular
     def _run_order_loop(self, loop):

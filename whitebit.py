@@ -37,6 +37,7 @@ class WhiteBitClient(BaseClient):
         self.markets_list = markets_list
         self.session = requests.session()
         self.session.headers.update(self.headers)
+        self.order_loop = asyncio.new_event_loop()
         self.instruments = {}
         self.markets = self.get_markets()
         self.orderbook = {}
@@ -53,11 +54,6 @@ class WhiteBitClient(BaseClient):
         self.leverage = leverage
         self.max_pos_part = max_pos_part
         self.error_info = None
-        self._loop = asyncio.new_event_loop()
-        self._connected = asyncio.Event()
-        self._wst_ = threading.Thread(target=self._run_ws_forever, args=[self._loop])
-        self.order_loop = asyncio.new_event_loop()
-        self.orders_thread = threading.Thread(target=self.deals_thread_func, args=[self.order_loop])
         self.LAST_ORDER_ID = 'default'
         self.taker_fee = 0.00035 * 0.6
         self.maker_fee = 0.0001 * 0.6
@@ -384,17 +380,19 @@ class WhiteBitClient(BaseClient):
     @try_exc_regular
     def _run_ws_forever(self, loop):
         while True:
-            self._loop.run_until_complete(self._run_ws_loop(loop))
+            loop.run_until_complete(self._run_ws_loop(loop))
 
     @try_exc_regular
     def run_updater(self):
-        self._wst_.daemon = True
-        self._wst_.start()
+        _wst_ = threading.Thread(target=self._run_ws_forever, args=[asyncio.new_event_loop()])
+        _wst_.daemon = True
+        _wst_.start()
         while set(self.orderbook) < set([self.markets[x] for x in self.markets_list if self.markets.get(x)]):
             time.sleep(0.01)
         if self.state == 'Bot':
-            self.orders_thread.daemon = True
-            self.orders_thread.start()
+            orders_thread = threading.Thread(target=self.deals_thread_func, args=[self.order_loop])
+            orders_thread.daemon = True
+            orders_thread.start()
             self.first_positions_update()
 
     @try_exc_regular
@@ -412,7 +410,6 @@ class WhiteBitClient(BaseClient):
     async def _run_ws_loop(self, loop):
         async with aiohttp.ClientSession() as session:
             async with session.ws_connect(self.PUBLIC_WS_ENDPOINT) as ws:
-                self._connected.set()
                 self._ws = ws
                 if self.state == 'Bot':
                     await loop.create_task(self.subscribe_privates())
@@ -701,7 +698,6 @@ class WhiteBitClient(BaseClient):
         method = {"id": 0,
                   "method": "depth_subscribe",
                   "params": data}
-        await self._connected.wait()
         await self._ws.send_json(method)
 
     @try_exc_regular
@@ -717,7 +713,6 @@ class WhiteBitClient(BaseClient):
         method_auth = {"id": 1, "method": "authorize", "params": [self.websocket_token, "public"]}
         orders_ex = {"id": 2, "method": "ordersExecuted_subscribe", "params": [list(self.markets.values()), 0]}
         balance = {"id": 3, "method": "balanceMargin_subscribe", "params": ["USDT"]}
-        await self._connected.wait()
         await self._ws.send_json(method_auth)
         time.sleep(1)
         await self._ws.send_json(orders_ex)
