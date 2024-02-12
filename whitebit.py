@@ -15,6 +15,10 @@ from clients.core.base_client import BaseClient
 from aiohttp.client_exceptions import ContentTypeError
 import random
 import string
+import uvloop
+import gc
+
+asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
 
 class WhiteBitClient(BaseClient):
