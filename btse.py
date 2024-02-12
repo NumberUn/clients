@@ -13,10 +13,10 @@ from core.wrappers import try_exc_regular, try_exc_async
 from clients.core.base_client import BaseClient
 import asyncio
 import string
-import uvloop
-import gc
-
-asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+# import uvloop
+# import gc
+#
+# asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
 
 class BtseClient(BaseClient):

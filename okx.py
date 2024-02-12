@@ -11,14 +11,14 @@ from datetime import datetime
 import requests
 import random
 import uuid
-import uvloop
-import gc
+# import uvloop
+# import gc
 
 from clients.core.base_client import BaseClient
 from clients.core.enums import ResponseStatus, OrderStatus
 from core.wrappers import try_exc_regular, try_exc_async
 
-asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+# asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
 
 class OkxClient(BaseClient):
