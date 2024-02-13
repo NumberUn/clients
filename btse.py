@@ -202,7 +202,7 @@ class BtseClient(BaseClient):
             loop.run_until_complete(self._run_ws_loop(ws_type, loop))
 
     @try_exc_regular
-    def generate_signature(self, path, nonce, data=''):
+    def generate_signature(self, path: str, nonce: str, data=''):
         language = "latin-1"
         message = path + nonce + data
         signature = hmac.new(bytes(self.api_secret, language),
