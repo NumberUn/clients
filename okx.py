@@ -398,7 +398,7 @@ class OkxClient(BaseClient):
             side = 'buy'
         elif top_bid and top_bid < self.orderbook[market]['asks'][0][0]:
             side = 'sell'
-        if self.finder and side and ts_ms - ts_ob < self.top_ws_ping:
+        if self.finder and side:  # and ts_ms - ts_ob < self.top_ws_ping:
             coin = market.split('-')[0]
             await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, 'ob')
         # if self.market_finder:
@@ -479,7 +479,7 @@ class OkxClient(BaseClient):
         size = float(data['sz'])
         price = float(data['px'])
         ts_ob = float(data['ts']) / 1000
-        ts_ms =  time.time()
+        ts_ms = time.time()
         tick = self.instruments[market]['tick_size']
         if side == 'buy':
             if price != ob['asks'][0][0]:
@@ -627,8 +627,7 @@ class OkxClient(BaseClient):
         way = '/api/v5/account/set-leverage'
         body = {"instId": symbol,
                 "lever": "5",
-                "mgnMode": "cross"
-                }
+                "mgnMode": "cross"}
         body_json = json.dumps(body)
         headers = self.get_private_headers('POST', way, body_json)
         requests.post(url=self.BASE_URL + way, headers=headers, data=body_json).json()

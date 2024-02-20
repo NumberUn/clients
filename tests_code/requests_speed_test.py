@@ -1,6 +1,5 @@
 import time
 import requests
-import aioquic
 
 headers = {"Accept": "application/json;charset=UTF-8",
            "Content-Type": "application/json",

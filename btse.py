@@ -80,6 +80,8 @@ class BtseClient(BaseClient):
         self.top_ws_ping = 0.012
         self.stop_all = False
         self.pipes = dict()
+        self.pings = []
+        self.cancel_pings = []
         if multibot:
             self.cancel_all_orders()
 
@@ -140,17 +142,19 @@ class BtseClient(BaseClient):
     @try_exc_async
     async def keep_alive_order(self):
         while True:
+            await asyncio.sleep(3)
             # if self.market_finder:
             #     loop.create_task(self.check_extra_orders())
             await self.get_balance_async()
-            market = self.markets[self.markets_list[random.randint(0, len(self.markets_list) - 1)]]
-            price = self.get_orderbook(market)['bids'][0][0] * 0.95
+#             market = self.markets[self.markets_list[random.randint(0, len(self.markets_list) - 1)]]
+            market = 'BTCPFC'
+            price = self.get_orderbook(market)['asks'][0][0] * 1.001
             price, size = self.fit_sizes(price, self.instruments[market]['min_size'], market)
-            await self.create_fast_order(price, size, 'buy', market, 'keep-alive')
+            await self.create_fast_order(price, size, 'sell', market, 'keep-alive')
             resp = self.responses.get('keep-alive')
             ex_order_id = resp['exchange_order_id']
             await self.cancel_order(market, ex_order_id)
-            await asyncio.sleep(3)
+
 
     @staticmethod
     @try_exc_regular
@@ -393,6 +397,10 @@ class BtseClient(BaseClient):
         async with self.async_session.post(url=self.BASE_URL + path, headers=self.session.headers, json=body) as resp:
             try:
                 response = await resp.json()
+                self.pings.append(response[0]['timestamp'] / 1000 - time_start)
+                print(f"Attempts: {len(self.pings)}")
+                print(f"Create order time, s: {response[0]['timestamp'] / 1000 - time_start}")
+                print(f"Average create order time, ms: {sum(self.pings) / len(self.pings) * 1000}")
                 if not client_id or 'taker' in client_id:
                     print(f"{self.EXCHANGE_NAME} ORDER CREATE RESPONSE: {response}")
                     print(f"{self.EXCHANGE_NAME} ORDER CREATE PING: {response[0]['timestamp'] / 1000 - time_start}")
@@ -615,9 +623,10 @@ class BtseClient(BaseClient):
 
     @try_exc_async
     async def cancel_order(self, symbol: str, order_id: str):
+        start = time.time()
         path = '/api/v2.1/order'
         data = {'symbol': symbol,
-                'orderID': order_id}
+                'orderId': order_id}
         self.get_private_headers(path, data)
         path += '?' + "&".join([f"{key}={data[key]}" for key in sorted(data)])
         async with self.async_session.delete(url=self.BASE_URL + path, headers=self.session.headers, json=data) as resp:
@@ -628,6 +637,9 @@ class BtseClient(BaseClient):
                 #     coin = symbol.split('PFC')[0]
                 #     ord_id = coin + '-' + self.EXCHANGE_NAME
                 #     self.multibot.open_orders.pop(ord_id)
+                self.cancel_pings.append(response[0]['timestamp'] / 1000 - start)
+                print(f"Cancel order time, ms: {response[0]['timestamp'] / 1000 - start}")
+                print(f"Average cancel order time, ms: {(sum(self.cancel_pings) / len(self.cancel_pings)) * 1000}")
                 self.cancel_responses.update({order_id: response[0]})
                         # if self.multibot.open_orders.get(ord_id, [''])[0] == response[0]['orderID']:
                         #     self.multibot.dump_orders.update({ord_id: self.multibot.open_orders.pop(ord_id)})
@@ -813,7 +825,7 @@ class BtseClient(BaseClient):
         self.orderbook[symbol] = new_ob
         # if self.market_finder and flag_market:
         #     await self.market_finder.count_one_coin(symbol.split('PFC')[0], self.EXCHANGE_NAME)
-        if side and self.finder and ts_ms - ts_ob < self.top_ws_ping:
+        if side and self.finder:  # and ts_ms - ts_ob < self.top_ws_ping:
             coin = symbol.split('PFC')[0]
             await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, 'ob')
 
@@ -909,11 +921,11 @@ if __name__ == '__main__':
     client.markets_list = list(client.markets.keys())[:30]
     client.run_updater()
     # time.sleep(3)
-    # ob = client.get_orderbook('MANAPFC')
-    # amount = client.instruments['MANAPFC']['min_size']
-    # price, amount = client.fit_sizes(ob['bids'][0][0] * 0.95, amount, 'MANAPFC')
     while True:
-        time.sleep(5)
+        time.sleep(3)
+#         ob = client.get_orderbook('BTCPFC')
+#         amount = client.instruments['BTCPFC']['min_size']
+#         price, amount = client.fit_sizes(ob['bids'][0][0] * 0.95, amount, 'BTCPFC')
         # client.order_loop.create_task(client.create_fast_order(price, amount, 'buy', 'MANAPFC'))
         # client.cancel_all_orders()
         # for symbol in client.markets.values():
