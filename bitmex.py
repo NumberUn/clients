@@ -320,6 +320,9 @@ class BitmexClient(BaseClient):
         factual_price = order.get('avgPx') if order.get('avgPx') else 0
         factual_size_coin = abs(order.get('homeNotional', 0))
         factual_size_usd = abs(order.get('foreignNotional', 0))
+        if factual_size_coin and self.multibot:
+            loop = asyncio.get_event_loop()
+            loop.create_task(self.multibot.update_all_av_balances())
         status = self.get_order_status(order)
         timestamp = self.timestamp_from_date(order['transactTime'])
         result = {
@@ -350,9 +353,6 @@ class BitmexClient(BaseClient):
                 # print(message)
                 if message['table'] == 'execution':
                     self.update_fills(message['data'])
-                    if self.multibot:
-                        loop = asyncio.get_event_loop()
-                        loop.create_task(self.multibot.update_all_av_balances())
                 elif message['table'] == self.orderbook_type:
                     self.update_orderbook(message['data'])
                 elif message['table'] == 'position':
