@@ -211,8 +211,8 @@ class BitmexClient(BaseClient):
     async def _run_ws_loop(self, loop) -> None:
         async with aiohttp.ClientSession(headers=self.__get_auth('GET', '/realtime')) as s:
             async with s.ws_connect(self.__get_url()) as ws:
-                print("Bitmex: connected")
                 loop.create_task(self._ping(ws))
+                print("Bitmex: connected")
                 async for msg in ws:
                     await self._process_msg(msg)
                 await ws.close()
@@ -278,7 +278,7 @@ class BitmexClient(BaseClient):
                     'exchange_order_id': order['orderID'],
                     'type': order['timeInForce'],
                     'status': status,
-                    'exchange': self.EXCHANGE_NAME,
+                    'exchange_name': self.EXCHANGE_NAME,
                     'side': order['side'].lower(),
                     'symbol': symbol,
                     'expect_price': expect_price,
@@ -306,7 +306,7 @@ class BitmexClient(BaseClient):
         real_price = res.get('avgPx', 0)
         return {
             'exchange_order_id': order_id,
-            'exchange': self.EXCHANGE_NAME,
+            'exchange_name': self.EXCHANGE_NAME,
             'status': OrderStatus.FULLY_EXECUTED if res.get('ordStatus') == 'Filled' else OrderStatus.NOT_EXECUTED,
             'factual_price': real_price,
             'factual_amount_coin': real_size,
@@ -377,28 +377,29 @@ class BitmexClient(BaseClient):
         for ob in data:
             if market := ob.get('symbol'):
                 # side = None
-                ts_ob = self.timestamp_from_date(ob['timestamp'])
-                ts_ms = time.time()
-                # print(f"OB UPD TIME, s: {ts_ms - ts_ob}")
-                # return
-                ob.update({'timestamp': ts_ob, 'ts_ms': ts_ms})
-                contract_value = self.get_contract_value(market)
-                ob['bids'] = [[x[0], x[1] / contract_value] for x in ob['bids']]
-                ob['asks'] = [[x[0], x[1] / contract_value] for x in ob['asks']]
-                self.orderbook.update({market: ob})
-                # if self.finder and new_ob['asks']:
-                #     last_ob = self.get_orderbook(market).copy()
-                #     if_new_top_ask = new_ob['asks'][0][0] > self.orderbook[market]['asks'][0][0]
-                #     side = 'buy'
-                # if self.finder and new_ob['bids']:
-                #     last_ob = self.get_orderbook(market).copy()
-                #     if_new_top_bid = new_ob['bids'][0][0] < self.orderbook[market]['bids'][0][0]
-                #     side = 'sell'
-                # if side:
-                # #     coin = market.split('USDT')[0]
-                # #     if self.state == 'Bot':
-                # #         await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, self.multibot.run_arbitrage)
-                # #     else:
+                if self.instruments.get(market) and market.split('USD')[0] in self.markets_list:
+                    ts_ob = self.timestamp_from_date(ob['timestamp'])
+                    ts_ms = time.time()
+                    # print(f"OB UPD TIME, s: {ts_ms - ts_ob}")
+                    # return
+                    ob.update({'timestamp': ts_ob, 'ts_ms': ts_ms})
+                    contract_value = self.get_contract_value(market)
+                    ob['bids'] = [[x[0], x[1] / contract_value] for x in ob['bids']]
+                    ob['asks'] = [[x[0], x[1] / contract_value] for x in ob['asks']]
+                    self.orderbook.update({market: ob})
+                    # if self.finder and new_ob['asks']:
+                    #     last_ob = self.get_orderbook(market).copy()
+                    #     if_new_top_ask = new_ob['asks'][0][0] > self.orderbook[market]['asks'][0][0]
+                    #     side = 'buy'
+                    # if self.finder and new_ob['bids']:
+                    #     last_ob = self.get_orderbook(market).copy()
+                    #     if_new_top_bid = new_ob['bids'][0][0] < self.orderbook[market]['bids'][0][0]
+                    #     side = 'sell'
+                    # if side:
+                    # #     coin = market.split('USDT')[0]
+                    # #     if self.state == 'Bot':
+                    # #         await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, self.multibot.run_arbitrage)
+                    # #     else:
 
     @try_exc_regular
     def update_fills(self, data: dict) -> None:
@@ -575,9 +576,9 @@ class BitmexClient(BaseClient):
         """
         # Some subscriptions need to have the symbol appended.
         url_parts = list(urllib.parse.urlparse(self.BASE_WS))
-        url_parts[2] += "?subscribe={}".format(','.join(self.subscriptions))
-        actual_markets = [self.orderbook_type + ':' + y for x, y in self.markets.items() if x in self.markets_list]
-        url_parts[2] += ',' + ','.join(actual_markets)
+        url_parts[2] += "?subscribe={}".format(','.join(self.subscriptions)) + ',' + self.orderbook_type
+        # actual_markets = [self.orderbook_type + ':' + y for x, y in self.markets.items() if x in self.markets_list]
+        # url_parts[2] += ',' + ','.join(actual_markets)
         final_url = urllib.parse.urlunparse(url_parts)
         return final_url
 
