@@ -266,7 +266,7 @@ class BitmexClient(BaseClient):
                 status = OrderStatus.NOT_EXECUTED
             real_size = res['cumQty'] / contract_value
             expect_size = res['orderQty'] / contract_value
-            real_price = res.get('avgPx', 0)
+            real_price = res.get('avgPx') if res.get('avgPx') else 0
             expect_price = res.get('price', 0)
             orders.append(
                 {
@@ -303,7 +303,7 @@ class BitmexClient(BaseClient):
         res = self.swagger_client.Order.Order_getOrders(filter=json.dumps({'orderID': order_id})).result()[0][0]
         contract_value = self.get_contract_value(symbol)
         real_size = res['cumQty'] / contract_value
-        real_price = res.get('avgPx')
+        real_price = res.get('avgPx') if res.get('avgPx') else 0
         return {
             'exchange_order_id': order_id,
             'exchange_name': self.EXCHANGE_NAME,
