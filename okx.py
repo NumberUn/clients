@@ -317,6 +317,9 @@ class OkxClient(BaseClient):
                 await self._update_positions(obj)
             elif obj['arg']['channel'] == 'orders':
                 await self._update_orders(obj)
+                if self.multibot:
+                    loop = asyncio.get_event_loop()
+                    loop.create_task(self.multibot.update_all_av_balances())
             elif obj['arg']['channel'] == 'trades':
                 await self._update_trades(obj)
 

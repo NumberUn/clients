@@ -350,6 +350,9 @@ class BitmexClient(BaseClient):
                 # print(message)
                 if message['table'] == 'execution':
                     self.update_fills(message['data'])
+                    if self.multibot:
+                        loop = asyncio.get_event_loop()
+                        loop.create_task(self.multibot.update_all_av_balances())
                 elif message['table'] == self.orderbook_type:
                     self.update_orderbook(message['data'])
                 elif message['table'] == 'position':
