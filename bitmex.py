@@ -11,8 +11,15 @@ from bravado.requests_client import RequestsClient
 # from config import Config
 from clients.core.base_client import BaseClient
 from clients.core.enums import ResponseStatus, OrderStatus
-from clients.core.APIKeyAuthenticator import APIKeyAuthenticator as auth
+from clients.core.APIKeyAuthenticator import APIKeyAuthenticator as Auth
 from core.wrappers import try_exc_regular, try_exc_async
+import uvloop
+import gc
+import socket
+import aiodns
+from aiohttp.resolver import AsyncResolver
+
+asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
 
 # Naive implementation of connecting to BitMEX websocket for streaming realtime data.
@@ -29,62 +36,128 @@ class BitmexClient(BaseClient):
     BASE_URL = 'https://www.bitmex.com'
     EXCHANGE_NAME = 'BITMEX'
     MAX_TABLE_LEN = 200
+    headers = {"Content-Type": "application/json",
+               'Connection': 'keep-alive'}
+    LAST_ORDER_ID = 'default'
 
-    def __init__(self, keys, leverage, markets_list=[], max_pos_part=20):
+    def __init__(self, multibot=None, keys=None, leverage=None, state='Bot', markets_list=[],
+                 max_pos_part=20, finder=None, ob_len=4, market_finder=None):
         super().__init__()
+        self.multibot = multibot
+        self.state = state
+        self.finder = finder
+        self.ob_len = ob_len
+        self.market_finder = market_finder
         self.max_pos_part = max_pos_part
         self.markets_list = markets_list
-        self._loop = asyncio.new_event_loop()
-        self._connected = asyncio.Event()
         self.leverage = leverage
         self.api_key = keys['API_KEY']
         self.api_secret = keys['API_SECRET']
-        self.subscriptions = ['margin', 'position', 'orderBook10', 'execution']
+        self.subscriptions = ['margin', 'position', 'execution']
+        self.orderbook_type = 'orderBook10'  # 'orderBookL2_25'  #
 
-        self.auth = auth(self.BASE_URL, self.api_key, self.api_secret)
+        self.auth = Auth(self.BASE_URL, self.api_key, self.api_secret)
         self.amount = 0
         self.amount_contracts = 0
         self.taker_fee = 0.0005
         self.requestLimit = 1200
         self.price = 0
-        self.data = {}
         self.orders = {}
         self.positions = {}
         self.orderbook = {}
         self.balance = {}
         self.keys = {}
-        self.exited = False
         self.error_info = None
         self.swagger_client = self.swagger_client_init()
         self.commission = self.swagger_client.User.User_getCommission().result()[0]
         self.instruments = self.get_all_instruments()
         self.markets = self.get_markets()
         self.get_real_balance()
-        self.wst = threading.Thread(target=self._run_ws_forever, daemon=True)
         self.time_sent = datetime.utcnow().timestamp()
+        self.responses = {}
+        self.async_tasks = []
+        self.orig_sizes = {}
+        self.clients_ids = {}
+        if multibot:
+            self.cancel_all_orders()
+
+    @try_exc_async
+    async def _run_order_loop(self, loop):
+        # last_request = time.time()
+        # request_pause = 1.02 / self.rate_limit_orders
+        # connector = aiohttp.TCPConnector(family=socket.AF_INET6)
+        resolver = AsyncResolver()
+        connector = aiohttp.TCPConnector(resolver=resolver, family=socket.AF_INET)
+        async with aiohttp.ClientSession(connector=connector) as self.async_session:
+            loop.create_task(self.keep_alive_order())
+            while True:
+                for task in self.async_tasks:
+                    if task[0] == 'create_order':
+                        price = task[1]['price']
+                        size = task[1]['size']
+                        side = task[1]['side']
+                        market = task[1]['market']
+                        client_id = task[1].get('client_id')
+                        if task[1].get('hedge'):
+                            await self.create_fast_order(price, size, side, market, client_id)
+                        else:
+                            loop.create_task(self.create_fast_order(price, size, side, market, client_id))
+                    elif task[0] == 'cancel_order':
+                        if task[1]['order_id'] not in self.deleted_orders:
+                            if len(self.deleted_orders) > 1000:
+                                self.deleted_orders = []
+                            self.deleted_orders.append(task[1]['order_id'])
+                            self.cancel_all_orders()
+                    # elif task[0] == 'amend_order':
+                    #     if task[1]['order_id'] not in self.deleted_orders:
+                    #         price = task[1]['price']
+                    #         size = task[1]['size']
+                    #         order_id = task[1]['order_id']
+                    #         market = task[1]['market']
+                    #         old_order_size = task[1]['old_order_size']
+                    #         loop.create_task(self.amend_order(price, size, order_id, market, old_order_size))
+                    self.async_tasks.remove(task)
+                await asyncio.sleep(0.00001)
+
+    @try_exc_async
+    async def keep_alive_order(self):
+        while True:
+            market = 'ETHUSDT'
+            price = self.get_orderbook(market)['asks'][0][0] * 0.95
+            price, size = self.fit_sizes(price, self.instruments[market]['min_size'], market)
+            await self.create_fast_order(price, size, 'buy', market, 'keep-alive')
+            self.cancel_all_orders()
+            await asyncio.sleep(3)
 
     @try_exc_regular
-    def get_markets(self):
+    def get_markets(self) -> dict:
         markets = {}
         for symbol, market in self.instruments.items():
             markets.update({market['coin']: symbol})
         return markets
 
     @try_exc_regular
-    def run_updater(self):
-        self.wst.start()
+    def run_updater(self) -> None:
+        wst = threading.Thread(target=self._run_ws_forever, args=[asyncio.new_event_loop(), self._run_ws_loop])
+        wst.daemon = True
+        wst.start()
+        time.sleep(2)
+        if self.state == 'Bot':
+            wst = threading.Thread(target=self._run_ws_forever, args=[asyncio.new_event_loop(), self._run_order_loop])
+            wst.daemon = True
+            wst.start()
         # self.__wait_for_account()
         # self.get_contract_value()
 
     @try_exc_regular
-    def get_fees(self, symbol):
+    def get_fees(self, symbol: str) -> (float, float):
         taker_fee = self.commission[symbol]['takerFee']
         maker_fee = self.commission[symbol]['makerFee']
         return taker_fee, maker_fee
 
     @staticmethod
     @try_exc_regular
-    def get_quantity_precision(step_size):
+    def get_quantity_precision(step_size: float) -> int:
         if '.' in str(step_size):
             quantity_precision = len(str(step_size).split('.')[1])
         elif '-' in str(step_size):
@@ -94,8 +167,8 @@ class BitmexClient(BaseClient):
         return quantity_precision
 
     @try_exc_regular
-    def get_all_instruments(self):
-        instr_list = {}
+    def get_all_instruments(self) -> dict:
+        refactored_instruments = {}
         instruments = self.swagger_client.Instrument.Instrument_get(
             filter=json.dumps({'quoteCurrency': 'USDT', 'state': 'Open'})).result()
         for instr in instruments[0]:
@@ -105,19 +178,19 @@ class BitmexClient(BaseClient):
             price_precision = self.get_price_precision(instr['tickSize'])
             step_size = instr['lotSize'] / contract_value
             quantity_precision = self.get_quantity_precision(step_size)
-            instr_list.update({instr['symbol']: {'tick_size': instr['tickSize'],
-                                                 'price_precision': price_precision,
-                                                 'step_size': instr['lotSize'] / contract_value,
-                                                 'min_size': instr['lotSize'] / contract_value,
-                                                 'quantity_precision': quantity_precision,
-                                                 'contract_value': contract_value,
-                                                 'coin': instr['rootSymbol']
-                                                 }})
-        return instr_list
+            refactored_instruments.update({instr['symbol']: {'tick_size': instr['tickSize'],
+                                                             'price_precision': price_precision,
+                                                             'step_size': instr['lotSize'] / contract_value,
+                                                             'min_size': instr['lotSize'] / contract_value,
+                                                             'quantity_precision': quantity_precision,
+                                                             'contract_value': contract_value,
+                                                             'coin': instr['rootSymbol']
+                                                             }})
+        return refactored_instruments
 
     @staticmethod
     @try_exc_regular
-    def get_price_precision(tick_size):
+    def get_price_precision(tick_size: float) -> int:
         if '.' in str(tick_size):
             price_precision = len(str(tick_size).split('.')[1])
         elif '-' in str(tick_size):
@@ -127,34 +200,25 @@ class BitmexClient(BaseClient):
         return price_precision
 
     @try_exc_regular
-    def _run_ws_forever(self):
+    def _run_ws_forever(self, loop: asyncio.new_event_loop, call: callable) -> None:
         while True:
             try:
-                self._loop.run_until_complete(self._run_ws_loop())
+                loop.run_until_complete(call(loop))
             finally:
                 print("WS loop completed. Restarting")
 
-    @try_exc_regular
-    def __wait_for_account(self):
-        '''On subscribe, this data will come down. Wait for it.'''
-        # Wait for the keys to show up from the ws
-        while not set(self.subscriptions) <= set(self.data):
-            time.sleep(0.1)
-
     @try_exc_async
-    async def _run_ws_loop(self):
+    async def _run_ws_loop(self, loop) -> None:
         async with aiohttp.ClientSession(headers=self.__get_auth('GET', '/realtime')) as s:
             async with s.ws_connect(self.__get_url()) as ws:
                 print("Bitmex: connected")
-                self._connected.set()
-                self._ws = ws
                 async for msg in ws:
-                    self._process_msg(msg)
-                self._connected.clear()
+                    await self._process_msg(msg)
+                await ws.close()
 
     @staticmethod
     @try_exc_regular
-    def get_order_status(order):
+    def get_order_status(order: dict) -> str:
         if order['ordStatus'] == 'New':
             status = OrderStatus.PROCESSING
         elif order['ordStatus'] == 'Filled':
@@ -168,20 +232,21 @@ class BitmexClient(BaseClient):
         return status
 
     @try_exc_regular
-    def get_all_tops(self):
+    def get_all_tops(self) -> dict:
         # NECESSARY
         tops = {}
         for symbol, orderbook in self.orderbook.items():
             coin = symbol.upper().split('USD')[0]
-            if len(orderbook['bids']) and len(orderbook['asks']):
-                tops.update({self.EXCHANGE_NAME + '__' + coin:
-                               {'top_bid': orderbook['bids'][0][0], 'top_ask': orderbook['asks'][0][0],
-                                'bid_vol': orderbook['bids'][0][1], 'ask_vol': orderbook['asks'][0][1],
-                                'ts_exchange': orderbook['timestamp']}})
+            if len(orderbook['bids']) & len(orderbook['asks']):
+                tops.update({self.EXCHANGE_NAME + '__' + coin: {
+                    'top_bid': orderbook['bids'][0][0], 'top_ask': orderbook['asks'][0][0],
+                    'bid_vol': orderbook['bids'][0][1], 'ask_vol': orderbook['asks'][0][1],
+                    'ts_exchange': orderbook['timestamp']
+                }})
         return tops
 
     @try_exc_async
-    async def get_all_orders(self, symbol: str, session: aiohttp.ClientSession):
+    async def get_all_orders(self, symbol: str, session: aiohttp.ClientSession) -> list:
         res = self.swagger_client.Order.Order_getOrders(filter=json.dumps({'symbol': symbol})).result()[0]
         contract_value = self.get_contract_value(symbol)
         orders = []
@@ -227,7 +292,7 @@ class BitmexClient(BaseClient):
         return orders
 
     @try_exc_regular
-    def get_order_by_id(self, symbol, order_id):
+    def get_order_by_id(self, symbol: str, order_id: str) -> dict:
         res = self.swagger_client.Order.Order_getOrders(filter=json.dumps({'orderID': order_id})).result()[0][0]
         contract_value = self.get_contract_value(symbol)
         real_size = res['cumQty'] / contract_value
@@ -244,33 +309,41 @@ class BitmexClient(BaseClient):
         }
 
     @try_exc_regular
-    def get_order_result(self, order):
-        factual_price = order['avgPx'] if order.get('avgPx') else 0
-        factual_size_coin = abs(order['homeNotional']) if order.get('homeNotional') else 0
-        factual_size_usd = abs(order['foreignNotional']) if order.get('foreignNotional') else 0
+    def get_order_result(self, order: dict) -> dict:
+        factual_price = order.get('avgPx', 0)
+        factual_size_coin = abs(order.get('homeNotional', 0))
+        factual_size_usd = abs(order.get('foreignNotional', 0))
         status = self.get_order_status(order)
+        timestamp = self.timestamp_from_date(order['transactTime'])
         result = {
             'exchange_order_id': order['orderID'],
-            'exchange': self.EXCHANGE_NAME,
+            'exchange_name': self.EXCHANGE_NAME,
             'status': status,
             'factual_price': factual_price,
+            'price': factual_price,
+            'limit_price': order['price'],
             'factual_amount_coin': factual_size_coin,
+            'size': factual_size_coin,
             'factual_amount_usd': factual_size_usd,
             'datetime_update': datetime.utcnow(),
-            'ts_update': int(round(datetime.utcnow().timestamp() * 1000))
-        }
+            'ts_update': int(round(datetime.utcnow().timestamp() * 1000)),
+            'api_response': order,
+            'timestamp': timestamp,
+            'time_order_sent': self.time_sent,
+            'create_order_time': timestamp - self.time_sent}
         return result
 
-    @try_exc_regular
-    def _process_msg(self, msg: aiohttp.WSMessage):
+    @try_exc_async
+    async def _process_msg(self, msg: aiohttp.WSMessage) -> None:
         if msg.type == aiohttp.WSMsgType.TEXT:
             message = json.loads(msg.data)
             if message.get('subscribe'):
                 print(message)
             if message.get("action"):
+                # print(message)
                 if message['table'] == 'execution':
                     self.update_fills(message['data'])
-                elif message['table'] == 'orderBook10':
+                elif message['table'] == self.orderbook_type:
                     self.update_orderbook(message['data'])
                 elif message['table'] == 'position':
                     self.update_positions(message['data'])
@@ -278,7 +351,7 @@ class BitmexClient(BaseClient):
                     self.update_balance(message['data'])
 
     @try_exc_regular
-    def update_positions(self, data):
+    def update_positions(self, data: dict) -> None:
         for position in data:
             if position.get('foreignNotional'):
                 side = 'SHORT' if position['foreignNotional'] > 0 else 'LONG'
@@ -292,27 +365,61 @@ class BitmexClient(BaseClient):
                                                             'realized_pnl_usd': 0,
                                                             'lever': self.leverage}})
 
-    @try_exc_regular
-    def update_orderbook(self, data):
-        for ob in data:
-            if ob.get('symbol') and self.instruments.get(ob['symbol']):
-                ob.update({'timestamp': int(datetime.utcnow().timestamp() * 1000)})
-                contract_value = self.get_contract_value(ob['symbol'])
-                ob['bids'] = [[x[0], x[1] / contract_value] for x in ob['bids']]
-                ob['asks'] = [[x[0], x[1] / contract_value] for x in ob['asks']]
-                self.orderbook.update({ob['symbol']: ob})
+    def create_order(self, price: float, side: str,
+                     session: aiohttp.ClientSession, expire: int = 100, client_ID: str = None) -> dict:
+        pass
 
     @try_exc_regular
-    def update_fills(self, data):
+    def update_orderbook(self, data: dict) -> None:
+        for ob in data:
+            if market := ob.get('symbol'):
+                # side = None
+                ts_ob = self.timestamp_from_date(ob['timestamp'])
+                ts_ms = time.time()
+                # print(f"OB UPD TIME, s: {ts_ms - ts_ob}")
+                # return
+                ob.update({'timestamp': ts_ob, 'ts_ms': ts_ms})
+                contract_value = self.get_contract_value(market)
+                ob['bids'] = [[x[0], x[1] / contract_value] for x in ob['bids']]
+                ob['asks'] = [[x[0], x[1] / contract_value] for x in ob['asks']]
+                self.orderbook.update({market: ob})
+                # if self.finder and new_ob['asks']:
+                #     last_ob = self.get_orderbook(market).copy()
+                #     if_new_top_ask = new_ob['asks'][0][0] > self.orderbook[market]['asks'][0][0]
+                #     side = 'buy'
+                # if self.finder and new_ob['bids']:
+                #     last_ob = self.get_orderbook(market).copy()
+                #     if_new_top_bid = new_ob['bids'][0][0] < self.orderbook[market]['bids'][0][0]
+                #     side = 'sell'
+                # if side:
+                # #     coin = market.split('USDT')[0]
+                # #     if self.state == 'Bot':
+                # #         await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, self.multibot.run_arbitrage)
+                # #     else:
+
+    @try_exc_regular
+    def update_fills(self, data: dict) -> None:
+        # print(f"Fills data: {data}")
         for order in data:
             if order['ordStatus'] == 'New':
                 timestamp = self.timestamp_from_date(order['transactTime'])
                 print(f'BITMEX ORDER PLACE TIME: {timestamp - self.time_sent} sec')
             result = self.get_order_result(order)
             self.orders.update({order['orderID']: result})
+            if client_id := self.clients_ids.get(order['orderID']):
+                if self.responses.get(client_id):
+                    self.responses[client_id].update(result)
+                else:
+                    self.responses.update({client_id: result})
+        # example_blank = [{'execID': '00000000-006d-1000-0000-000509ada326', 'orderID': 'ef99ee87-f7c1-405e-873c-cf1513595c5a',
+        #             'account': 2127720, 'symbol': 'ETHUSDT', 'side': 'Buy', 'orderQty': 1000, 'price': 3171.73,
+        #             'currency': 'USDT', 'settlCurrency': 'USDt', 'execType': 'New', 'ordType': 'Limit',
+        #             'timeInForce': 'GoodTillCancel', 'ordStatus': 'New', 'workingIndicator': True, 'leavesQty': 1000,
+        #             'cumQty': 0, 'text': 'Submitted via API.', 'transactTime': '2024-02-28T13:09:40.041Z',
+        #             'timestamp': '2024-02-28T13:09:40.041Z'}]
 
     @try_exc_regular
-    def update_balance(self, data):
+    def update_balance(self, data: dict) -> None:
         for balance in data:
             if balance['currency'] == 'USDt' and balance.get('marginBalance'):
                 self.balance = {'free': balance.get('availableMargin', 0) / (10 ** 6),
@@ -321,23 +428,23 @@ class BitmexClient(BaseClient):
 
     @staticmethod
     @try_exc_regular
-    def timestamp_from_date(date: str):
+    def timestamp_from_date(date: str) -> float:
         # date = '2023-02-15T02:55:27.640Z'
         ms = int(date.split(".")[1].split('Z')[0]) / 1000
         return time.mktime(datetime.strptime(date, "%Y-%m-%dT%H:%M:%S.%fZ").timetuple()) + ms
 
     @staticmethod
     @try_exc_regular
-    def get_pos_power(self, symbol):
+    def get_pos_power(symbol: str) -> (int, str):
         pos_power = 6 if 'USDT' in symbol else 8
         currency = 'USDt' if 'USDT' in symbol else 'XBt'
         return pos_power, currency
 
     @try_exc_regular
-    def swagger_client_init(self, config=None):
-        if config is None:
+    def swagger_client_init(self, swagger_config: dict = None) -> SwaggerClient:
+        if swagger_config is None:
             # See full config options at http://bravado.readthedocs.io/en/latest/configuration.html
-            config = {
+            swagger_config = {
                 # Don't use models (Python classes) instead of dicts for #/definitions/{models}
                 'use_models': False,
                 # bravado has some issues with nullable fields
@@ -348,113 +455,113 @@ class BitmexClient(BaseClient):
         spec_uri = self.BASE_URL + '/api/explorer/swagger.json'
         request_client = RequestsClient()
         request_client.authenticator = self.auth
-        return SwaggerClient.from_url(spec_uri, config=config, http_client=request_client)
+        return SwaggerClient.from_url(spec_uri, config=swagger_config, http_client=request_client)
 
     @try_exc_regular
-    def exit(self):
-        '''Call this to exit - will close websocket.'''
-        self.exited = True
-        self.ws.close()
-
-    @try_exc_regular
-    def get_balance(self):
+    def get_balance(self) -> float:
         """Get your margin details."""
         return self.balance['total']
 
     @try_exc_regular
-    def open_orders(self):
-        """Get all your open orders."""
-        return self.data['order']
-
-    @try_exc_regular
-    def fit_sizes(self, price, symbol):
-        instr = self.instruments[symbol]
+    def fit_sizes(self, price: float, amount: float, market: str) -> (float, float):
+        # NECESSARY
+        instr = self.instruments[market]
         tick_size = instr['tick_size']
-        contract_value = instr['contract_value']
         quantity_precision = instr['quantity_precision']
-        self.amount = round(self.amount, quantity_precision)
-        self.amount_contracts = round(self.amount * contract_value)
+        price_precision = instr['price_precision']
+        amount = round(amount, quantity_precision)
         rounded_price = round(price / tick_size) * tick_size
-        self.price = round(rounded_price, instr['price_precision'])
+        price = round(rounded_price, price_precision)
+        return price, amount
 
     @try_exc_async
-    async def create_order(self, symbol, side, session, expire=100, client_id=None):
-        self.time_sent = datetime.utcnow().timestamp()
-        body = {
-            "symbol": symbol,
-            "ordType": "Limit",
-            "price": self.price,
-            "orderQty": self.amount_contracts,
-            "side": side.capitalize()
-        }
-        print(f'BITMEX BODY: {body}')
-        if client_id is not None:
-            body["clOrdID"] = client_id
+    async def create_fast_order(self, price: float, sz: float, side: str, market: str, client_id: str = None):
+        self.time_sent = time.time()
+        path = "/api/v1/order"
+        contract_value = self.get_contract_value(market)
+        body = {"symbol": market,
+                "ordType": "Limit",
+                "price": price,
+                "orderQty": int(sz * contract_value),
+                "side": side.capitalize()}
+        headers_body = '&'.join([x + '=' + str(y) for x, y in body.items()])
+        headers = self.__get_auth("POST", path, headers_body)
+        self.async_session.headers.update(headers)
+        async with self.async_session.post(url=self.BASE_URL + path, headers=headers, data=headers_body) as resp:
+            response = await resp.json()
+            exchange_order_id = response.get('orderID', 'default')
+            if client_id:
+                self.clients_ids.update({exchange_order_id: client_id})
+            print(f"BITMEX RES: {response}")
+            order_res = self.construct_order_res(response, market, exchange_order_id)
+            if client_id:
+                self.responses.update({client_id: order_res})
+                self.LAST_ORDER_ID = exchange_order_id
+            else:
+                self.responses.update({exchange_order_id: order_res})
 
-        res = await self._post("/api/v1/order", body, session)
-        print(f"BITMEX RES: {res}")
-        timestamp = 0000000000000
-        exchange_order_id = None
-        if res.get('errors'):
+    @try_exc_regular
+    def construct_order_res(self, response: dict, market: str, exchange_order_id: str) -> dict:
+        self.orig_sizes.update({exchange_order_id: response.get('homeNotional')})
+        status = self.get_order_response_status(response)
+        timestamp = self.timestamp_from_date(response['transactTime'])
+        return {'exchange_name': self.EXCHANGE_NAME,
+                'exchange_order_id': exchange_order_id,
+                'timestamp': timestamp,
+                'status': status,
+                'api_response': response,
+                'size': response['cumQty'] / self.instruments[market]['contract_value'],
+                'price': response.get('avgPx', 0),
+                'time_order_sent': self.time_sent,
+                'create_order_time': timestamp - self.time_sent}
+
+    @try_exc_regular
+    def get_order_response_status(self, response: dict) -> str:
+        if response.get('errors'):
             status = ResponseStatus.ERROR
-            self.error_info = res.get('errors')
-        elif res.get('ordStatus'):
-            timestamp = int(datetime.timestamp(datetime.strptime(res['transactTime'], '%Y-%m-%dT%H:%M:%S.%fZ')) * 1000)
+            self.error_info = response.get('errors')
+        elif response.get('ordStatus'):
             status = ResponseStatus.SUCCESS
-            self.LAST_ORDER_ID = res['orderID']
-            exchange_order_id = res['orderID']
         else:
             status = ResponseStatus.NO_CONNECTION
-            self.error_info = res
-        return {
-            'exchange_name': self.EXCHANGE_NAME,
-            'exchange_order_id': exchange_order_id,
-            'timestamp': timestamp,
-            'status': status
-        }
+            self.error_info = response
+        return status
 
-    @try_exc_async
-    async def _post(self, path, data, session):
-        headers_body = f"symbol={data['symbol']}&side={data['side']}&ordType=Limit&orderQty={data['orderQty']}&price={data['price']}"
-        headers = self.__get_auth("POST", path, headers_body)
-        headers.update(
-            {
-                "Content-Length": str(len(headers_body.encode('utf-8'))),
-                "Content-Type": "application/x-www-form-urlencoded"}
-        )
-        async with session.post(url=self.BASE_URL + path, headers=headers, data=headers_body) as resp:
-            return await resp.json()
+    # response_example = {'orderID': 'ca60fd7c-71ad-4fe9-95b3-1358a923f36d', 'clOrdID': '', 'clOrdLinkID': '',
+    #                     'account': 2127720, 'symbol': 'ETHUSDT', 'side': 'Buy', 'orderQty': 1000, 'price': 3151.08,
+    #                     'displayQty': None, 'stopPx': None, 'pegOffsetValue': None, 'pegPriceType': '',
+    #                     'currency': 'USDT', 'settlCurrency': 'USDt', 'ordType': 'Limit',
+    #                     'timeInForce': 'GoodTillCancel', 'execInst': '', 'contingencyType': '', 'ordStatus': 'New',
+    #                     'triggered': '', 'workingIndicator': True, 'ordRejReason': '', 'leavesQty': 1000, 'cumQty': 0,
+    #                     'avgPx': None, 'text': 'Submitted via API.', 'transactTime': '2024-02-28T12:55:19.104Z',
+    #                     'timestamp': '2024-02-28T12:55:19.104Z'}
 
     @try_exc_regular
-    def change_order(self, amount, price, id):
+    def change_order(self, amount: float, price: float, order_id: str):
         if amount:
-            self.swagger_client.Order.Order_amend(orderID=id, orderQty=amount, price=price).result()
+            self.swagger_client.Order.Order_amend(orderID=order_id, orderQty=amount, price=price).result()
         else:
-            self.swagger_client.Order.Order_amend(orderID=id, price=price).result()
+            self.swagger_client.Order.Order_amend(orderID=order_id, price=price).result()
 
     @try_exc_regular
     def cancel_all_orders(self):
         result = self.swagger_client.Order.Order_cancelAll().result()
         return result
-        # print('order', order)
-        # if not order['ordStatus'] in ['Canceled', 'Filled']:
-        #
-        #     print(self.swagger_client.Order.Order_cancel(orderID=order['orderID']).result())
-        #
-        #     print('\n\n\n\n\n')
 
     @try_exc_regular
-    def __get_auth(self, method, uri, body=''):
+    def __get_auth(self, method: str, uri: str, body: str = '') -> dict:
         """
         Return auth headers. Will use API Keys if present in settings.
         """
-        # To auth to the WS using an API key, we generate a signature of a nonce and
+        # To auth to the WS using an API key, we generate a signature of a nonce &
         # the WS API endpoint.
         expires = str(int(round(time.time()) + 100))
         return {
             "api-expires": expires,
             "api-signature": self.auth.generate_signature(self.api_secret, method, uri, expires, body),
             "api-key": self.api_key,
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Content-Length": str(len(body.encode('utf-8')))
         }
 
     @try_exc_regular
@@ -463,48 +570,29 @@ class BitmexClient(BaseClient):
         Generate a connection URL. We can define subscriptions right in the querystring.
         Most subscription topics are scoped by the symbol we're listening to.
         """
-        # Some subscriptions need to xhave the symbol appended.
+        # Some subscriptions need to have the symbol appended.
         url_parts = list(urllib.parse.urlparse(self.BASE_WS))
         url_parts[2] += "?subscribe={}".format(','.join(self.subscriptions))
-        return urllib.parse.urlunparse(url_parts)
+        actual_markets = [self.orderbook_type + ':' + y for x, y in self.markets.items() if x in self.markets_list]
+        url_parts[2] += ',' + ','.join(actual_markets)
+        final_url = urllib.parse.urlunparse(url_parts)
+        return final_url
 
     @try_exc_regular
-    def get_orders(self):
+    def get_orders(self) -> dict:
         # NECESSARY
         return self.orders
 
-    # def get_pnl(self):
-    #     positions = self.positions()
-    #     pnl = [x for x in positions if x['symbol'] == self.symbol]
-    #     pnl = None if not len(pnl) else pnl[0]
-    #     if not pnl:
-    #         return [0, 0, 0]
-    #     multiplier_power = 6 if pnl['currency'] == 'USDt' else 8
-    #     change = 1 if pnl['currency'] == 'USDt' else self.get_orderbook()['XBTUSD']['bids'][0][0]
-    #     realized_pnl = pnl['realisedPnl'] / 10 ** multiplier_power * change
-    #     unrealized_pnl = pnl['unrealisedPnl'] / 10 ** multiplier_power * change
-    #     return [realized_pnl + unrealized_pnl, pnl, realized_pnl]
-
     @try_exc_regular
-    def get_last_price(self, side, symbol):
-        side = side.capitalize()
-        # last_trades = self.recent_trades()
-        last_trades = self.data['execution']
-        last_price = 0
-        for trade in last_trades:
-            if trade['side'] == side and trade['symbol'] == symbol and trade.get('avgPx'):
-                last_price = trade['avgPx']
-        return last_price
-
-    @try_exc_regular
-    def get_real_balance(self):
+    def get_real_balance(self) -> None:
         transes = None
         while not transes:
             try:
                 transes = self.swagger_client.User.User_getWalletHistory(currency='USDt').result()
             except:
                 pass
-        real = transes[0][0]['marginBalance'] if transes[0][0]['marginBalance'] else transes[0][0]['walletBalance']
+        real = transes[0][0]['walletBalance'] if not transes[0][0].get('marginBalance') else transes[0][0][
+            'marginBalance']
         self.balance['total'] = (real / 10 ** 6)
         self.balance['timestamp'] = datetime.utcnow().timestamp()
 
@@ -513,7 +601,7 @@ class BitmexClient(BaseClient):
         return self.positions
 
     @try_exc_async
-    async def get_orderbook_by_symbol(self, symbol):
+    async def get_orderbook_by_symbol(self, symbol: str) -> dict:
         res = self.swagger_client.OrderBook.OrderBook_getL2(symbol=symbol).result()[0]
         contract_value = self.get_contract_value(symbol)
         orderbook = dict()
@@ -523,7 +611,7 @@ class BitmexClient(BaseClient):
         return orderbook
 
     @try_exc_regular
-    def get_available_balance(self):
+    def get_available_balance(self) -> dict:
         return super().get_available_balance(
             leverage=self.leverage,
             max_pos_part=self.max_pos_part,
@@ -531,8 +619,7 @@ class BitmexClient(BaseClient):
             balance=self.balance)
 
     @try_exc_regular
-    def get_position(self):
-        '''Get your positions.'''
+    def get_position(self) -> None:
         poses = self.swagger_client.Position.Position_get().result()[0]
         pos_bitmex = {x['symbol']: x for x in poses}
         all_poses = {}
@@ -549,8 +636,12 @@ class BitmexClient(BaseClient):
         self.positions = all_poses
 
     @try_exc_regular
-    def get_orderbook(self, symbol):
-        return self.orderbook[symbol]
+    def get_orderbook(self, market: str):
+        ob = self.orderbook.get(market)
+        if ob and ob['asks'][0][0] <= ob['bids'][0][0]:
+            print(f"\n\nALERT {self.EXCHANGE_NAME} ORDERBOOK IS BROKEN\n\n{ob}")
+            return None
+        return ob
 
     def get_contract_value(self, symbol):
         return self.instruments[symbol]['contract_value']
@@ -565,23 +656,21 @@ if __name__ == '__main__':
     config.read(sys.argv[1], "utf-8")
     client = BitmexClient(keys=config['BITMEX'],
                           leverage=float(config['SETTINGS']['LEVERAGE']),
-                          markets_list=['ETH', 'LINK', 'LTC', 'BCH', 'SOL', 'MINA', 'XRP', 'PEPE', 'CFX', 'FIL'])
+                          markets_list=['ETH', 'LINK', 'LTC', 'BCH', 'SOL', 'MINA', 'XRP', 'PEPE', 'CFX', 'FIL'],
+                          state='Bot')
     client.run_updater()
 
 
     async def test_order():
-        async with aiohttp.ClientSession() as session:
-            ob = client.get_orderbook('ETHUSDT')
-            # print(ob)
-            price = ob['bids'][5][0]
-            # # client.get_markets()
-            client.fit_sizes(0.0135235, price, 'ETHUSDT')
-            data = await client.create_order('ETHUSDT',
-                                             'buy',
-                                             session=session)
-            print(data)
-            data_cancel = client.cancel_all_orders()
-            print(data_cancel)
+        ob = client.get_orderbook('ETHUSDT')
+        # print(ob)
+        price = ob['bids'][5][0]
+        # # client.get_markets()
+        price, amount = client.fit_sizes(price, client.instruments['ETHUSDT']['min_size'], 'ETHUSDT')
+        data = await client.create_fast_order(price, amount, 'buy', 'ETHUSDT')
+        print(data)
+        data_cancel = client.cancel_all_orders()
+        print(type(data_cancel))
 
 
     time.sleep(3)
@@ -589,17 +678,16 @@ if __name__ == '__main__':
     # print(client.markets)
     #
     # client.get_real_balance()
-    asyncio.run(test_order())
+    # asyncio.run(test_order())
     # client.get_position()
     # print(client.positions)
     # print(client.get_balance())
     # print(client.orders)
     while True:
         # print(client.funds())
-        # print(client.get_orderbook())
+        # print(client.orderbook)
         # print('CYCLE DONE')
         # print(f"{client.get_available_balance('sell')=}")
         # print(f"{client.get_available_balance('buy')=}")
         # print("\n")
-        time.sleep(1)
-
+        time.sleep(5)

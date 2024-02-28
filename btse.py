@@ -15,6 +15,9 @@ import asyncio
 import string
 import uvloop
 import gc
+import socket
+import aiodns
+from aiohttp.resolver import AsyncResolver
 
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
@@ -102,7 +105,10 @@ class BtseClient(BaseClient):
     async def _run_order_loop(self, loop):
         # last_request = time.time()
         # request_pause = 1.02 / self.rate_limit_orders
-        async with aiohttp.ClientSession() as self.async_session:
+        # connector = aiohttp.TCPConnector(family=socket.AF_INET6)
+        resolver = AsyncResolver()
+        connector = aiohttp.TCPConnector(resolver=resolver, family=socket.AF_INET)
+        async with aiohttp.ClientSession(connector=connector) as self.async_session:
             self.async_session.headers.update(self.headers)
             loop.create_task(self.keep_alive_order())
             while True:
@@ -134,6 +140,66 @@ class BtseClient(BaseClient):
                     self.async_tasks.remove(task)
                 await asyncio.sleep(0.00001)
 
+    @try_exc_async
+    async def create_fast_order(self, price, sz, side, market, client_id=None, session=None):
+        time_start = time.time()
+        path = '/api/v2.1/order'
+        contract_value = self.instruments[market]['contract_value']
+        sz = int(sz / contract_value)
+        body = {"symbol": market,
+                "side": side.upper(),
+                'size': sz if sz else 1}
+        # if 'taker' in client_id:
+        #     body.update({"type": "MARKET"})
+        # else:
+        body.update({"price": price,
+                     'type': 'LIMIT'})
+        # if client_id:
+        #     body.update({'clOrderID': client_id})
+        # print(f"{self.EXCHANGE_NAME} SENDING ORDER: {body}")
+        self.get_private_headers(path, body)
+        async with self.async_session.post(url=self.BASE_URL + path, headers=self.session.headers, json=body) as resp:
+            try:
+                response = await resp.json()
+                self.pings.append(response[0]['timestamp'] / 1000 - time_start)
+                print(f"Attempts: {len(self.pings)}")
+                print(f"Create order time, s: {response[0]['timestamp'] / 1000 - time_start}")
+                print(f"Average create order time, ms: {sum(self.pings) / len(self.pings) * 1000}")
+                if not client_id or 'taker' in client_id:
+                    print(f"{self.EXCHANGE_NAME} ORDER CREATE RESPONSE: {response}")
+                    print(f"{self.EXCHANGE_NAME} ORDER CREATE PING: {response[0]['timestamp'] / 1000 - time_start}")
+            except Exception:
+                # if self.EXCHANGE_NAME != self.multibot.mm_exchange:
+                print(body)
+                traceback.print_exc()
+                print(resp, '\n\n')
+            if isinstance(response, list):
+                status = self.get_order_response_status(response)
+                self.orig_sizes.update({self.LAST_ORDER_ID: response[0].get('originalSize')})
+                order_res = {'exchange_name': self.EXCHANGE_NAME,
+                             'exchange_order_id': response[0].get('orderID', 'default'),
+                             'timestamp': response[0]['timestamp'] / 1000 if response[0].get(
+                                 'timestamp') else time.time(),
+                             'status': status,
+                             'api_response': response[0],
+                             'size': response[0]['fillSize'] * self.instruments[market]['contract_value'],
+                             'price': response[0]['avgFillPrice'],
+                             'time_order_sent': time_start,
+                             'create_order_time': response[0]['timestamp'] / 1000 - time_start}
+                if client_id:
+                    self.responses.update({client_id: order_res})
+                    self.LAST_ORDER_ID = response[0].get('orderID', 'default')
+                else:
+                    self.responses.update({response[0]['orderID']: order_res})
+            else:
+                print(response)
+            # res_example = [{'status': 2, 'symbol': 'BTCPFC', 'orderType': 76, 'price': 43490, 'side': 'BUY', 'size': 1,
+            #             'orderID': '13a82711-f6e2-4228-bf9f-3755cd8d7885', 'timestamp': 1703535543583,
+            #             'triggerPrice': 0, 'trigger': False, 'deviation': 100, 'stealth': 100, 'message': '',
+            #             'avgFillPrice': 0, 'fillSize': 0, 'clOrderID': '', 'originalSize': 1, 'postOnly': False,
+            #             'remainingSize': 1, 'orderDetailType': None, 'positionMode': 'ONE_WAY',
+            #             'positionDirection': None, 'positionId': 'BTCPFC-USD', 'time_in_force': 'GTC'}]
+
     @staticmethod
     @try_exc_regular
     def id_generator(size=6, chars=string.ascii_letters):
@@ -148,13 +214,12 @@ class BtseClient(BaseClient):
             await self.get_balance_async()
 #             market = self.markets[self.markets_list[random.randint(0, len(self.markets_list) - 1)]]
             market = 'BTCPFC'
-            price = self.get_orderbook(market)['asks'][0][0] * 1.001
+            price = self.get_orderbook(market)['asks'][0][0] * 0.95
             price, size = self.fit_sizes(price, self.instruments[market]['min_size'], market)
-            await self.create_fast_order(price, size, 'sell', market, 'keep-alive')
+            await self.create_fast_order(price, size, 'buy', market, 'keep-alive')
             resp = self.responses.get('keep-alive')
             ex_order_id = resp['exchange_order_id']
             await self.cancel_order(market, ex_order_id)
-
 
     @staticmethod
     @try_exc_regular
@@ -377,66 +442,6 @@ class BtseClient(BaseClient):
             #             'positionDirection': None, 'positionId': 'BTCPFC-USD', 'time_in_force': 'GTC'}]
 
     @try_exc_async
-    async def create_fast_order(self, price, sz, side, market, client_id=None, session=None):
-        time_start = time.time()
-        path = '/api/v2.1/order'
-        contract_value = self.instruments[market]['contract_value']
-        sz = int(sz / contract_value)
-        body = {"symbol": market,
-                "side": side.upper(),
-                'size': sz if sz else 1}
-        # if 'taker' in client_id:
-        #     body.update({"type": "MARKET"})
-        # else:
-        body.update({"price": price,
-                     'type': 'LIMIT'})
-        # if client_id:
-        #     body.update({'clOrderID': client_id})
-        # print(f"{self.EXCHANGE_NAME} SENDING ORDER: {body}")
-        self.get_private_headers(path, body)
-        async with self.async_session.post(url=self.BASE_URL + path, headers=self.session.headers, json=body) as resp:
-            try:
-                response = await resp.json()
-                self.pings.append(response[0]['timestamp'] / 1000 - time_start)
-                print(f"Attempts: {len(self.pings)}")
-                print(f"Create order time, s: {response[0]['timestamp'] / 1000 - time_start}")
-                print(f"Average create order time, ms: {sum(self.pings) / len(self.pings) * 1000}")
-                if not client_id or 'taker' in client_id:
-                    print(f"{self.EXCHANGE_NAME} ORDER CREATE RESPONSE: {response}")
-                    print(f"{self.EXCHANGE_NAME} ORDER CREATE PING: {response[0]['timestamp'] / 1000 - time_start}")
-            except Exception:
-                # if self.EXCHANGE_NAME != self.multibot.mm_exchange:
-                print(body)
-                traceback.print_exc()
-                print(resp, '\n\n')
-            if isinstance(response, list):
-                status = self.get_order_response_status(response)
-                self.orig_sizes.update({self.LAST_ORDER_ID: response[0].get('originalSize')})
-                order_res = {'exchange_name': self.EXCHANGE_NAME,
-                             'exchange_order_id': response[0].get('orderID', 'default'),
-                             'timestamp': response[0]['timestamp'] / 1000 if response[0].get(
-                                 'timestamp') else time.time(),
-                             'status': status,
-                             'api_response': response[0],
-                             'size': response[0]['fillSize'] * self.instruments[market]['contract_value'],
-                             'price': response[0]['avgFillPrice'],
-                             'time_order_sent': time_start,
-                             'create_order_time': response[0]['timestamp'] / 1000 - time_start}
-                if client_id:
-                    self.responses.update({client_id: order_res})
-                    self.LAST_ORDER_ID = response[0].get('orderID', 'default')
-                else:
-                    self.responses.update({response[0]['orderID']: order_res})
-            else:
-                print(response)
-            # res_example = [{'status': 2, 'symbol': 'BTCPFC', 'orderType': 76, 'price': 43490, 'side': 'BUY', 'size': 1,
-            #             'orderID': '13a82711-f6e2-4228-bf9f-3755cd8d7885', 'timestamp': 1703535543583,
-            #             'triggerPrice': 0, 'trigger': False, 'deviation': 100, 'stealth': 100, 'message': '',
-            #             'avgFillPrice': 0, 'fillSize': 0, 'clOrderID': '', 'originalSize': 1, 'postOnly': False,
-            #             'remainingSize': 1, 'orderDetailType': None, 'positionMode': 'ONE_WAY',
-            #             'positionDirection': None, 'positionId': 'BTCPFC-USD', 'time_in_force': 'GTC'}]
-
-    @try_exc_async
     async def create_order(self, symbol, side, price, size, session, expire=10000, client_id=None, expiration=None):
         path = '/api/v2.1/order'
         contract_value = self.instruments[symbol]['contract_value']
@@ -550,9 +555,6 @@ class BtseClient(BaseClient):
                     await loop.create_task(self.subscribe_orderbooks())
                 loop.create_task(self._ping(ws))
                 async for msg in ws:
-                    if self.stop_all:
-                        await asyncio.sleep(0.0015)
-                        self.stop_all = False
                     await self.process_ws_msg(msg)
             await ws.close()
 
@@ -783,10 +785,10 @@ class BtseClient(BaseClient):
     async def upd_ob(self, data):
         ts_ms = time.time()
         ts_ob = data['data']['timestamp']
-        if isinstance(ts_ob, int):
-            ts_ob = ts_ob / 1000
+        # if isinstance(ts_ob, int):
+        #     ts_ob = ts_ob / 1000
         # print(ts_ms - ts_ob)
-        # flag_market = False
+        # return
         side = None
         symbol = data['data']['symbol']
         new_ob = self.orderbook[symbol].copy()
