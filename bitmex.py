@@ -122,12 +122,12 @@ class BitmexClient(BaseClient):
     @try_exc_async
     async def keep_alive_order(self):
         while True:
-            market = 'ETHUSDT'
+            market = self.markets[self.markets_list[0]]
             price = self.get_orderbook(market)['asks'][0][0] * 0.95
             price, size = self.fit_sizes(price, self.instruments[market]['min_size'], market)
             await self.create_fast_order(price, size, 'buy', market, 'keep-alive')
             self.cancel_all_orders()
-            await asyncio.sleep(3)
+            await asyncio.sleep(70)
 
     @try_exc_regular
     def get_markets(self) -> dict:
@@ -371,10 +371,6 @@ class BitmexClient(BaseClient):
                                                             'unrealized_pnl_usd': 0,
                                                             'realized_pnl_usd': 0,
                                                             'lever': self.leverage}})
-
-    def create_order(self, price: float, side: str,
-                     session: aiohttp.ClientSession, expire: int = 100, client_ID: str = None) -> dict:
-        pass
 
     @try_exc_regular
     def update_orderbook(self, data: dict) -> None:
