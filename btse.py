@@ -200,6 +200,7 @@ class BtseClient(BaseClient):
             #             'remainingSize': 1, 'orderDetailType': None, 'positionMode': 'ONE_WAY',
             #             'positionDirection': None, 'positionId': 'BTCPFC-USD', 'time_in_force': 'GTC'}]
 
+
     @staticmethod
     @try_exc_regular
     def id_generator(size=6, chars=string.ascii_letters):
@@ -440,6 +441,7 @@ class BtseClient(BaseClient):
             #             'avgFillPrice': 0, 'fillSize': 0, 'clOrderID': '', 'originalSize': 1, 'postOnly': False,
             #             'remainingSize': 1, 'orderDetailType': None, 'positionMode': 'ONE_WAY',
             #             'positionDirection': None, 'positionId': 'BTCPFC-USD', 'time_in_force': 'GTC'}]
+
 
     @try_exc_async
     async def create_order(self, symbol, side, price, size, session, expire=10000, client_id=None, expiration=None):

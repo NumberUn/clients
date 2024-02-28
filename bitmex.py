@@ -646,6 +646,54 @@ class BitmexClient(BaseClient):
     def get_contract_value(self, symbol):
         return self.instruments[symbol]['contract_value']
 
+    @try_exc_async
+    async def create_order(self, symbol, side, session, expire=100, client_id=None):
+        self.time_sent = datetime.utcnow().timestamp()
+        body = {
+            "symbol": symbol,
+            "ordType": "Limit",
+            "price": self.price,
+            "orderQty": self.amount_contracts,
+            "side": side.capitalize()
+        }
+        print(f'BITMEX BODY: {body}')
+        if client_id is not None:
+            body["clOrdID"] = client_id
+
+        res = await self._post("/api/v1/order", body, session)
+        print(f"BITMEX RES: {res}")
+        timestamp = 0000000000000
+        exchange_order_id = None
+        if res.get('errors'):
+            status = ResponseStatus.ERROR
+            self.error_info = res.get('errors')
+        elif res.get('ordStatus'):
+            timestamp = int(datetime.timestamp(datetime.strptime(res['transactTime'], '%Y-%m-%dT%H:%M:%S.%fZ')) * 1000)
+            status = ResponseStatus.SUCCESS
+            self.LAST_ORDER_ID = res['orderID']
+            exchange_order_id = res['orderID']
+        else:
+            status = ResponseStatus.NO_CONNECTION
+            self.error_info = res
+        return {
+            'exchange_name': self.EXCHANGE_NAME,
+            'exchange_order_id': exchange_order_id,
+            'timestamp': timestamp,
+            'status': status
+        }
+
+    @try_exc_async
+    async def _post(self, path, data, session):
+        headers_body = f"symbol={data['symbol']}&side={data['side']}&ordType=Limit&orderQty={data['orderQty']}&price={data['price']}"
+        headers = self.__get_auth("POST", path, headers_body)
+        headers.update(
+            {
+                "Content-Length": str(len(headers_body.encode('utf-8'))),
+                "Content-Type": "application/x-www-form-urlencoded"}
+        )
+        async with session.post(url=self.BASE_URL + path, headers=headers, data=headers_body) as resp:
+            return await resp.json()
+
 
 if __name__ == '__main__':
     import configparser
