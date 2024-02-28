@@ -212,9 +212,16 @@ class BitmexClient(BaseClient):
         async with aiohttp.ClientSession(headers=self.__get_auth('GET', '/realtime')) as s:
             async with s.ws_connect(self.__get_url()) as ws:
                 print("Bitmex: connected")
+                loop.create_task(self._ping(ws))
                 async for msg in ws:
                     await self._process_msg(msg)
                 await ws.close()
+
+    @try_exc_async
+    async def _ping(self, ws):
+        while True:
+            await asyncio.sleep(25)  # Adjust the ping interval as needed
+            await ws.ping()
 
     @staticmethod
     @try_exc_regular
