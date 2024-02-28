@@ -177,7 +177,7 @@ class OkxClient(BaseClient):
                          "tdMode": "cross",
                          "sz": int(size * contract_value),
                          "ordType": 'limit',
-                         "px": price}]}
+                         "px": str(price)}]}
         # if 'taker' in client_id:
         #     msg['args'][0].update({"ordType": 'market'})
         # else:
