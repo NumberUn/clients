@@ -303,14 +303,14 @@ class BitmexClient(BaseClient):
         res = self.swagger_client.Order.Order_getOrders(filter=json.dumps({'orderID': order_id})).result()[0][0]
         contract_value = self.get_contract_value(symbol)
         real_size = res['cumQty'] / contract_value
-        real_price = res.get('avgPx', 0)
+        real_price = res.get('avgPx')
         return {
             'exchange_order_id': order_id,
             'exchange_name': self.EXCHANGE_NAME,
             'status': OrderStatus.FULLY_EXECUTED if res.get('ordStatus') == 'Filled' else OrderStatus.NOT_EXECUTED,
             'factual_price': real_price,
             'factual_amount_coin': real_size,
-            'factual_amount_usd': real_price * real_size,
+            'factual_amount_usd': real_price * real_size if real_price else 0,
             'datetime_update': datetime.utcnow(),
             'ts_update': int(datetime.utcnow().timestamp() * 1000)
         }
