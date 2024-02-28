@@ -12,7 +12,7 @@ from clients.btse import BtseClient
 from clients.whitebit import WhiteBitClient
 
 ALL_CLIENTS = {
-    # 'BITMEX': BitmexClient,
+    'BITMEX': BitmexClient,
     # 'DYDX': DydxClient,
     # 'BINANCE': BinanceClient,
     # 'APOLLOX': ApolloxClient,
