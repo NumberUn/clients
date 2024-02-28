@@ -651,13 +651,13 @@ class BitmexClient(BaseClient):
         return self.instruments[symbol]['contract_value']
 
     @try_exc_async
-    async def create_order(self, symbol, side, session, expire=100, client_id=None):
-        self.time_sent = datetime.utcnow().timestamp()
+    async def create_order(self, symbol, side, price, size, session, expire=10000, client_id=None, expiration=None):
+        contract_value = self.get_contract_value(symbol)
         body = {
             "symbol": symbol,
             "ordType": "Limit",
-            "price": self.price,
-            "orderQty": self.amount_contracts,
+            "price": price,
+            "orderQty": int(size * contract_value),
             "side": side.capitalize()
         }
         print(f'BITMEX BODY: {body}')
