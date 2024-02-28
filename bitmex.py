@@ -317,7 +317,7 @@ class BitmexClient(BaseClient):
 
     @try_exc_regular
     def get_order_result(self, order: dict) -> dict:
-        factual_price = order.get('avgPx', 0)
+        factual_price = order.get('avgPx') if order.get('avgPx') else 0
         factual_size_coin = abs(order.get('homeNotional', 0))
         factual_size_usd = abs(order.get('foreignNotional', 0))
         status = self.get_order_status(order)
