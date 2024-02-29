@@ -23,9 +23,9 @@ asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
 
 class BtseClient(BaseClient):
-    PUBLIC_WS_ENDPOINT = 'wss://ws.btse.com/ws/oss/futures'
-    PRIVATE_WS_ENDPOINT = 'wss://ws.btse.com/ws/futures'
-    BASE_URL = f"https://api.btse.com/futures"
+    PUBLIC_WS_ENDPOINT = 'wss://colows.btse.com/ws/oss/futures'
+    PRIVATE_WS_ENDPOINT = 'wss://colows.btse.com/ws/futures'
+    BASE_URL = f"https://coloapi.btse.com/futures"
     EXCHANGE_NAME = 'BTSE'
     headers = {"Accept": "application/json;charset=UTF-8",
                "Content-Type": "application/json",
@@ -441,7 +441,6 @@ class BtseClient(BaseClient):
             #             'avgFillPrice': 0, 'fillSize': 0, 'clOrderID': '', 'originalSize': 1, 'postOnly': False,
             #             'remainingSize': 1, 'orderDetailType': None, 'positionMode': 'ONE_WAY',
             #             'positionDirection': None, 'positionId': 'BTCPFC-USD', 'time_in_force': 'GTC'}]
-
 
     @try_exc_async
     async def create_order(self, symbol, side, price, size, session, expire=10000, client_id=None, expiration=None):
