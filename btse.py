@@ -789,9 +789,7 @@ class BtseClient(BaseClient):
     @try_exc_async
     async def upd_ob(self, data):
         ts_ms = time.time()
-        ts_ob = data['data']['timestamp']
-        # if isinstance(ts_ob, int):
-        #     ts_ob = ts_ob / 1000
+        ts_ob = data['data']['timestamp'] / 1000
         # print(ts_ms - ts_ob)
         # return
         side = None

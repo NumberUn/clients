@@ -399,7 +399,7 @@ class BitmexClient(BaseClient):
                     if side:
                         coin = market.split('USDT')[0]
                         if self.state == 'Bot' and ts_ms - ts_ob < self.top_ws_ping:
-                            await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, self.multibot.run_arbitrage)
+                            await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, 'ob')
                     # #     else:
 
     @try_exc_async
