@@ -70,7 +70,7 @@ class WhiteBitClient(BaseClient):
         self.requests_counter = 0
         self.total_requests = 0
         self.total_start_time = time.time()
-        self.top_ws_ping = 0.02
+        self.top_ws_ping = 0.03
         self.stop_all = False
         self.cancel_all_orders()
 

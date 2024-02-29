@@ -78,6 +78,7 @@ class BitmexClient(BaseClient):
         self.async_tasks = []
         self.orig_sizes = {}
         self.clients_ids = {}
+        self.top_ws_ping = 0.01
         if multibot:
             self.cancel_all_orders()
 
@@ -378,27 +379,27 @@ class BitmexClient(BaseClient):
     async def update_orderbook(self, data: dict) -> None:
         for ob in data:
             if market := ob.get('symbol'):
-                # side = None
+                side = None
                 if self.instruments.get(market) and market.split('USD')[0] in self.markets_list:
                     ts_ob = self.timestamp_from_date(ob['timestamp'])
                     ts_ms = time.time()
+                    print(ts_ms - ts_ob)
+                    return
                     ob.update({'timestamp': ts_ob, 'ts_ms': ts_ms})
                     contract_value = self.get_contract_value(market)
                     ob['bids'] = [[x[0], x[1] / contract_value] for x in ob['bids']]
                     ob['asks'] = [[x[0], x[1] / contract_value] for x in ob['asks']]
+                    if self.finder:
+                        last_ob = self.get_orderbook(market).copy()
+                        if ob['asks'][0][0] > last_ob['asks'][0][0]:
+                            side = 'buy'
+                        elif ob['bids'][0][0] < last_ob['bids'][0][0]:
+                            side = 'sell'
                     self.orderbook.update({market: ob})
-                    # if self.finder and new_ob['asks']:
-                    #     last_ob = self.get_orderbook(market).copy()
-                    #     if_new_top_ask = new_ob['asks'][0][0] > self.orderbook[market]['asks'][0][0]
-                    #     side = 'buy'
-                    # if self.finder and new_ob['bids']:
-                    #     last_ob = self.get_orderbook(market).copy()
-                    #     if_new_top_bid = new_ob['bids'][0][0] < self.orderbook[market]['bids'][0][0]
-                    #     side = 'sell'
-                    # if side:
-                    # #     coin = market.split('USDT')[0]
-                    # #     if self.state == 'Bot':
-                    # #         await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, self.multibot.run_arbitrage)
+                    if side:
+                        coin = market.split('USDT')[0]
+                        if self.state == 'Bot' and ts_ms - ts_ob < self.top_ws_ping:
+                            await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, self.multibot.run_arbitrage)
                     # #     else:
 
     @try_exc_async
