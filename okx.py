@@ -22,8 +22,8 @@ asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
 
 class OkxClient(BaseClient):
-    WS_PBL = "wss://wsaws.okx.com:8443/ws/v5/public"
-    WS_PRV = "wss://wsaws.okx.com:8443/ws/v5/private"
+    WS_PBL = "wss://ws.okx.com:8443/ws/v5/public"
+    WS_PRV = "wss://ws.okx.com:8443/ws/v5/private"
     BASE_URL = 'https://www.okx.com'
     headers = {'Content-Type': 'application/json'}
     EXCHANGE_NAME = 'OKX'
