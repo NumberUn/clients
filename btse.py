@@ -23,9 +23,9 @@ asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
 
 class BtseClient(BaseClient):
-    PUBLIC_WS_ENDPOINT = 'wss://colows.btse.com/ws/oss/futures'
-    PRIVATE_WS_ENDPOINT = 'wss://colows.btse.com/ws/futures'
-    BASE_URL = f"https://coloapi.btse.com/futures"
+    PUBLIC_WS_ENDPOINT = 'wss://ws.btse.com/ws/oss/futures'
+    PRIVATE_WS_ENDPOINT = 'wss://ws.btse.com/ws/futures'
+    BASE_URL = f"https://api.btse.com/futures"
     EXCHANGE_NAME = 'BTSE'
     headers = {"Accept": "application/json;charset=UTF-8",
                "Content-Type": "application/json",
@@ -47,6 +47,10 @@ class BtseClient(BaseClient):
         super().__init__()
         self.market_finder = market_finder
         self.multibot = multibot
+        if self.multibot and 'TAIWAN' in self.multibot.env:
+            self.PUBLIC_WS_ENDPOINT = 'wss://colows.btse.com/ws/oss/futures'
+            self.PRIVATE_WS_ENDPOINT = 'wss://colows.btse.com/ws/futures'
+            self.BASE_URL = f"https://coloapi.btse.com/futures"
         self.state = state
         self.finder = finder
         self.max_pos_part = max_pos_part

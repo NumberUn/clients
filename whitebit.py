@@ -70,7 +70,7 @@ class WhiteBitClient(BaseClient):
         self.requests_counter = 0
         self.total_requests = 0
         self.total_start_time = time.time()
-        self.top_ws_ping = 0.06
+        self.top_ws_ping = 0.02
         self.stop_all = False
         self.cancel_all_orders()
 
@@ -423,10 +423,10 @@ class WhiteBitClient(BaseClient):
                         await loop.create_task(self.subscribe_orderbooks(market))
                 loop.create_task(self._ping(ws))
                 async for msg in ws:
-                    if self.stop_all:
-                        await asyncio.sleep(0.0015)
-                        self.stop_all = False
-                    await self.process_ws_msg(msg)
+                    # if self.stop_all:
+                    #     await asyncio.sleep(0.0015)
+                    #     self.stop_all = False
+                    loop.create_task(self.process_ws_msg(msg))
                 await ws.close()
 
     @try_exc_async
@@ -744,6 +744,8 @@ class WhiteBitClient(BaseClient):
         ts_ms = time.time()
         ts_ob = data['params'][1]['timestamp']
         # print(ts_ms - ts_ob)
+        # print(ts_ob)
+        # print()
         # return
         # flag_market = False
         symbol = data['params'][2]
