@@ -383,8 +383,8 @@ class BitmexClient(BaseClient):
                 if self.instruments.get(market) and market.split('USD')[0] in self.markets_list:
                     ts_ob = self.timestamp_from_date(ob['timestamp'])
                     ts_ms = time.time()
-                    print(ts_ms - ts_ob)
-                    return
+                    # print(ts_ms - ts_ob)
+                    # return
                     ob.update({'timestamp': ts_ob, 'ts_ms': ts_ms})
                     contract_value = self.get_contract_value(market)
                     ob['bids'] = [[x[0], x[1] / contract_value] for x in ob['bids']]
