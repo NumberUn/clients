@@ -214,7 +214,7 @@ class BitmexClient(BaseClient):
                 loop.create_task(self._ping(ws))
                 print("Bitmex: connected")
                 async for msg in ws:
-                    await self._process_msg(msg)
+                    loop.create_task(self._process_msg(msg))
                 await ws.close()
 
     @try_exc_async
@@ -350,18 +350,17 @@ class BitmexClient(BaseClient):
             if message.get('subscribe'):
                 print(message)
             if message.get("action"):
-                # print(message)
                 if message['table'] == 'execution':
-                    self.update_fills(message['data'])
+                    await self.update_fills(message['data'])
                 elif message['table'] == self.orderbook_type:
-                    self.update_orderbook(message['data'])
+                    await self.update_orderbook(message['data'])
                 elif message['table'] == 'position':
-                    self.update_positions(message['data'])
+                    await self.update_positions(message['data'])
                 elif message['table'] == 'margin':
-                    self.update_balance(message['data'])
+                    await self.update_balance(message['data'])
 
-    @try_exc_regular
-    def update_positions(self, data: dict) -> None:
+    @try_exc_async
+    async def update_positions(self, data: dict) -> None:
         for position in data:
             if position.get('foreignNotional'):
                 side = 'SHORT' if position['foreignNotional'] > 0 else 'LONG'
@@ -375,16 +374,14 @@ class BitmexClient(BaseClient):
                                                             'realized_pnl_usd': 0,
                                                             'lever': self.leverage}})
 
-    @try_exc_regular
-    def update_orderbook(self, data: dict) -> None:
+    @try_exc_async
+    async def update_orderbook(self, data: dict) -> None:
         for ob in data:
             if market := ob.get('symbol'):
                 # side = None
                 if self.instruments.get(market) and market.split('USD')[0] in self.markets_list:
                     ts_ob = self.timestamp_from_date(ob['timestamp'])
                     ts_ms = time.time()
-                    # print(f"OB UPD TIME, s: {ts_ms - ts_ob}")
-                    # return
                     ob.update({'timestamp': ts_ob, 'ts_ms': ts_ms})
                     contract_value = self.get_contract_value(market)
                     ob['bids'] = [[x[0], x[1] / contract_value] for x in ob['bids']]
@@ -404,8 +401,8 @@ class BitmexClient(BaseClient):
                     # #         await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, self.multibot.run_arbitrage)
                     # #     else:
 
-    @try_exc_regular
-    def update_fills(self, data: dict) -> None:
+    @try_exc_async
+    async def update_fills(self, data: dict) -> None:
         # print(f"Fills data: {data}")
         for order in data:
             if order['ordStatus'] == 'New':
@@ -425,8 +422,8 @@ class BitmexClient(BaseClient):
         #             'cumQty': 0, 'text': 'Submitted via API.', 'transactTime': '2024-02-28T13:09:40.041Z',
         #             'timestamp': '2024-02-28T13:09:40.041Z'}]
 
-    @try_exc_regular
-    def update_balance(self, data: dict) -> None:
+    @try_exc_async
+    async def update_balance(self, data: dict) -> None:
         for balance in data:
             if balance['currency'] == 'USDt' and balance.get('marginBalance'):
                 self.balance = {'free': balance.get('availableMargin', 0) / (10 ** 6),
