@@ -22,8 +22,8 @@ asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
 
 class OkxClient(BaseClient):
-    WS_PBL = "wss://ws.okx.com:8443/ws/v5/public"
-    WS_PRV = "wss://ws.okx.com:8443/ws/v5/private"
+    WS_PBL = "wss://wsaws.okx.com:8443/ws/v5/public"
+    WS_PRV = "wss://wsaws.okx.com:8443/ws/v5/private"
     BASE_URL = 'https://www.okx.com'
     headers = {'Content-Type': 'application/json'}
     EXCHANGE_NAME = 'OKX'
@@ -383,8 +383,8 @@ class OkxClient(BaseClient):
         orderbook = obj['data'][0]
         ts_ms = time.time()
         ts_ob = float(orderbook['ts']) / 1000
-        # print(f"OB UPD PING: {ts_ms - ts_ob}")
-        # return
+        print(f"OB UPD PING: {ts_ms - ts_ob}")
+        return
         market = obj['arg']['instId']
         side = None
         top_ask = self.orderbook.get(market, {}).get('asks', [[None, None]])[0][0]
@@ -840,7 +840,7 @@ if __name__ == '__main__':
                        leverage=float(config['SETTINGS']['LEVERAGE']),
                        max_pos_part=int(config['SETTINGS']['PERCENT_PER_MARKET']),
                        markets_list=['ETH', 'BTC', 'LTC', 'BCH', 'SOL', 'MINA', 'XRP', 'PEPE', 'CFX', 'FIL'])
-
+    client.markets_list = [x for x in client.markets.keys()]
     client.run_updater()
 
     # time.sleep(3)
