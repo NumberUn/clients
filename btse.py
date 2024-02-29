@@ -89,6 +89,7 @@ class BtseClient(BaseClient):
         self.pipes = dict()
         self.pings = []
         self.cancel_pings = []
+        self.orderbook_broken = False
         if multibot:
             self.cancel_all_orders()
 
@@ -561,6 +562,10 @@ class BtseClient(BaseClient):
                 loop.create_task(self._ping(ws))
                 async for msg in ws:
                     await self.process_ws_msg(msg)
+                    if self.orderbook_broken:
+                        await ws.close()
+                        self.orderbook_broken = False
+                        return
             await ws.close()
 
     @try_exc_async
@@ -855,6 +860,7 @@ class BtseClient(BaseClient):
             return snap
         if snap['top_ask'][0] <= snap['top_bid'][0]:
             print(f"ALARM! ORDERBOOK ERROR {self.EXCHANGE_NAME}: {snap}")
+            self.orderbook_broken = True
             return {}
         c_v = self.instruments[symbol]['contract_value']
         ob = {'timestamp': snap['timestamp'],

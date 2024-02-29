@@ -497,7 +497,8 @@ class BitmexClient(BaseClient):
             exchange_order_id = response.get('orderID', 'default')
             if client_id:
                 self.clients_ids.update({exchange_order_id: client_id})
-            print(f"BITMEX RES: {response}")
+            if not client_id or 'taker' in client_id:
+                print(f"BITMEX RES: {response}")
             order_res = self.construct_order_res(response, market, exchange_order_id)
             if client_id:
                 self.responses.update({client_id: order_res})
