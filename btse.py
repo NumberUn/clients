@@ -561,11 +561,10 @@ class BtseClient(BaseClient):
                     await loop.create_task(self.subscribe_orderbooks())
                 loop.create_task(self._ping(ws))
                 async for msg in ws:
-                    await self.process_ws_msg(msg)
+                    loop.create_task(self.process_ws_msg(msg))
                     if self.orderbook_broken:
-                        await ws.close()
                         self.orderbook_broken = False
-                        return
+                        break
             await ws.close()
 
     @try_exc_async
