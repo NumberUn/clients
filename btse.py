@@ -161,10 +161,10 @@ class BtseClient(BaseClient):
         async with self.async_session.post(url=self.BASE_URL + path, headers=self.session.headers, json=body) as resp:
             try:
                 response = await resp.json()
-                self.pings.append(response[0]['timestamp'] / 1000 - time_start)
-                print(f"Attempts: {len(self.pings)}")
-                print(f"Create order time, s: {response[0]['timestamp'] / 1000 - time_start}")
-                print(f"Average create order time, ms: {sum(self.pings) / len(self.pings) * 1000}")
+                # self.pings.append(response[0]['timestamp'] / 1000 - time_start)
+                # print(f"Attempts: {len(self.pings)}")
+                # print(f"Create order time, s: {response[0]['timestamp'] / 1000 - time_start}")
+                # print(f"Average create order time, ms: {sum(self.pings) / len(self.pings) * 1000}")
                 if not client_id or 'taker' in client_id:
                     print(f"{self.EXCHANGE_NAME} ORDER CREATE RESPONSE: {response}")
                     print(f"{self.EXCHANGE_NAME} ORDER CREATE PING: {response[0]['timestamp'] / 1000 - time_start}")
