@@ -389,7 +389,7 @@ class BitmexClient(BaseClient):
                     contract_value = self.get_contract_value(market)
                     ob['bids'] = [[x[0], x[1] / contract_value] for x in ob['bids']]
                     ob['asks'] = [[x[0], x[1] / contract_value] for x in ob['asks']]
-                    if self.finder:
+                    if self.finder and self.orderbook.get(market):
                         last_ob = self.get_orderbook(market).copy()
                         if ob['asks'][0][0] > last_ob['asks'][0][0]:
                             side = 'buy'
