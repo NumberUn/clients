@@ -127,7 +127,12 @@ class BitmexClient(BaseClient):
             price = self.get_orderbook(market)['asks'][0][0] * 0.95
             price, size = self.fit_sizes(price, self.instruments[market]['min_size'], market)
             await self.create_fast_order(price, size, 'buy', market, 'keep-alive')
-            self.cancel_all_orders()
+            order_data = self.responses.get('keep-alive')
+            if order_data:
+                await self.cancel_order(order_data['exchange_order_id'])
+                self.responses.__delitem__('keep-alive')
+            else:
+                self.cancel_all_orders()
             await asyncio.sleep(70)
 
     @try_exc_regular
@@ -552,6 +557,12 @@ class BitmexClient(BaseClient):
     @try_exc_regular
     def cancel_all_orders(self):
         result = self.swagger_client.Order.Order_cancelAll().result()
+        return result
+
+    @try_exc_async
+    async def cancel_order(self, order_id: str):
+        result = self.swagger_client.Order.Order_cancel(orderID=order_id).result()
+        # print(result)
         return result
 
     @try_exc_regular
