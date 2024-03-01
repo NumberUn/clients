@@ -411,14 +411,14 @@ class BitmexClient(BaseClient):
     async def update_fills(self, data: dict) -> None:
         # print(f"Fills data: {data}")
         for order in data:
-            # if order['ordStatus'] == 'New':
-            result = self.get_order_result(order)
-            self.orders.update({order['orderID']: result})
-            if client_id := self.clients_ids.get(order['orderID']):
-                if self.responses.get(client_id):
-                    self.responses[client_id].update(result)
-                else:
-                    self.responses.update({client_id: result})
+            if order['ordStatus'] != 'New':
+                result = self.get_order_result(order)
+                self.orders.update({order['orderID']: result})
+                if client_id := self.clients_ids.get(order['orderID']):
+                    if self.responses.get(client_id):
+                        self.responses[client_id].update(result)
+                    else:
+                        self.responses.update({client_id: result})
         # example_blank = [{'execID': '00000000-006d-1000-0000-000509ada326', 'orderID': 'ef99ee87-f7c1-405e-873c-cf1513595c5a',
         #             'account': 2127720, 'symbol': 'ETHUSDT', 'side': 'Buy', 'orderQty': 1000, 'price': 3171.73,
         #             'currency': 'USDT', 'settlCurrency': 'USDt', 'execType': 'New', 'ordType': 'Limit',
