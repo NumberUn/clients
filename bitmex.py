@@ -272,7 +272,7 @@ class BitmexClient(BaseClient):
                 status = OrderStatus.NOT_EXECUTED
             real_size = res['cumQty'] / contract_value
             expect_size = res['orderQty'] / contract_value
-            real_price = res.get('avgPx') if res.get('avgPx') else 0
+            real_price = res.get('avgPx') if isinstance(res.get('avgPx'), float) else 0
             expect_price = res.get('price', 0)
             orders.append(
                 {
@@ -309,23 +309,24 @@ class BitmexClient(BaseClient):
         res = self.swagger_client.Order.Order_getOrders(filter=json.dumps({'orderID': order_id})).result()[0][0]
         contract_value = self.get_contract_value(symbol)
         real_size = res['cumQty'] / contract_value
-        real_price = res.get('avgPx') if res.get('avgPx') else 0
+        real_price = res.get('avgPx') if isinstance(res.get('avgPx'), float) else 0
         return {
             'exchange_order_id': order_id,
             'exchange_name': self.EXCHANGE_NAME,
             'status': OrderStatus.FULLY_EXECUTED if res.get('ordStatus') == 'Filled' else OrderStatus.NOT_EXECUTED,
             'factual_price': real_price,
             'factual_amount_coin': real_size,
-            'factual_amount_usd': real_price * real_size if real_price else 0,
+            'factual_amount_usd': real_price * real_size,
             'datetime_update': datetime.utcnow(),
             'ts_update': int(datetime.utcnow().timestamp() * 1000)
         }
 
     @try_exc_regular
     def get_order_result(self, order: dict) -> dict:
-        factual_price = order.get('avgPx') if order.get('avgPx') else 0
-        factual_size_coin = abs(order.get('homeNotional', 0))
-        factual_size_usd = abs(order.get('foreignNotional', 0))
+        factual_price = order.get('avgPx') if isinstance(order.get('avgPx'), float) else 0
+        contract_value = self.get_contract_value(order['symbol'])
+        factual_size_coin = order['cumQty'] / contract_value
+        factual_size_usd = factual_size_coin * factual_price
         if factual_size_coin and self.multibot:
             loop = asyncio.get_event_loop()
             loop.create_task(self.multibot.update_all_av_balances())
