@@ -133,7 +133,7 @@ class BitmexClient(BaseClient):
                 self.responses.__delitem__('keep-alive')
             else:
                 self.cancel_all_orders()
-            await asyncio.sleep(70)
+            await asyncio.sleep(15)
 
     @try_exc_regular
     def get_markets(self) -> dict:
