@@ -411,9 +411,7 @@ class BitmexClient(BaseClient):
     async def update_fills(self, data: dict) -> None:
         # print(f"Fills data: {data}")
         for order in data:
-            if order['ordStatus'] == 'New':
-                timestamp = self.timestamp_from_date(order['transactTime'])
-                print(f'BITMEX ORDER PLACE TIME: {timestamp - self.time_sent} sec')
+            # if order['ordStatus'] == 'New':
             result = self.get_order_result(order)
             self.orders.update({order['orderID']: result})
             if client_id := self.clients_ids.get(order['orderID']):
@@ -503,7 +501,9 @@ class BitmexClient(BaseClient):
             if client_id:
                 self.clients_ids.update({exchange_order_id: client_id})
             if not client_id or 'taker' in client_id:
-                print(f"BITMEX RES: {response}")
+                print(f"{self.EXCHANGE_NAME} RES: {response}")
+                timestamp = self.timestamp_from_date(response['transactTime'])
+                print(f'{self.EXCHANGE_NAME} ORDER PLACE TIME: {timestamp - self.time_sent} sec')
             order_res = self.construct_order_res(response, market, exchange_order_id)
             if client_id:
                 self.responses.update({client_id: order_res})
