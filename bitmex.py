@@ -523,7 +523,7 @@ class BitmexClient(BaseClient):
                 'status': status,
                 'api_response': response,
                 'size': response['cumQty'] / self.instruments[market]['contract_value'],
-                'price': response.get('avgPx', 0),
+                'price': response.get('avgPx') if isinstance(response.get('avgPx'), float) else 0,
                 'time_order_sent': self.time_sent,
                 'create_order_time': timestamp - self.time_sent}
 
