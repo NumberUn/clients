@@ -465,7 +465,7 @@ class BtseClient(BaseClient):
                 self.orig_sizes.update({self.LAST_ORDER_ID: res[0].get('originalSize')})
                 return {'exchange_name': self.EXCHANGE_NAME,
                         'exchange_order_id': self.LAST_ORDER_ID,
-                        'timestamp': res[0]['timestamp'] / 1000 if res[0].get('timestamp') else time.time(),
+                        'timestamp': res[0]['timestamp'] if res[0].get('timestamp') else int(time.time() * 1000),
                         'status': status}
 
     @try_exc_regular

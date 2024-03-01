@@ -620,7 +620,7 @@ class WhiteBitClient(BaseClient):
             self.LAST_ORDER_ID = response.get('orderId', 'default')
             return {'exchange_name': self.EXCHANGE_NAME,
                     'exchange_order_id': response.get('orderId'),
-                    'timestamp': response.get('timestamp', time.time()),
+                    'timestamp': int(response.get('timestamp', time.time()) * 1000),
                     'status': status}
 
     @try_exc_async
