@@ -411,7 +411,7 @@ class BitmexClient(BaseClient):
     @try_exc_async
     async def update_fills(self, data: dict) -> None:
         for order in data:
-            if order['ordStatus'] != 'New':
+            if order.get('cumQty'):
                 print(f"{self.EXCHANGE_NAME} FILL: {data}")
                 result = self.get_order_result(order)
                 self.orders.update({order['orderID']: result})
