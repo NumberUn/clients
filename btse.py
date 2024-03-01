@@ -655,7 +655,8 @@ class BtseClient(BaseClient):
                         # if self.multibot.open_orders.get(ord_id, [''])[0] == response[0]['orderID']:
                         #     self.multibot.dump_orders.update({ord_id: self.multibot.open_orders.pop(ord_id)})
             except:
-                print(f'ORDER CANCEL ERROR', resp)
+                pass
+                # print(f'ORDER CANCEL ERROR', resp)
             # else:
             #     print(f'ORDER WAS CANCELED BEFORE {self.EXCHANGE_NAME}', response)
 
