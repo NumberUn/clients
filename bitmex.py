@@ -306,20 +306,33 @@ class BitmexClient(BaseClient):
 
     @try_exc_regular
     def get_order_by_id(self, symbol: str, order_id: str) -> dict:
-        res = self.swagger_client.Order.Order_getOrders(filter=json.dumps({'orderID': order_id})).result()[0][0]
-        contract_value = self.get_contract_value(symbol)
-        real_size = res['cumQty'] / contract_value
-        real_price = res.get('avgPx') if isinstance(res.get('avgPx'), float) else 0
-        return {
-            'exchange_order_id': order_id,
-            'exchange_name': self.EXCHANGE_NAME,
-            'status': OrderStatus.FULLY_EXECUTED if res.get('ordStatus') == 'Filled' else OrderStatus.NOT_EXECUTED,
-            'factual_price': real_price,
-            'factual_amount_coin': real_size,
-            'factual_amount_usd': real_price * real_size,
-            'datetime_update': datetime.utcnow(),
-            'ts_update': int(datetime.utcnow().timestamp() * 1000)
-        }
+        res = self.swagger_client.Order.Order_getOrders(filter=json.dumps({'orderID': order_id}))
+        if len(res.result()[0]):
+            response = res.result()[0][0]
+            contract_value = self.get_contract_value(symbol)
+            real_size = response['cumQty'] / contract_value
+            real_price = response.get('avgPx') if isinstance(response.get('avgPx'), float) else 0
+            return {
+                'exchange_order_id': order_id,
+                'exchange_name': self.EXCHANGE_NAME,
+                'status': OrderStatus.FULLY_EXECUTED if response.get('ordStatus') == 'Filled' else OrderStatus.NOT_EXECUTED,
+                'factual_price': real_price,
+                'factual_amount_coin': real_size,
+                'factual_amount_usd': real_price * real_size,
+                'datetime_update': datetime.utcnow(),
+                'ts_update': int(datetime.utcnow().timestamp() * 1000)
+            }
+        else:
+            return {
+                'exchange_order_id': order_id,
+                'exchange_name': self.EXCHANGE_NAME,
+                'status': OrderStatus.NOT_EXECUTED,
+                'factual_price': 0,
+                'factual_amount_coin': 0,
+                'factual_amount_usd': 0,
+                'datetime_update': datetime.utcnow(),
+                'ts_update': int(datetime.utcnow().timestamp() * 1000)
+            }
 
     @try_exc_regular
     def get_order_result(self, order: dict) -> dict:
