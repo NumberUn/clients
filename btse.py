@@ -585,7 +585,7 @@ class BtseClient(BaseClient):
     @try_exc_async
     async def _ping(self, ws):
         while True:
-            await asyncio.sleep(25)  # Adjust the ping interval as needed
+            await asyncio.sleep(15)  # Adjust the ping interval as needed
             await ws.ping()
         # print(f'PING SENT: {datetime.utcnow()}')
 
