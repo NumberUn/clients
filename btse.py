@@ -90,6 +90,7 @@ class BtseClient(BaseClient):
         self.pings = []
         self.cancel_pings = []
         self.orderbook_broken = False
+        self.restart_task = asyncio.Event()
         if multibot:
             self.cancel_all_orders()
 
@@ -559,11 +560,12 @@ class BtseClient(BaseClient):
                 else:
                     self._ws_public = ws
                     await loop.create_task(self.subscribe_orderbooks())
-                loop.create_task(self._ping())
+                loop.create_task(self._ping(ws))
                 async for msg in ws:
                     loop.create_task(self.process_ws_msg(msg))
                     if self.orderbook_broken:
                         self.orderbook_broken = False
+                        self.restart_task.set()
                         break
             await ws.close()
 
@@ -583,11 +585,14 @@ class BtseClient(BaseClient):
             await self.upd_positions(data)
 
     @try_exc_async
-    async def _ping(self):
+    async def _ping(self, ws):
         while True:
-            await asyncio.sleep(25)  # Adjust the ping interval as needed
-            await self._ws_private.ping()
-            await self._ws_public.ping()
+            await asyncio.sleep(25)
+            if self.restart_task.is_set():
+                self.restart_task.clear()
+                return
+            # Adjust the ping interval as needed
+            await ws.ping()
         # print(f'PING SENT: {datetime.utcnow()}')
 
     @try_exc_async
