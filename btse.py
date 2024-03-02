@@ -559,7 +559,7 @@ class BtseClient(BaseClient):
                 else:
                     self._ws_public = ws
                     await loop.create_task(self.subscribe_orderbooks())
-                loop.create_task(self._ping(ws))
+                loop.create_task(self._ping())
                 async for msg in ws:
                     loop.create_task(self.process_ws_msg(msg))
                     if self.orderbook_broken:
@@ -583,10 +583,11 @@ class BtseClient(BaseClient):
             await self.upd_positions(data)
 
     @try_exc_async
-    async def _ping(self, ws):
+    async def _ping(self):
         while True:
-            await asyncio.sleep(15)  # Adjust the ping interval as needed
-            await ws.ping()
+            await asyncio.sleep(25)  # Adjust the ping interval as needed
+            await self._ws_private.ping()
+            await self._ws_public.ping()
         # print(f'PING SENT: {datetime.utcnow()}')
 
     @try_exc_async
