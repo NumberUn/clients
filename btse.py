@@ -73,7 +73,7 @@ class BtseClient(BaseClient):
         self.error_info = None
         self.orderbook = {}
         self.orders = {}
-        self.rate_limit_orders = 75
+        self.rate_limit_orders = 200
         self.taker_fee = 0.0005 * 0.75
         self.maker_fee = 0.0001 * 0.75
         self.orig_sizes = {}
@@ -109,8 +109,7 @@ class BtseClient(BaseClient):
 
     @try_exc_async
     async def _run_order_loop(self, loop):
-        # last_request = time.time()
-        # request_pause = 1.02 / self.rate_limit_orders
+        request_pause = 1.02 / self.rate_limit_orders
         # connector = aiohttp.TCPConnector(family=socket.AF_INET6)
         resolver = AsyncResolver()
         connector = aiohttp.TCPConnector(resolver=resolver, family=socket.AF_INET)
@@ -129,12 +128,14 @@ class BtseClient(BaseClient):
                             await self.create_fast_order(price, size, side, market, client_id)
                         else:
                             loop.create_task(self.create_fast_order(price, size, side, market, client_id))
+                        await asyncio.sleep(request_pause)
                     elif task[0] == 'cancel_order':
                         if task[1]['order_id'] not in self.deleted_orders:
                             if len(self.deleted_orders) > 1000:
                                 self.deleted_orders = []
                             self.deleted_orders.append(task[1]['order_id'])
                             loop.create_task(self.cancel_order(task[1]['market'], task[1]['order_id']))
+                            await asyncio.sleep(request_pause)
                     elif task[0] == 'amend_order':
                         if task[1]['order_id'] not in self.deleted_orders:
                             price = task[1]['price']
@@ -143,6 +144,7 @@ class BtseClient(BaseClient):
                             market = task[1]['market']
                             old_order_size = task[1]['old_order_size']
                             loop.create_task(self.amend_order(price, size, order_id, market, old_order_size))
+                            await asyncio.sleep(request_pause)
                     self.async_tasks.remove(task)
                 await asyncio.sleep(0.00001)
 
