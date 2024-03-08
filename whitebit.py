@@ -118,10 +118,14 @@ class WhiteBitClient(BaseClient):
     async def keep_alive_order(self):
         while True:
             await self.get_position_async()
-            market = self.markets[self.markets_list[random.randint(0, len(self.markets_list) - 1)]]
-            price = self.get_orderbook(market)['bids'][0][0] * 0.95
+            market = list(self.positions.keys())[0]
+            side = 'buy' if self.positions[market]['amount'] < 0 else 'sell'
+            if side == 'buy':
+                price = self.get_orderbook(market)['bids'][0][0] * 0.95
+            else:
+                price = self.get_orderbook(market)['asks'][0][0] * 1.05
             price, size = self.fit_sizes(price, self.instruments[market]['min_size'], market)
-            await self.create_fast_order(price, size, 'buy', market, 'keep-alive')
+            await self.create_fast_order(price, size, side, market, 'keep-alive')
             resp = self.responses.get('keep-alive')
             ex_order_id = resp['exchange_order_id']
             await self.cancel_order(market, ex_order_id)
