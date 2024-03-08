@@ -302,13 +302,14 @@ class OkxClient(BaseClient):
                 loop.create_task(self._ping(ws))
                 async for msg in ws:
                     await self.process_ws_msg(msg)
+                await ws.close()
 
     @try_exc_async
     async def process_ws_msg(self, msg: aiohttp.WSMessage):
         obj = json.loads(msg.data)
         if obj.get('event'):
             return
-        if obj.get('arg'):
+        elif obj.get('arg'):
             if obj['arg']['channel'] == 'account':
                 await self._update_account(obj)
             elif obj['arg']['channel'] in ['bbo-tbt', 'books50-l2-tbt', 'books5']:
@@ -331,8 +332,8 @@ class OkxClient(BaseClient):
     @try_exc_async
     async def _ping(self, ws):
         while True:
-            await asyncio.sleep(25)  # Adjust the ping interval as needed
             await ws.ping()
+            await asyncio.sleep(15)  # Adjust the ping interval as needed
 
     @try_exc_regular
     def get_balance(self):
@@ -507,8 +508,6 @@ class OkxClient(BaseClient):
         if self.finder and flag and ts_ms - ts_ob < self.top_ws_ping:
             coin = market.split('-')[0]
             await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, 'trade')
-        if self.market_finder:
-            await self.market_finder.count_one_coin(market.split('-')[0], self.EXCHANGE_NAME)
 
     @try_exc_regular
     def get_contract_value(self, symbol):
