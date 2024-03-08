@@ -805,6 +805,7 @@ class BtseClient(BaseClient):
         ts_ob = data['data']['timestamp'] / 1000
         # print(ts_ms - ts_ob)
         # return
+        flag_market = False
         side = None
         symbol = data['data']['symbol']
         new_ob = self.orderbook[symbol].copy()
@@ -815,21 +816,21 @@ class BtseClient(BaseClient):
                 new_ob['top_bid'] = [float(new_bid[0]), float(new_bid[1])]
                 new_ob['top_bid_timestamp'] = ts_ob
                 side = 'sell'
-                # flag_market = True
+                flag_market = True
             if new_ob['bids'].get(new_bid[0]) and new_bid[1] == '0':
                 del new_ob['bids'][new_bid[0]]
                 if float(new_bid[0]) == new_ob['top_bid'][0] and len(new_ob['bids']):
                     top = sorted(new_ob['bids'])[-1]
                     new_ob['top_bid'] = [float(top), float(new_ob['bids'][top])]
                     new_ob['top_bid_timestamp'] = ts_ob
-                    # flag_market = True
+                    flag_market = True
             elif new_bid[1] != '0':
                 new_ob['bids'][new_bid[0]] = new_bid[1]
         for new_ask in data['data']['asks']:
             if float(new_ask[0]) <= new_ob['top_ask'][0]:
                 new_ob['top_ask'] = [float(new_ask[0]), float(new_ask[1])]
                 new_ob['top_ask_timestamp'] = ts_ob
-                # flag_market = True
+                flag_market = True
                 side = 'buy'
             if new_ob['asks'].get(new_ask[0]) and new_ask[1] == '0':
                 del new_ob['asks'][new_ask[0]]
@@ -837,12 +838,12 @@ class BtseClient(BaseClient):
                     top = sorted(new_ob['asks'])[0]
                     new_ob['top_ask'] = [float(top), float(new_ob['asks'][top])]
                     new_ob['top_ask_timestamp'] = ts_ob
-                    # flag_market = True
+                    flag_market = True
             elif new_ask[1] != '0':
                 new_ob['asks'][new_ask[0]] = new_ask[1]
         self.orderbook[symbol] = new_ob
-        # if self.market_finder and flag_market:
-        #     await self.market_finder.count_one_coin(symbol.split('PFC')[0], self.EXCHANGE_NAME)
+        if self.market_finder and flag_market:
+            await self.market_finder.count_one_coin(symbol.split('PFC')[0], self.EXCHANGE_NAME)
         if side and self.finder and ts_ms - ts_ob < self.top_ws_ping:
             coin = symbol.split('PFC')[0]
             await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, 'ob')
