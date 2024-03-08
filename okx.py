@@ -507,6 +507,8 @@ class OkxClient(BaseClient):
         if self.finder and flag and ts_ms - ts_ob < self.top_ws_ping:
             coin = market.split('-')[0]
             await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, 'trade')
+        if self.market_finder:
+            await self.market_finder.count_one_coin(market.split('-')[0], self.EXCHANGE_NAME)
 
     @try_exc_regular
     def get_contract_value(self, symbol):
