@@ -420,7 +420,8 @@ class BitmexClient(BaseClient):
                         coin = market.split('USDT')[0]
                         if self.state == 'Bot' and ts_ms - ts_ob < self.top_ws_ping:
                             await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, 'ob')
-                    # #     else:
+                    if self.market_finder:
+                        await self.market_finder.count_one_coin(market.split('USDT')[0], self.EXCHANGE_NAME)
 
     @try_exc_async
     async def update_fills(self, data: dict) -> None:
