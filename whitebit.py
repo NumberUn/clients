@@ -70,7 +70,7 @@ class WhiteBitClient(BaseClient):
         self.requests_counter = 0
         self.total_requests = 0
         self.total_start_time = time.time()
-        self.top_ws_ping = 0.05
+        self.top_ws_ping = 0.02
         self.stop_all = False
         self.cancel_all_orders()
 
@@ -385,10 +385,7 @@ class WhiteBitClient(BaseClient):
     @try_exc_regular
     def _run_ws_forever(self, loop):
         while True:
-            for symbol in self.markets_list:
-                if market := self.markets.get(symbol):
-                    loop.create_task(self._run_ws_loop(loop, 'orderbook', market))
-            loop.run_until_complete(self._run_ws_loop(loop, 'private'))
+            loop.run_until_complete(self._run_ws_loop(loop))
 
     @try_exc_regular
     def run_updater(self):
@@ -415,13 +412,15 @@ class WhiteBitClient(BaseClient):
         return self.balance['total'] + tot_unrealised_pnl
 
     @try_exc_async
-    async def _run_ws_loop(self, loop: asyncio.new_event_loop, ws_type: str, market: str = None):
+    async def _run_ws_loop(self, loop):
         async with aiohttp.ClientSession() as session:
             async with session.ws_connect(self.PUBLIC_WS_ENDPOINT) as ws:
-                if self.state == 'Bot' and ws_type == 'private':
-                    await loop.create_task(self.subscribe_privates(ws))
-                if ws_type == 'orderbook':
-                    await loop.create_task(self.subscribe_orderbooks(market, ws))
+                self._ws = ws
+                if self.state == 'Bot':
+                    await loop.create_task(self.subscribe_privates())
+                for symbol in self.markets_list:
+                    if market := self.markets.get(symbol):
+                        await loop.create_task(self.subscribe_orderbooks(market))
                 loop.create_task(self._ping(ws))
                 async for msg in ws:
                     # if self.stop_all:
@@ -702,12 +701,12 @@ class WhiteBitClient(BaseClient):
             return ResponseStatus.ERROR
 
     @try_exc_async
-    async def subscribe_orderbooks(self, symbol: str, ws: aiohttp.ClientSession.ws_connect):
+    async def subscribe_orderbooks(self, symbol):
         data = [symbol, 100, '0', True]
         method = {"id": 0,
                   "method": "depth_subscribe",
                   "params": data}
-        await ws.send_json(method)
+        await self._ws.send_json(method)
 
     @try_exc_regular
     def get_ws_token(self):
@@ -718,14 +717,14 @@ class WhiteBitClient(BaseClient):
         return res['websocket_token']
 
     @try_exc_async
-    async def subscribe_privates(self, ws: aiohttp.ClientSession.ws_connect):
+    async def subscribe_privates(self):
         method_auth = {"id": 1, "method": "authorize", "params": [self.websocket_token, "public"]}
         orders_ex = {"id": 2, "method": "ordersExecuted_subscribe", "params": [list(self.markets.values()), 0]}
         balance = {"id": 3, "method": "balanceMargin_subscribe", "params": ["USDT"]}
-        await ws.send_json(method_auth)
+        await self._ws.send_json(method_auth)
         time.sleep(1)
-        await ws.send_json(orders_ex)
-        await ws.send_json(balance)
+        await self._ws.send_json(orders_ex)
+        await self._ws.send_json(balance)
 
     @try_exc_regular
     def get_all_tops(self):
@@ -744,15 +743,13 @@ class WhiteBitClient(BaseClient):
         side = None
         ts_ms = time.time()
         ts_ob = data['params'][1]['timestamp']
-        symbol = data['params'][2]
         # print(ts_ms - ts_ob)
-        # print(ts_ob)
-        # print(symbol)
-        # # print(len(data['params'][1].get('asks', [])))
-        # # print(len(data['params'][1].get('bids', [])))
+        # print(len(data['params'][1].get('asks', [])))
+        # print(len(data['params'][1].get('bids', [])))
         # print()
         # return
         # flag_market = False
+        symbol = data['params'][2]
         new_ob = self.orderbook[symbol].copy()
         new_ob['ts_ms'] = ts_ms
         new_ob['timestamp'] = ts_ob
@@ -792,13 +789,13 @@ class WhiteBitClient(BaseClient):
             new_ob = self.cut_extra_orders_from_ob(symbol, data, new_ob)
         self.orderbook[symbol] = new_ob
         # if self.market_finder and flag_market:
-            # if self.multibot.mm_exchange == self.EXCHANGE_NAME:
-            #     if ts_ms - ts_ob < 0.035:
-            #         await self.market_finder.count_one_coin(symbol.split('_')[0], self.EXCHANGE_NAME)
-            # else:
-            #     if ts_ms - ts_ob < 0.120:
-            # await self.market_finder.count_one_coin(symbol.split('_')[0], self.EXCHANGE_NAME)
-        if side and self.finder:  # and ts_ms - ts_ob < self.top_ws_ping:
+        #     # if self.multibot.mm_exchange == self.EXCHANGE_NAME:
+        #     #     if ts_ms - ts_ob < 0.035:
+        #     #         await self.market_finder.count_one_coin(symbol.split('_')[0], self.EXCHANGE_NAME)
+        #     # else:
+        #     #     if ts_ms - ts_ob < 0.120:
+        #     await self.market_finder.count_one_coin(symbol.split('_')[0], self.EXCHANGE_NAME)
+        if side and self.finder and ts_ms - ts_ob < self.top_ws_ping:
             coin = symbol.split('_')[0]
             await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, 'ob')
 
@@ -899,7 +896,7 @@ if __name__ == '__main__':
             client.cancel_all_orders()
 
 
-    client.markets_list = list(client.markets.keys())
+    client.markets_list = [list(client.markets.keys())[0]]
     print(client.markets_list)
     client.run_updater()
 

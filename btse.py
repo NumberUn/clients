@@ -73,7 +73,7 @@ class BtseClient(BaseClient):
         self.error_info = None
         self.orderbook = {}
         self.orders = {}
-        self.rate_limit_orders = 200
+        self.rate_limit_orders = 75
         self.taker_fee = 0.0005 * 0.75
         self.maker_fee = 0.0001 * 0.75
         self.orig_sizes = {}
@@ -693,7 +693,7 @@ class BtseClient(BaseClient):
         for fill in data['data']:
             order_id = fill['orderId']
             size = float(fill['size']) * self.instruments[fill['symbol']]['contract_value']
-            if 'maker' in fill.get('clOrderId', '') and self.multibot.mm_exchange == self.EXCHANGE_NAME:
+            if fill['orderId'] in str(self.multibot.open_orders) and self.multibot.mm_exchange == self.EXCHANGE_NAME:
                 deal = {'side': fill['side'].lower(),
                         'size': size,
                         'coin': fill['symbol'].split('PFC')[0],
