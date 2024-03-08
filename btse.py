@@ -441,7 +441,7 @@ class BtseClient(BaseClient):
             if response[0].get("clOrderID"):
                 self.responses.update({response[0]["clOrderID"]: order_res})
             else:
-                self.responses.update({response[0]['orderId']: order_res})
+                self.responses.update({self.LAST_ORDER_ID: order_res})
             # self.last_keep_alive = order_res['timestamp']
             # res_example = [{'status': 2, 'symbol': 'BTCPFC', 'orderType': 76, 'price': 43490, 'side': 'BUY', 'size': 1,
             #             'orderID': '13a82711-f6e2-4228-bf9f-3755cd8d7885', 'timestamp': 1703535543583,
