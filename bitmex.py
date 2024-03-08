@@ -60,6 +60,7 @@ class BitmexClient(BaseClient):
         self.amount = 0
         self.amount_contracts = 0
         self.taker_fee = 0.0005
+        self.maker_fee = -0.0001
         self.requestLimit = 1200
         self.price = 0
         self.orders = {}

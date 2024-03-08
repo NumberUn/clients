@@ -61,8 +61,6 @@ class WhiteBitClient(BaseClient):
         self.LAST_ORDER_ID = 'default'
         self.taker_fee = 0.00035 * 0.6
         self.maker_fee = 0.0001 * 0.6
-        self.last_keep_alive = 0
-        self.last_websocket_ping = 0
         self.async_tasks = []
         self.responses = {}
         self.deleted_orders = []
