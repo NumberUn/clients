@@ -196,19 +196,21 @@ class WhiteBitClient(BaseClient):
             try:
                 response = await resp.json()
                 # print(f'ORDER CANCELED {self.EXCHANGE_NAME}', response)
-                if order_id in self.multibot.deleted_orders:
-                    self.multibot.deleted_orders.remove(order_id)
-                if 'maker' in response.get('clientOrderId', '') and self.EXCHANGE_NAME == self.multibot.mm_exchange:
-                    coin = symbol.split('_')[0]
-                    if self.multibot.open_orders.get(coin + '-' + self.EXCHANGE_NAME)[0] == response['orderId']:
-                        self.multibot.open_orders.pop(coin + '-' + self.EXCHANGE_NAME)
+                if self.multibot:
+                    if order_id in self.multibot.deleted_orders:
+                        self.multibot.deleted_orders.remove(order_id)
+                    if 'maker' in response.get('clientOrderId', '') and self.EXCHANGE_NAME == self.multibot.mm_exchange:
+                        coin = symbol.split('_')[0]
+                        if self.multibot.open_orders.get(coin + '-' + self.EXCHANGE_NAME)[0] == response['orderId']:
+                            self.multibot.open_orders.pop(coin + '-' + self.EXCHANGE_NAME)
             except:
                 # print(resp.text)
                 await asyncio.sleep(0.1)
                 # await self.cancel_order(symbol, order_id)
                 self.cancel_all_orders()
-                if self.EXCHANGE_NAME == self.multibot.mm_exchange:
-                    self.multibot.open_orders = {}
+                if self.multibot:
+                    if self.EXCHANGE_NAME == self.multibot.mm_exchange:
+                        self.multibot.open_orders = {}
 
     # example = {'orderId': 422806159063, 'clientOrderId': 'maker-WHITEBIT-XRP-1003947', 'market': 'XRP_PERP',
     #            'side': 'buy', 'type': 'margin limit', 'timestamp': 1705924757.295865, 'dealMoney': '0',
@@ -249,12 +251,13 @@ class WhiteBitClient(BaseClient):
             self.positions = {}
             for pos in response:
                 if isinstance(pos, str):
-                    print(f"{self.EXCHANGE_NAME} position update in get_position mistake {response}")
+                    # print(f"{self.EXCHANGE_NAME} position update in get_position mistake {response}")
                     continue
                 market = pos['market']
                 ob = self.get_orderbook(market)
                 if not ob:
                     ob = await self.get_orderbook_by_symbol(market)
+                print(ob)
                 change = (ob['asks'][0][0] + ob['bids'][0][0]) / 2
                 if pos['basePrice'] and pos['amount']:
                     unrealised_pnl = (change - float(pos['basePrice'])) * float(pos['amount'])
@@ -657,37 +660,38 @@ class WhiteBitClient(BaseClient):
         body = self.get_auth_for_request(body, path)
         path += self._create_uri(body)
         async with self.async_session.post(url=self.BASE_URL + path, headers=self.session.headers, json=body) as resp:
-            try:
-                response = await resp.json()
+            # try:
+            response = await resp.json()
+            if self.multibot:
                 if self.EXCHANGE_NAME != self.multibot.mm_exchange:
                     if not client_id or 'taker' in client_id:
                         print(f"{self.EXCHANGE_NAME} ORDER CREATE RESPONSE: {response}")
                         print(f"{self.EXCHANGE_NAME} ORDER CREATE PING: {response['timestamp'] - time_start}")
                         self.update_order_after_deal(response)
-                if response.get('code'):
-                    print(f"CREATE ORDER RESPONSE: {body=}")
-                    print(response)
-                    return
-                price = float(response['dealMoney']) / float(response['dealStock']) if response[
-                                                                                           'dealStock'] != '0' else 0
-                order_res = {'exchange_name': self.EXCHANGE_NAME,
-                             'exchange_order_id': response.get('orderId'),
-                             'timestamp': response.get('timestamp', time.time()),
-                             'status': self.get_order_response_status(response),
-                             'api_response': response,
-                             'size': float(response['dealStock']),
-                             'price': price,
-                             'time_order_sent': time_start,
-                             'create_order_time': response['timestamp'] - time_start}
-                if client_id:
-                    self.responses.update({client_id: order_res})
-                else:
-                    self.responses.update({response['orderId']: order_res})
-            except:
-                # if self.EXCHANGE_NAME != self.multibot.mm_exchange:
-                # print(message)
-                # print(f"{self.EXCHANGE_NAME} ORDER CREATE FAILURE\nBODY: {body}\nRESP: {resp.text}")
+            if response.get('code'):
+                print(f"CREATE ORDER RESPONSE: {body=}")
+                print(response)
                 return
+            price = float(response['dealMoney']) / float(response['dealStock']) if response[
+                                                                                       'dealStock'] != '0' else 0
+            order_res = {'exchange_name': self.EXCHANGE_NAME,
+                         'exchange_order_id': response.get('orderId'),
+                         'timestamp': response.get('timestamp', time.time()),
+                         'status': self.get_order_response_status(response),
+                         'api_response': response,
+                         'size': float(response['dealStock']),
+                         'price': price,
+                         'time_order_sent': time_start,
+                         'create_order_time': response['timestamp'] - time_start}
+            if client_id:
+                self.responses.update({client_id: order_res})
+            else:
+                self.responses.update({response['orderId']: order_res})
+            # except:
+            #     # if self.EXCHANGE_NAME != self.multibot.mm_exchange:
+            #     # print(message)
+            #     print(f"{self.EXCHANGE_NAME} ORDER CREATE FAILURE\nBODY: {body}\nRESP: {resp.text}")
+            #     return
 
             # example_executed = {'orderId': 395248275015, 'clientOrderId': '', 'market': 'BTC_PERP', 'side': 'buy',
             # 'type': 'margin limit',
@@ -781,46 +785,54 @@ class WhiteBitClient(BaseClient):
         new_ob['ts_ms'] = ts_ms
         new_ob['timestamp'] = ts_ob
         for new_bid in data['params'][1].get('bids', []):
-            if float(new_bid[0]) >= new_ob['top_bid'][0]:
-                new_ob['top_bid'] = [float(new_bid[0]), float(new_bid[1])]
-                new_ob['top_bid_ts'] = ts_ob
-                # flag_market = True
-                side = 'sell'
+            # if float(new_bid[0]) >= new_ob['top_bid'][0]:
+            #     new_ob['top_bid'] = [float(new_bid[0]), float(new_bid[1])]
+            #     new_ob['top_bid_ts'] = ts_ob
+            #     # flag_market = True
+            #     side = 'sell'
             if new_ob['bids'].get(new_bid[0]) and new_bid[1] == '0':
                 del new_ob['bids'][new_bid[0]]
-                if float(new_bid[0]) == new_ob['top_bid'][0] and len(new_ob['bids']):
-                    top = sorted(new_ob['bids'])[-1]
-                    new_ob['top_bid'] = [float(top), float(new_ob['bids'][top])]
-                    new_ob['top_bid_ts'] = ts_ob
+                # if float(new_bid[0]) == new_ob['top_bid'][0] and len(new_ob['bids']):
+                #     top = sorted(new_ob['bids'])[-1]
+                #     new_ob['top_bid'] = [float(top), float(new_ob['bids'][top])]
+                #     new_ob['top_bid_ts'] = ts_ob
                     # flag_market = True
                     # side = 'sell'
             elif new_bid[1] != '0':
-                new_ob['bids'][new_bid[0]] = new_bid[1]
-        for new_ask in data['params'][1].get('asks', []):
-            if float(new_ask[0]) <= new_ob['top_ask'][0]:
-                new_ob['top_ask'] = [float(new_ask[0]), float(new_ask[1])]
-                new_ob['top_ask_ts'] = ts_ob
+                # new_ob['top_bid'] = [float(new_bid[0]), float(new_bid[1])]
+                # new_ob['top_bid_ts'] = ts_ob
                 # flag_market = True
-                side = 'buy'
+                side = 'sell'
+                new_ob['bids'] = {new_bid[0]: new_bid[1]}
+        for new_ask in data['params'][1].get('asks', []):
+            # if float(new_ask[0]) <= new_ob['top_ask'][0]:
+            #     new_ob['top_ask'] = [float(new_ask[0]), float(new_ask[1])]
+            #     new_ob['top_ask_ts'] = ts_ob
+            #     # flag_market = True
+            #     side = 'buy'
             if new_ob['asks'].get(new_ask[0]) and new_ask[1] == '0':
                 del new_ob['asks'][new_ask[0]]
-                if float(new_ask[0]) == new_ob['top_ask'][0] and len(new_ob['asks']):
-                    top = sorted(new_ob['asks'])[0]
-                    new_ob['top_ask'] = [float(top), float(new_ob['asks'][top])]
-                    new_ob['top_ask_ts'] = ts_ob
+                # if float(new_ask[0]) == new_ob['top_ask'][0] and len(new_ob['asks']):
+                #     top = sorted(new_ob['asks'])[0]
+                #     new_ob['top_ask'] = [float(top), float(new_ob['asks'][top])]
+                #     new_ob['top_ask_ts'] = ts_ob
                     # flag_market = True
                     # side = 'buy'
             elif new_ask[1] != '0':
-                new_ob['asks'][new_ask[0]] = new_ask[1]
-        if new_ob['top_ask'][0] <= new_ob['top_bid'][0]:
-            new_ob = self.cut_extra_orders_from_ob(symbol, data, new_ob)
+                # new_ob['top_ask'] = [float(new_ask[0]), float(new_ask[1])]
+                # new_ob['top_ask_ts'] = ts_ob
+                # flag_market = True
+                side = 'buy'
+                new_ob['asks'] = {new_ask[0]: new_ask[1]}
+        # if new_ob['top_ask'][0] <= new_ob['top_bid'][0]:
+        #     new_ob = self.cut_extra_orders_from_ob(symbol, data, new_ob)
         self.orderbook[symbol] = new_ob
         if self.market_finder:
         #     # if self.multibot.mm_exchange == self.EXCHANGE_NAME:
         #     #     if ts_ms - ts_ob < 0.035:
         #     #         await self.market_finder.count_one_coin(symbol.split('_')[0], self.EXCHANGE_NAME)
         #     # else:
-        #     #     if ts_ms - ts_ob < 0.120:
+            #     if ts_ms - ts_ob < 0.120:
             await self.market_finder.count_one_coin(symbol.split('_')[0], self.EXCHANGE_NAME)
         if side and self.finder and ts_ms - ts_ob < self.top_ws_ping:
             coin = symbol.split('_')[0]
@@ -876,21 +888,22 @@ class WhiteBitClient(BaseClient):
     def get_orderbook(self, symbol, necessary=False) -> dict:
         if not self.orderbook.get(symbol):
             return {}
-        if necessary:
-            orderbook = None
-            while not orderbook:
-                orderbook = self.get_orderbook(symbol)
-            return orderbook
+        # if necessary:
+        #     orderbook = None
+        #     while not orderbook:
+        #         orderbook = self.get_orderbook(symbol)
+        #     return orderbook
         snap = self.orderbook[symbol].copy()
         if isinstance(snap['asks'], list):
             return snap
-        if snap['top_ask'][0] <= snap['top_bid'][0]:
-            return {}
+        # if snap['top_ask'][0] <= snap['top_bid'][0]:
+        #     print(f)
+        #     return {}
         ob = {'timestamp': snap['timestamp'],
-              'asks': sorted([[float(x), float(y)] for x, y in snap['asks'].copy().items()])[:self.ob_len],
-              'bids': sorted([[float(x), float(y)] for x, y in snap['bids'].copy().items()])[::-1][:self.ob_len],
-              'top_ask_ts': snap['top_ask_ts'],
-              'top_bid_ts': snap['top_bid_ts'],
+              'asks': [[float(x), float(y)] for x, y in snap['asks'].items()],
+              'bids': [[float(x), float(y)] for x, y in snap['bids'].items()],
+              # 'top_ask_ts': snap['top_ask_ts'],
+              # 'top_bid_ts': snap['top_bid_ts'],
               'ts_ms': snap['ts_ms']}
         return ob
 
