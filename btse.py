@@ -72,6 +72,7 @@ class BtseClient(BaseClient):
         self.ob_len = ob_len
         self.error_info = None
         self.orderbook = {}
+        self.snap_orderbook = {}
         self.orders = {}
         self.rate_limit_orders = 75
         self.taker_fee = 0.0005 * 0.75
@@ -561,7 +562,8 @@ class BtseClient(BaseClient):
                     await loop.create_task(self.subscribe_privates())
                 else:
                     self._ws_public = ws
-                    await loop.create_task(self.subscribe_orderbooks())
+                    # await loop.create_task(self.subscribe_orderbooks())
+                    await loop.create_task(self.subscribe_snapshot_orderbooks())
                 loop.create_task(self._ping(ws))
                 async for msg in ws:
                     loop.create_task(self.process_ws_msg(msg))
@@ -578,13 +580,46 @@ class BtseClient(BaseClient):
         if topic == 'fills':
             own_ts = time.time()
             await self.upd_fills(data, own_ts)
-        if 'update' in topic:
-            if data.get('data') and data['data']['type'] == 'delta':
-                await self.upd_ob(data)
-            elif data.get('data') and data['data']['type'] == 'snapshot':
-                await self.upd_ob_snapshot(data)
+        elif topic.startswith('snapshot'):
+            await self.update_ob_snap(data)
+        # if topic.startswith('update'):
+        #     if data.get('data') and data['data']['type'] == 'delta':
+        #         await self.upd_ob(data)
+        #     elif data.get('data') and data['data']['type'] == 'snapshot':
+        #         await self.upd_ob_snapshot(data)
         elif topic == 'allPosition':
             await self.upd_positions(data)
+
+    @try_exc_async
+    async def update_ob_snap(self, data):
+        ts_ms = time.time()
+        ts_ob = data['data']['timestamp'] / 1000
+        market = data['data']['symbol']
+        side = None
+        c_v = self.instruments[symbol]['contract_value']
+        new_ob = {'asks': [[float(data['data']['asks'][0][0]), float(data['data']['asks'][0][1]) * c_v]],
+                  'bids': [[float(data['data']['bids'][0][0]), float(data['data']['bids'][0][1]) * c_v]],
+                  'ts_ms': ts_ms,
+                  'timestamp': ts_ob}
+        last_ob = self.get_orderbook(market)
+        if last_ob:
+            if new_ob['asks'][0][0] <= last_ob['asks'][0][0]:
+                side = 'buy'
+            elif new_ob['bids'][0][0] >= last_ob['bids'][0][0]:
+                side = 'sell'
+        self.orderbook.update({market: new_ob})
+        if self.market_finder:
+            await self.market_finder.count_one_coin(market.split('PFC')[0], self.EXCHANGE_NAME)
+        if side and self.finder and ts_ms - ts_ob < self.top_ws_ping:
+            coin = market.split('PFC')[0]
+            await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, 'ob')
+        # print(f"PING SNAP/UPDATE: {ts_ms - ts_ob} / {ob['ts_ms'] - ob['timestamp']}")
+        # print(f"TS SNAP/UPDATE: {ts_ob} / {ob['timestamp']}")
+        # print(f"SNAP/UPDATE TOPASK: {data['data']['asks'][0]} / {ob['asks'][0]}")
+        # print(f"SNAP/UPDATE TOPBID: {data['data']['bids'][0]} / {ob['bids'][0]}")
+        # example = {'topic': 'snapshotL1:1INCHPFC_0',
+        #  'data': {'bids': [['0.6223', '21795']], 'asks': [['0.6253', '21578']], 'type': 'snapshotL1',
+        #           'symbol': '1INCHPFC', 'timestamp': 1709986431507}}
 
     @try_exc_async
     async def _ping(self, ws):
@@ -764,6 +799,13 @@ class BtseClient(BaseClient):
         #      'positionMode': 'ONE_WAY', 'positionDirection': None, 'future': True, 'settleWithNonUSDAsset': 'USDT'},
 
     @try_exc_async
+    async def subscribe_snapshot_orderbooks(self):
+        args = [f"snapshotL1:{self.markets[x]}_0" for x in self.markets_list if self.markets.get(x)]
+        method = {"op": "subscribe",
+                  "args": args}
+        await self._ws_public.send_json(method)
+
+    @try_exc_async
     async def subscribe_orderbooks(self):
         args = [f"update:{self.markets[x]}_0" for x in self.markets_list if self.markets.get(x)]
         method = {"op": "subscribe",
@@ -842,6 +884,14 @@ class BtseClient(BaseClient):
             elif new_ask[1] != '0':
                 new_ob['asks'][new_ask[0]] = new_ask[1]
         self.orderbook[symbol] = new_ob
+        ob = self.snap_orderbook[symbol]
+        if new_ob['top_ask'] != [float(ob['asks'][0][0]), float(ob['asks'][0][1])]:
+            print(f"PING UPDATE/SNAP: {ts_ms - ts_ob} / {ob['ts_ms'] - ob['timestamp']}")
+            print(f"TS UPDATE/SNAP: {ts_ob} / {ob['timestamp']}")
+            print(f"UPDATE/SNAP TOPASK: {new_ob['top_ask']} / {ob['asks'][0]}")
+            print(f"UPDATE/SNAP TOPBID: {new_ob['top_bid']} / {ob['bids'][0]}")
+            print(new_ob)
+            print()
         if self.market_finder and flag_market:
             await self.market_finder.count_one_coin(symbol.split('PFC')[0], self.EXCHANGE_NAME)
         if side and self.finder and ts_ms - ts_ob < self.top_ws_ping:
@@ -862,24 +912,24 @@ class BtseClient(BaseClient):
 
     @try_exc_regular
     def get_orderbook(self, symbol) -> dict:
-        if not self.orderbook.get(symbol):
-            return {}
-        snap = self.orderbook[symbol].copy()
-        if isinstance(snap['asks'], list):
-            return snap
-        if snap['top_ask'][0] <= snap['top_bid'][0]:
-            print(f"ALARM! ORDERBOOK ERROR {self.EXCHANGE_NAME}: {snap}")
-            self.orderbook_broken = True
-            return {}
-        c_v = self.instruments[symbol]['contract_value']
-        ob = {'timestamp': snap['timestamp'],
-              'asks': sorted([[float(x), y] for x, y in snap['asks'].copy().items()])[:self.ob_len],
-              'bids': sorted([[float(x), y] for x, y in snap['bids'].copy().items()])[::-1][:self.ob_len],
-              'top_ask_timestamp': snap['top_ask_timestamp'],
-              'top_bid_timestamp': snap['top_bid_timestamp'],
-              'ts_ms': snap['ts_ms']}
-        ob['asks'] = [[x, float(y) * c_v] for x, y in ob['asks']]
-        ob['bids'] = [[x, float(y) * c_v] for x, y in ob['bids']]
+        ob = self.orderbook.get(symbol, {})
+
+        # snap = self.orderbook[symbol].copy()
+        # if isinstance(snap['asks'], list):
+        #     return snap
+        # if snap['top_ask'][0] <= snap['top_bid'][0]:
+        #     print(f"ALARM! ORDERBOOK ERROR {self.EXCHANGE_NAME}: {snap}")
+        #     self.orderbook_broken = True
+        #     return {}
+        # c_v = self.instruments[symbol]['contract_value']
+        # ob = {'timestamp': snap['timestamp'],
+        #       'asks': sorted([[float(x), y] for x, y in snap['asks'].copy().items()])[:self.ob_len],
+        #       'bids': sorted([[float(x), y] for x, y in snap['bids'].copy().items()])[::-1][:self.ob_len],
+        #       'top_ask_timestamp': snap['top_ask_timestamp'],
+        #       'top_bid_timestamp': snap['top_bid_timestamp'],
+        #       'ts_ms': snap['ts_ms']}
+        # ob['asks'] = [[x, float(y) * c_v] for x, y in ob['asks']]
+        # ob['bids'] = [[x, float(y) * c_v] for x, y in ob['bids']]
         return ob
 
     @try_exc_async
