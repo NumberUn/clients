@@ -118,8 +118,12 @@ class WhiteBitClient(BaseClient):
     async def keep_alive_order(self):
         while True:
             await self.get_position_async()
-            market = list(self.positions.keys())[0] if len(self.positions) else self.markets[self.markets_list[0]]
-            side = 'buy' if self.positions[market]['amount'] < 0 else 'sell'
+            if len(self.positions):
+                market = list(self.positions.keys())[0]
+                side = 'buy' if self.positions[market]['amount'] < 0 else 'sell'
+            else:
+                market = self.markets[self.markets_list[0]]
+                side = 'buy'
             if side == 'buy':
                 price = self.get_orderbook(market)['bids'][0][0] * 0.95
             else:
