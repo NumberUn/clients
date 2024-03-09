@@ -423,13 +423,24 @@ class WhiteBitClient(BaseClient):
                 for symbol in self.markets_list:
                     if market := self.markets.get(symbol):
                         await loop.create_task(self.subscribe_orderbooks(market))
+                # loop.create_task(self.request_ob())
                 loop.create_task(self._ping(ws))
                 async for msg in ws:
+                    # print(json.loads(msg.data))
                     # if self.stop_all:
                     #     await asyncio.sleep(0.0015)
                     #     self.stop_all = False
-                    loop.create_task(self.process_ws_msg(msg))
+                    await self.process_ws_msg(msg)
                 await ws.close()
+    #
+    # @try_exc_async
+    # async def request_ob(self):
+    #     while True:
+    #         for symbol in self.markets_list:
+    #             if market := self.markets.get(symbol):
+    #                 await self.request_orderbooks(market)
+    #                 print(f"SENT REQUEST FOR {market}")
+    #         time.sleep(0.1)
 
     @try_exc_async
     async def process_ws_msg(self, msg: aiohttp.WSMessage):
@@ -703,8 +714,17 @@ class WhiteBitClient(BaseClient):
             return ResponseStatus.ERROR
 
     @try_exc_async
+    async def request_orderbooks(self, symbol):
+        rand_id = self.id_generator()
+        data = [symbol, 100, '0']
+        method = {"id": rand_id,
+                  "method": "depth_request",
+                  "params": data}
+        await self._ws.send_json(method)
+
+    @try_exc_async
     async def subscribe_orderbooks(self, symbol):
-        data = [symbol, 100, '0', True]
+        data = [symbol, 1, '0', True]
         method = {"id": 0,
                   "method": "depth_subscribe",
                   "params": data}
@@ -746,8 +766,9 @@ class WhiteBitClient(BaseClient):
         ts_ms = time.time()
         ts_ob = data['params'][1]['timestamp']
         # print(ts_ms - ts_ob)
-        # print(len(data['params'][1].get('asks', [])))
-        # print(len(data['params'][1].get('bids', [])))
+        # print(ts_ob)
+        # print('ask', data['params'][1].get('asks', []))
+        # print('bid', data['params'][1].get('bids', []))
         # print()
         # return
         # flag_market = False
@@ -898,7 +919,7 @@ if __name__ == '__main__':
             client.cancel_all_orders()
 
 
-    client.markets_list = [list(client.markets.keys())[0]]
+    client.markets_list = list(client.markets.keys())
     print(client.markets_list)
     client.run_updater()
 
