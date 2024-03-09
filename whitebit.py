@@ -257,7 +257,6 @@ class WhiteBitClient(BaseClient):
                 ob = self.get_orderbook(market)
                 if not ob:
                     ob = await self.get_orderbook_by_symbol(market)
-                print(ob)
                 change = (ob['asks'][0][0] + ob['bids'][0][0]) / 2
                 if pos['basePrice'] and pos['amount']:
                     unrealised_pnl = (change - float(pos['basePrice'])) * float(pos['amount'])
