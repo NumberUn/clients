@@ -596,7 +596,7 @@ class BtseClient(BaseClient):
         ts_ob = data['data']['timestamp'] / 1000
         market = data['data']['symbol']
         side = None
-        c_v = self.instruments[symbol]['contract_value']
+        c_v = self.instruments[market]['contract_value']
         new_ob = {'asks': [[float(data['data']['asks'][0][0]), float(data['data']['asks'][0][1]) * c_v]],
                   'bids': [[float(data['data']['bids'][0][0]), float(data['data']['bids'][0][1]) * c_v]],
                   'ts_ms': ts_ms,
