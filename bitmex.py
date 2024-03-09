@@ -316,7 +316,8 @@ class BitmexClient(BaseClient):
             return {
                 'exchange_order_id': order_id,
                 'exchange_name': self.EXCHANGE_NAME,
-                'status': OrderStatus.FULLY_EXECUTED if response.get('ordStatus') == 'Filled' else OrderStatus.NOT_EXECUTED,
+                'status': OrderStatus.FULLY_EXECUTED if response.get(
+                    'ordStatus') == 'Filled' else OrderStatus.NOT_EXECUTED,
                 'factual_price': real_price,
                 'factual_amount_coin': real_size,
                 'factual_amount_usd': real_price * real_size,
@@ -426,7 +427,7 @@ class BitmexClient(BaseClient):
     @try_exc_async
     async def update_fills(self, data: dict) -> None:
         for order in data:
-            if order.get('cumQty'):
+            if order.get('cumQty') and order.get('orderID'):
                 print(f"{self.EXCHANGE_NAME} FILL: {data}")
                 result = self.get_order_result(order)
                 self.orders.update({order['orderID']: result})
@@ -441,6 +442,15 @@ class BitmexClient(BaseClient):
         #             'timeInForce': 'GoodTillCancel', 'ordStatus': 'New', 'workingIndicator': True, 'leavesQty': 1000,
         #             'cumQty': 0, 'text': 'Submitted via API.', 'transactTime': '2024-02-28T13:09:40.041Z',
         #             'timestamp': '2024-02-28T13:09:40.041Z'}]
+        # example_funding = [{'execID': 'a655081d-7a4f-49b1-a649-51d7b47d3a44', 'account': 2127720, 'symbol': 'APEUSDT',
+        #                     'lastQty': 69000, 'lastPx': 2.2666, 'orderQty': 69000, 'price': 2.2666, 'currency': 'USDT',
+        #                     'settlCurrency': 'USDt', 'execType': 'Funding', 'ordType': 'Limit',
+        #                     'timeInForce': 'AtTheClose', 'ordStatus': 'Filled', 'workingIndicator': False,
+        #                     'leavesQty': 0, 'cumQty': 69000, 'avgPx': 2.2666, 'commission': -0.000524,
+        #                     'feeType': 'Funding', 'text': 'Funding',
+        #                     'trdMatchID': '910dcb92-91f9-7ce0-09a7-aa255bed5c91', 'execCost': -156395400,
+        #                     'execComm': -81951, 'homeNotional': -69.0, 'foreignNotional': 156.3954,
+        #                     'transactTime': '2024-03-09T20:00:00.000Z', 'timestamp': '2024-03-09T20:00:00.000Z'}]
 
     @try_exc_async
     async def update_balance(self, data: dict) -> None:
