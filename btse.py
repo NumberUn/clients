@@ -220,6 +220,8 @@ class BtseClient(BaseClient):
             # if self.market_finder:
             #     loop.create_task(self.check_extra_orders())
             await self.get_balance_async()
+            if self.multibot.market_maker and self.multibot.mm_exchange == self.EXCHANGE_NAME:
+                return
 #             market = self.markets[self.markets_list[random.randint(0, len(self.markets_list) - 1)]]
             market = 'BTCPFC'
             price = self.get_orderbook(market)['asks'][0][0] * 0.95
