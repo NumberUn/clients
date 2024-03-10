@@ -216,7 +216,8 @@ class BitmexClient(BaseClient):
 
     @try_exc_async
     async def _run_ws_loop(self, loop) -> None:
-        async with aiohttp.ClientSession(headers=self.__get_auth('GET', '/realtime')) as s:
+        connector = aiohttp.TCPConnector(tcp_nodelay=True)
+        async with aiohttp.ClientSession(connector=connector, headers=self.__get_auth('GET', '/realtime')) as s:
             async with s.ws_connect(self.__get_url()) as ws:
                 loop.create_task(self._ping(ws))
                 print("Bitmex: connected")

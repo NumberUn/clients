@@ -18,6 +18,7 @@ import gc
 import socket
 import aiodns
 from aiohttp.resolver import AsyncResolver
+from core.custom_tcp_connector import CustomTCPConnector
 
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
@@ -47,10 +48,10 @@ class BtseClient(BaseClient):
         super().__init__()
         self.market_finder = market_finder
         self.multibot = multibot
-        if self.multibot and 'TAIWAN' in self.multibot.env:
-            self.PUBLIC_WS_ENDPOINT = 'wss://colows.btse.com/ws/oss/futures'
-            self.PRIVATE_WS_ENDPOINT = 'wss://colows.btse.com/ws/futures'
-            self.BASE_URL = f"https://coloapi.btse.com/futures"
+        # if self.multibot and 'TAIWAN' in self.multibot.env:
+        self.PUBLIC_WS_ENDPOINT = 'wss://colows.btse.com/ws/oss/futures'
+        self.PRIVATE_WS_ENDPOINT = 'wss://colows.btse.com/ws/futures'
+        self.BASE_URL = f"https://coloapi.btse.com/futures"
         self.state = state
         self.finder = finder
         self.max_pos_part = max_pos_part
@@ -79,15 +80,11 @@ class BtseClient(BaseClient):
         self.maker_fee = 0.0001 * 0.75
         self.orig_sizes = {}
         self.LAST_ORDER_ID = 'default'
-        self.last_keep_alive = 0
-        self.last_websocket_ping = 0
         self.async_tasks = []
         self.responses = {}
         self.cancel_responses = {}
         self.deleted_orders = []
         self.top_ws_ping = 0.012
-        self.stop_all = False
-        self.pipes = dict()
         self.pings = []
         self.cancel_pings = []
         self.orderbook_broken = False
@@ -209,7 +206,6 @@ class BtseClient(BaseClient):
             #             'remainingSize': 1, 'orderDetailType': None, 'positionMode': 'ONE_WAY',
             #             'positionDirection': None, 'positionId': 'BTCPFC-USD', 'time_in_force': 'GTC'}]
 
-
     @staticmethod
     @try_exc_regular
     def id_generator(size=6, chars=string.ascii_letters):
@@ -228,6 +224,7 @@ class BtseClient(BaseClient):
             price, size = self.fit_sizes(price, self.instruments[market]['min_size'], market)
             await self.create_fast_order(price, size, 'buy', market, 'keep-alive')
             resp = self.responses.get('keep-alive')
+            print(f'Order creation time: {resp["create_order_time"]}')
             ex_order_id = resp['exchange_order_id']
             await self.cancel_order(market, ex_order_id)
 
@@ -445,7 +442,6 @@ class BtseClient(BaseClient):
                 self.responses.update({response[0]["clOrderID"]: order_res})
             else:
                 self.responses.update({self.LAST_ORDER_ID: order_res})
-            # self.last_keep_alive = order_res['timestamp']
             # res_example = [{'status': 2, 'symbol': 'BTCPFC', 'orderType': 76, 'price': 43490, 'side': 'BUY', 'size': 1,
             #             'orderID': '13a82711-f6e2-4228-bf9f-3755cd8d7885', 'timestamp': 1703535543583,
             #             'triggerPrice': 0, 'trigger': False, 'deviation': 100, 'stealth': 100, 'message': '',
@@ -552,12 +548,13 @@ class BtseClient(BaseClient):
 
     @try_exc_async
     async def _run_ws_loop(self, ws_type, loop):
-        async with aiohttp.ClientSession() as s:
+        connector = CustomTCPConnector()
+        async with aiohttp.ClientSession(connector=connector) as session:
             if ws_type == 'private':
                 endpoint = self.PRIVATE_WS_ENDPOINT
             else:
                 endpoint = self.PUBLIC_WS_ENDPOINT
-            async with s.ws_connect(endpoint) as ws:
+            async with session.ws_connect(endpoint) as ws:
                 print(f"BTSE: connected {ws_type}")
                 if ws_type == 'private':
                     self._ws_private = ws
@@ -596,6 +593,7 @@ class BtseClient(BaseClient):
     async def update_ob_snap(self, data):
         ts_ms = time.time()
         ts_ob = data['data']['timestamp'] / 1000
+        print(f"PING WS: {ts_ms - ts_ob}")
         market = data['data']['symbol']
         side = None
         c_v = self.instruments[market]['contract_value']
@@ -612,7 +610,7 @@ class BtseClient(BaseClient):
         self.orderbook.update({market: new_ob})
         if self.market_finder:
             await self.market_finder.count_one_coin(market.split('PFC')[0], self.EXCHANGE_NAME)
-        if side and self.finder and ts_ms - ts_ob < self.top_ws_ping:
+        if side and self.finder:# and ts_ms - ts_ob < self.top_ws_ping:
             coin = market.split('PFC')[0]
             await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, 'ob')
         # print(f"PING SNAP/UPDATE: {ts_ms - ts_ob} / {ob['ts_ms'] - ob['timestamp']}")
@@ -694,7 +692,7 @@ class BtseClient(BaseClient):
                 #     ord_id = coin + '-' + self.EXCHANGE_NAME
                 #     self.multibot.open_orders.pop(ord_id)
                 # self.cancel_pings.append(response[0]['timestamp'] / 1000 - start)
-                # print(f"Cancel order time, ms: {response[0]['timestamp'] / 1000 - start}")
+                print(f"Cancel order time, ms: {response[0]['timestamp'] / 1000 - start}")
                 # print(f"Average cancel order time, ms: {(sum(self.cancel_pings) / len(self.cancel_pings)) * 1000}")
                 self.cancel_responses.update({order_id: response[0]})
                         # if self.multibot.open_orders.get(ord_id, [''])[0] == response[0]['orderID']:

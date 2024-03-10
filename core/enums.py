@@ -41,8 +41,6 @@ class OrderStatus:
     FULLY_EXECUTED = 'Fully Executed'
 
 
-
-
 class ClientsOrderStatuses:
     NEW = 'NEW'
     FILLED = 'FILLED'
