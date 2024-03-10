@@ -75,6 +75,7 @@ class WhiteBitClient(BaseClient):
         self.top_ws_ping = 0.02
         self.stop_all = False
         self.clients_ids = {}
+        self.pings = []
         self.cancel_all_orders()
 
     @try_exc_regular
@@ -428,7 +429,7 @@ class WhiteBitClient(BaseClient):
 
     @try_exc_async
     async def _run_ws_loop(self, loop):
-        connector = CustomTCPConnector()
+        connector = CustomTCPConnector() #connector=connector
         async with aiohttp.ClientSession(connector=connector) as session:
             async with session.ws_connect(self.PUBLIC_WS_ENDPOINT) as ws:
                 self._ws = ws
@@ -795,13 +796,15 @@ class WhiteBitClient(BaseClient):
         side = None
         ts_ms = time.time()
         ts_ob = data['params'][1]['timestamp']
-        # print(ts_ms - ts_ob)
-        # print(ts_ob)
-        # print('ask', data['params'][1].get('asks', []))
-        # print('bid', data['params'][1].get('bids', []))
-        # print()
+        # self.pings.append(ts_ms - ts_ob)
+        # print(f"Av. WS ping: {round(sum(self.pings) / len(self.pings), 7)} | {len(self.pings)}")
+        # # print(ts_ms - ts_ob)
+        # # print(ts_ob)
+        # # print('ask', data['params'][1].get('asks', []))
+        # # print('bid', data['params'][1].get('bids', []))
+        # # print()
         # return
-        # flag_market = False
+        # # flag_market = False
         symbol = data['params'][2]
         new_ob = self.orderbook[symbol].copy()
         new_ob['ts_ms'] = ts_ms

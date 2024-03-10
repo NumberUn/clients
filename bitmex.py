@@ -81,6 +81,7 @@ class BitmexClient(BaseClient):
         self.orig_sizes = {}
         self.clients_ids = {}
         self.top_ws_ping = 0.02
+        self.pings = []
         if multibot:
             self.cancel_all_orders()
 
@@ -406,7 +407,8 @@ class BitmexClient(BaseClient):
                 if self.instruments.get(market) and market.split('USD')[0] in self.markets_list:
                     ts_ob = self.timestamp_from_date(ob['timestamp'])
                     ts_ms = time.time()
-                    # print(ts_ms - ts_ob)
+                    # self.pings.append(ts_ms - ts_ob)
+                    # print(f"Av. WS ping: {round(sum(self.pings) / len(self.pings), 7)} | {len(self.pings)}")
                     # return
                     ob.update({'timestamp': ts_ob, 'ts_ms': ts_ms})
                     contract_value = self.get_contract_value(market)
