@@ -18,7 +18,7 @@ import gc
 import socket
 import aiodns
 from aiohttp.resolver import AsyncResolver
-from core.custom_tcp_connector import CustomTCPConnector
+from clients.core.custom_tcp_connector import CustomTCPConnector
 
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 

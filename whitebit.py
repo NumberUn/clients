@@ -20,6 +20,7 @@ import gc
 import socket
 import aiodns
 from aiohttp.resolver import AsyncResolver
+from clients.core.custom_tcp_connector import CustomTCPConnector
 
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
@@ -427,7 +428,7 @@ class WhiteBitClient(BaseClient):
 
     @try_exc_async
     async def _run_ws_loop(self, loop):
-        connector = aiohttp.TCPConnector(tcp_nodelay=True)
+        connector = CustomTCPConnector()
         async with aiohttp.ClientSession(connector=connector) as session:
             async with session.ws_connect(self.PUBLIC_WS_ENDPOINT) as ws:
                 self._ws = ws
