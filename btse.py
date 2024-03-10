@@ -18,7 +18,6 @@ import gc
 import socket
 import aiodns
 from aiohttp.resolver import AsyncResolver
-from clients.core.custom_tcp_connector import CustomTCPConnector
 
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
@@ -551,8 +550,7 @@ class BtseClient(BaseClient):
 
     @try_exc_async
     async def _run_ws_loop(self, ws_type, loop):
-        connector = CustomTCPConnector()
-        async with aiohttp.ClientSession(connector=connector) as session:
+        async with aiohttp.ClientSession() as session:
             if ws_type == 'private':
                 endpoint = self.PRIVATE_WS_ENDPOINT
             else:

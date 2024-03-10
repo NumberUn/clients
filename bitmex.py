@@ -18,7 +18,6 @@ import gc
 import socket
 import aiodns
 from aiohttp.resolver import AsyncResolver
-from clients.core.custom_tcp_connector import CustomTCPConnector
 
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
@@ -218,8 +217,7 @@ class BitmexClient(BaseClient):
 
     @try_exc_async
     async def _run_ws_loop(self, loop) -> None:
-        connector = CustomTCPConnector()
-        async with aiohttp.ClientSession(connector=connector, headers=self.__get_auth('GET', '/realtime')) as s:
+        async with aiohttp.ClientSession(headers=self.__get_auth('GET', '/realtime')) as s:
             async with s.ws_connect(self.__get_url()) as ws:
                 loop.create_task(self._ping(ws))
                 print("Bitmex: connected")

@@ -17,7 +17,6 @@ import gc
 from clients.core.base_client import BaseClient
 from clients.core.enums import ResponseStatus, OrderStatus
 from core.wrappers import try_exc_regular, try_exc_async
-from clients.core.custom_tcp_connector import CustomTCPConnector
 
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
@@ -105,8 +104,7 @@ class OkxClient(BaseClient):
 
     @try_exc_async
     async def orders_processing_loop(self, loop):
-        connector = CustomTCPConnector()
-        async with aiohttp.ClientSession(connector=connector) as session:
+        async with aiohttp.ClientSession() as session:
             async with session.ws_connect(self.WS_PRV) as ws:
                 await loop.create_task(self.login_ws_message(loop, ws, 'orders_processing'))
                 self.orders_ws = ws
@@ -290,8 +288,7 @@ class OkxClient(BaseClient):
 
     @try_exc_async
     async def _run_ws_loop(self, connection_type, loop, endpoint):
-        connector = CustomTCPConnector()
-        async with aiohttp.ClientSession(connector=connector) as session:
+        async with aiohttp.ClientSession() as session:
             async with session.ws_connect(endpoint) as ws:
                 await loop.create_task(self.login_ws_message(loop, ws, connection_type))
                 if connection_type == 'private':
