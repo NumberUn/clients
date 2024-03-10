@@ -168,10 +168,10 @@ class BtseClient(BaseClient):
         async with self.async_session.post(url=self.BASE_URL + path, headers=self.session.headers, json=body) as resp:
             try:
                 response = await resp.json()
-                self.pings.append(response[0]['timestamp'] / 1000 - time_start)
-                print(f"Attempts: {len(self.pings)}")
-                print(f"Create order time, s: {response[0]['timestamp'] / 1000 - time_start}")
-                print(f"Average create order time, ms: {sum(self.pings) / len(self.pings) * 1000}")
+                # self.pings.append(response[0]['timestamp'] / 1000 - time_start)
+                # print(f"Attempts: {len(self.pings)}")
+                # print(f"Create order time, s: {response[0]['timestamp'] / 1000 - time_start}")
+                # print(f"Average create order time, ms: {sum(self.pings) / len(self.pings) * 1000}")
                 if not client_id or 'taker' in client_id:
                     print(f"{self.EXCHANGE_NAME} ORDER CREATE RESPONSE: {response}")
                     print(f"{self.EXCHANGE_NAME} ORDER CREATE PING: {response[0]['timestamp'] / 1000 - time_start}")
@@ -225,12 +225,6 @@ class BtseClient(BaseClient):
             price, size = self.fit_sizes(price, self.instruments[market]['min_size'], market)
             await self.create_fast_order(price, size, 'buy', market, 'keep-alive')
             resp = self.responses.get('keep-alive')
-            print(f'Order creation time: {resp["create_order_time"]}')
-            ex_order_id = resp['exchange_order_id']
-            price = price * 0.99
-            old_size = size
-            price, size = self.fit_sizes(price, self.instruments[market]['min_size'] * 2, market)
-            await self.amend_order(price, size, ex_order_id, market, old_size)
             await self.cancel_order(market, ex_order_id)
 
     @staticmethod
@@ -431,10 +425,10 @@ class BtseClient(BaseClient):
             if isinstance(response, dict):
                 return
             # print(f"{self.EXCHANGE_NAME} ORDER AMEND PING: {response[0]['timestamp'] / 1000 - time_start}")
-            self.pings_amend.append(response[0]['timestamp'] / 1000 - time_start)
-            # print(f"Attempts: {len(self.pings)}")
-            print(f"Amend order time, s: {response[0]['timestamp'] / 1000 - time_start}")
-            print(f"Average amend order time, ms: {sum(self.pings_amend) / len(self.pings_amend) * 1000}")
+            # self.pings_amend.append(response[0]['timestamp'] / 1000 - time_start)
+            # # print(f"Attempts: {len(self.pings)}")
+            # print(f"Amend order time, s: {response[0]['timestamp'] / 1000 - time_start}")
+            # print(f"Average amend order time, ms: {sum(self.pings_amend) / len(self.pings_amend) * 1000}")
             # print(f"ORDER AMEND: {response}")
             status = self.get_order_response_status(response)
             self.LAST_ORDER_ID = response[0].get('orderID', 'default')
@@ -617,11 +611,11 @@ class BtseClient(BaseClient):
             elif new_ob['bids'][0][0] >= last_ob['bids'][0][0]:
                 side = 'sell'
         self.orderbook.update({market: new_ob})
-        if self.market_finder:
-            await self.market_finder.count_one_coin(market.split('PFC')[0], self.EXCHANGE_NAME)
         if side and self.finder:# and ts_ms - ts_ob < self.top_ws_ping:
             coin = market.split('PFC')[0]
             await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, 'ob')
+        if self.market_finder:
+            await self.market_finder.count_one_coin(market.split('PFC')[0], self.EXCHANGE_NAME)
         # print(f"PING SNAP/UPDATE: {ts_ms - ts_ob} / {ob['ts_ms'] - ob['timestamp']}")
         # print(f"TS SNAP/UPDATE: {ts_ob} / {ob['timestamp']}")
         # print(f"SNAP/UPDATE TOPASK: {data['data']['asks'][0]} / {ob['asks'][0]}")
