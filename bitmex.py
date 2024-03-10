@@ -79,7 +79,7 @@ class BitmexClient(BaseClient):
         self.async_tasks = []
         self.orig_sizes = {}
         self.clients_ids = {}
-        self.top_ws_ping = 0.01
+        self.top_ws_ping = 0.02
         if multibot:
             self.cancel_all_orders()
 
@@ -416,6 +416,7 @@ class BitmexClient(BaseClient):
                             side = 'buy'
                         elif ob['bids'][0][0] < last_ob['bids'][0][0]:
                             side = 'sell'
+                    # print(side)
                     self.orderbook.update({market: ob})
                     if side:
                         coin = market.split('USDT')[0]
