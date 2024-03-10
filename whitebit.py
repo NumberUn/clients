@@ -558,13 +558,15 @@ class WhiteBitClient(BaseClient):
             return OrderStatus.NOT_EXECUTED
 
     @try_exc_regular
-    def fit_sizes(self, price, amount, symbol):
+    def fit_sizes(self, price: float, amount: float, market: str) -> (float, float):
         # NECESSARY
-        instr = self.instruments[symbol]
+        instr = self.instruments[market]
         tick_size = instr['tick_size']
         quantity_precision = instr['quantity_precision']
         price_precision = instr['price_precision']
-        amount = round(amount, quantity_precision)
+        step_size = instr['step_size']
+        precised_amount = int(amount / step_size) * step_size
+        amount = round(precised_amount, quantity_precision)
         rounded_price = round(price / tick_size) * tick_size
         price = round(rounded_price, price_precision)
         return price, amount

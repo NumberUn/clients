@@ -187,7 +187,7 @@ class BitmexClient(BaseClient):
             quantity_precision = self.get_quantity_precision(step_size)
             refactored_instruments.update({instr['symbol']: {'tick_size': instr['tickSize'],
                                                              'price_precision': price_precision,
-                                                             'step_size': instr['lotSize'] / contract_value,
+                                                             'step_size': step_size,
                                                              'min_size': instr['lotSize'] / contract_value,
                                                              'quantity_precision': quantity_precision,
                                                              'contract_value': contract_value,
@@ -504,7 +504,9 @@ class BitmexClient(BaseClient):
         tick_size = instr['tick_size']
         quantity_precision = instr['quantity_precision']
         price_precision = instr['price_precision']
-        amount = round(amount, quantity_precision)
+        step_size = instr['step_size']
+        precised_amount = int(amount / step_size) * step_size
+        amount = round(precised_amount, quantity_precision)
         rounded_price = round(price / tick_size) * tick_size
         price = round(rounded_price, price_precision)
         return price, amount
