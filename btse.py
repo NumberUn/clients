@@ -696,7 +696,8 @@ class BtseClient(BaseClient):
                 # print(f"Cancel order time, ms: {response[0]['timestamp'] / 1000 - start}")
                 # print(f"Average cancel order time, ms: {(sum(self.cancel_pings) / len(self.cancel_pings)) * 1000}")
                 self.cancel_responses.update({order_id: response[0]})
-                        # if self.multibot.open_orders.get(ord_id, [''])[0] == response[0]['orderID']:
+                if not self.multibot.open_orders.get(order_id, [''])[0] == response[0]['orderID']:
+                    print('deleted', order_id)
                         #     self.multibot.dump_orders.update({ord_id: self.multibot.open_orders.pop(ord_id)})
             except:
                 pass
