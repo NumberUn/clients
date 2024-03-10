@@ -48,10 +48,10 @@ class BtseClient(BaseClient):
         super().__init__()
         self.market_finder = market_finder
         self.multibot = multibot
-        # if self.multibot and 'TAIWAN' in self.multibot.env:
-        self.PUBLIC_WS_ENDPOINT = 'wss://colows.btse.com/ws/oss/futures'
-        self.PRIVATE_WS_ENDPOINT = 'wss://colows.btse.com/ws/futures'
-        self.BASE_URL = f"https://coloapi.btse.com/futures"
+        if self.multibot and 'TAIWAN' in self.multibot.env:
+            self.PUBLIC_WS_ENDPOINT = 'wss://colows.btse.com/ws/oss/futures'
+            self.PRIVATE_WS_ENDPOINT = 'wss://colows.btse.com/ws/futures'
+            self.BASE_URL = f"https://coloapi.btse.com/futures"
         self.state = state
         self.finder = finder
         self.max_pos_part = max_pos_part
@@ -86,6 +86,7 @@ class BtseClient(BaseClient):
         self.deleted_orders = []
         self.top_ws_ping = 0.012
         self.pings = []
+        self.pings_amend = []
         self.cancel_pings = []
         self.orderbook_broken = False
         self.restart_task = asyncio.Event()
@@ -167,10 +168,10 @@ class BtseClient(BaseClient):
         async with self.async_session.post(url=self.BASE_URL + path, headers=self.session.headers, json=body) as resp:
             try:
                 response = await resp.json()
-                # self.pings.append(response[0]['timestamp'] / 1000 - time_start)
-                # print(f"Attempts: {len(self.pings)}")
-                # print(f"Create order time, s: {response[0]['timestamp'] / 1000 - time_start}")
-                # print(f"Average create order time, ms: {sum(self.pings) / len(self.pings) * 1000}")
+                self.pings.append(response[0]['timestamp'] / 1000 - time_start)
+                print(f"Attempts: {len(self.pings)}")
+                print(f"Create order time, s: {response[0]['timestamp'] / 1000 - time_start}")
+                print(f"Average create order time, ms: {sum(self.pings) / len(self.pings) * 1000}")
                 if not client_id or 'taker' in client_id:
                     print(f"{self.EXCHANGE_NAME} ORDER CREATE RESPONSE: {response}")
                     print(f"{self.EXCHANGE_NAME} ORDER CREATE PING: {response[0]['timestamp'] / 1000 - time_start}")
@@ -226,6 +227,10 @@ class BtseClient(BaseClient):
             resp = self.responses.get('keep-alive')
             print(f'Order creation time: {resp["create_order_time"]}')
             ex_order_id = resp['exchange_order_id']
+            price = price * 0.99
+            old_size = size
+            price, size = self.fit_sizes(price, self.instruments[market]['min_size'] * 2, market)
+            await self.amend_order(price, size, ex_order_id, market, old_size)
             await self.cancel_order(market, ex_order_id)
 
     @staticmethod
@@ -426,6 +431,10 @@ class BtseClient(BaseClient):
             if isinstance(response, dict):
                 return
             # print(f"{self.EXCHANGE_NAME} ORDER AMEND PING: {response[0]['timestamp'] / 1000 - time_start}")
+            self.pings_amend.append(response[0]['timestamp'] / 1000 - time_start)
+            # print(f"Attempts: {len(self.pings)}")
+            print(f"Amend order time, s: {response[0]['timestamp'] / 1000 - time_start}")
+            print(f"Average amend order time, ms: {sum(self.pings_amend) / len(self.pings_amend) * 1000}")
             # print(f"ORDER AMEND: {response}")
             status = self.get_order_response_status(response)
             self.LAST_ORDER_ID = response[0].get('orderID', 'default')
@@ -593,7 +602,7 @@ class BtseClient(BaseClient):
     async def update_ob_snap(self, data):
         ts_ms = time.time()
         ts_ob = data['data']['timestamp'] / 1000
-        print(f"PING WS: {ts_ms - ts_ob}")
+        # print(f"PING WS: {ts_ms - ts_ob}")
         market = data['data']['symbol']
         side = None
         c_v = self.instruments[market]['contract_value']
