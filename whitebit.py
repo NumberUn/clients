@@ -70,6 +70,7 @@ class WhiteBitClient(BaseClient):
         self.total_start_time = time.time()
         self.top_ws_ping = 0.02
         self.stop_all = False
+        self.clients_ids = {}
         self.cancel_all_orders()
 
     @try_exc_regular
@@ -513,6 +514,8 @@ class WhiteBitClient(BaseClient):
                       'datetime_update': datetime.utcnow(),
                       'ts_update': order['mtime']}
             self.orders.update({order['id']: result})
+            if client_id := self.clients_ids.get(order['ordId']):
+                self.responses.update({client_id: result})
         loop.create_task(self.multibot.update_all_av_balances())
         print(f'ORDERS UPDATE {self.EXCHANGE_NAME} {datetime.utcnow()}', data)
         if stored:
@@ -673,6 +676,7 @@ class WhiteBitClient(BaseClient):
                 return
             price = float(response['dealMoney']) / float(response['dealStock']) if response[
                                                                                        'dealStock'] != '0' else 0
+            order_id = response.get('orderId', 'default')
             order_res = {'exchange_name': self.EXCHANGE_NAME,
                          'exchange_order_id': response.get('orderId'),
                          'timestamp': response.get('timestamp', time.time()),
@@ -683,9 +687,19 @@ class WhiteBitClient(BaseClient):
                          'time_order_sent': time_start,
                          'create_order_time': response['timestamp'] - time_start}
             if client_id:
-                self.responses.update({client_id: order_res})
+                self.clients_ids.update({order_id: client_id})
+                await asyncio.sleep(0.1)
+                self.responses.update({client_id: self.orders.get(order_id, order_res)})
             else:
-                self.responses.update({response['orderId']: order_res})
+                self.responses.update({response['orderId']: self.orders.get(order_id, order_res)})
+            self.LAST_ORDER_ID = order_id
+            if not order_id:
+                self.error_info = response
+
+
+            if client_id:
+                self.responses.update({client_id: order_res})
+
             # except:
             #     # if self.EXCHANGE_NAME != self.multibot.mm_exchange:
             #     # print(message)
