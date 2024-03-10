@@ -695,7 +695,7 @@ class BtseClient(BaseClient):
                 #     ord_id = coin + '-' + self.EXCHANGE_NAME
                 #     self.multibot.open_orders.pop(ord_id)
                 # self.cancel_pings.append(response[0]['timestamp'] / 1000 - start)
-                print(f"Cancel order time, ms: {response[0]['timestamp'] / 1000 - start}")
+                # print(f"Cancel order time, ms: {response[0]['timestamp'] / 1000 - start}")
                 # print(f"Average cancel order time, ms: {(sum(self.cancel_pings) / len(self.cancel_pings)) * 1000}")
                 self.cancel_responses.update({order_id: response[0]})
                         # if self.multibot.open_orders.get(ord_id, [''])[0] == response[0]['orderID']:
