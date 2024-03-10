@@ -89,6 +89,7 @@ class BtseClient(BaseClient):
         self.cancel_pings = []
         self.orderbook_broken = False
         self.restart_task = asyncio.Event()
+        self.takers = []
         if multibot:
             self.cancel_all_orders()
 
@@ -172,6 +173,7 @@ class BtseClient(BaseClient):
                 # print(f"Create order time, s: {response[0]['timestamp'] / 1000 - time_start}")
                 # print(f"Average create order time, ms: {sum(self.pings) / len(self.pings) * 1000}")
                 if not client_id or 'taker' in client_id:
+                    self.takers.append(response[0].get('orderID'))
                     print(f"{self.EXCHANGE_NAME} ORDER CREATE RESPONSE: {response}")
                     print(f"{self.EXCHANGE_NAME} ORDER CREATE PING: {response[0]['timestamp'] / 1000 - time_start}")
             except Exception:
@@ -224,6 +226,7 @@ class BtseClient(BaseClient):
             price, size = self.fit_sizes(price, self.instruments[market]['min_size'], market)
             await self.create_fast_order(price, size, 'buy', market, 'keep-alive')
             resp = self.responses.get('keep-alive')
+            ex_order_id = resp['exchange_order_id']
             await self.cancel_order(market, ex_order_id)
 
     @staticmethod
@@ -678,6 +681,9 @@ class BtseClient(BaseClient):
 
     @try_exc_async
     async def cancel_order(self, symbol: str, order_id: str):
+        if order_id in self.takers:
+            print(f"ATTEMPT TO DELETE TAKER LIMIT ORDER!: {order_id}")
+            return
         start = time.time()
         path = '/api/v2.1/order'
         data = {'symbol': symbol,
@@ -696,8 +702,8 @@ class BtseClient(BaseClient):
                 # print(f"Cancel order time, ms: {response[0]['timestamp'] / 1000 - start}")
                 # print(f"Average cancel order time, ms: {(sum(self.cancel_pings) / len(self.cancel_pings)) * 1000}")
                 self.cancel_responses.update({order_id: response[0]})
-                if not self.multibot.open_orders.get(order_id, [''])[0] == response[0]['orderID']:
-                    print('deleted', order_id)
+                # if not self.multibot.open_orders.get(order_id, [''])[0] == response[0]['orderID']:
+                #     print('deleted', order_id)
                         #     self.multibot.dump_orders.update({ord_id: self.multibot.open_orders.pop(ord_id)})
             except:
                 pass
