@@ -511,7 +511,8 @@ class WhiteBitClient(BaseClient):
                                 'price': factual_price,
                                 'timestamp': order['mtime'],
                                 'ts_ms': own_ts,
-                                'order_id': order['id']}
+                                'order_id': order['id'],
+                                'type': 'maker' if order['type'] in [1, 7] else 'taker'}
                         loop.create_task(self.multibot.hedge_maker_position(deal))
                 # self.get_position()
             else:
