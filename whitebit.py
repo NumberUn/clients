@@ -75,6 +75,7 @@ class WhiteBitClient(BaseClient):
         self.stop_all = False
         self.clients_ids = {}
         self.pings = []
+        self.cancel_responses = {}
         self.cancel_all_orders()
 
     @try_exc_regular
@@ -96,7 +97,7 @@ class WhiteBitClient(BaseClient):
     async def _run_order_loop(self, loop):
         resolver = AsyncResolver()
         connector = aiohttp.TCPConnector(resolver=resolver, family=socket.AF_INET)
-        async with aiohttp.ClientSession() as self.async_session:
+        async with aiohttp.ClientSession(connector=connector) as self.async_session:
             self.async_session.headers.update(self.headers)
             loop.create_task(self.keep_alive_order())
             while True:
@@ -117,7 +118,7 @@ class WhiteBitClient(BaseClient):
                         market = task[1]['market']
                         loop.create_task(self.cancel_order(market, task[1]['order_id']))
                         loop.create_task(self.create_fast_order(task[1]['price'], task[1]['size'], task[1]['side'],
-                                                                market, task[1]['client_id'], amend=True))
+                                                                market, task[1]['client_id']))
                     self.async_tasks.remove(task)
                 await asyncio.sleep(0.00001)
 
@@ -203,21 +204,22 @@ class WhiteBitClient(BaseClient):
             try:
                 response = await resp.json()
                 # print(f'ORDER CANCELED {self.EXCHANGE_NAME}', response)
-                if self.multibot:
-                    if order_id in self.multibot.deleted_orders:
-                        self.multibot.deleted_orders.remove(order_id)
-                    if 'maker' in response.get('clientOrderId', '') and self.EXCHANGE_NAME == self.multibot.mm_exchange:
-                        coin = symbol.split('_')[0]
-                        if self.multibot.open_orders.get(coin + '-' + self.EXCHANGE_NAME)[0] == response['orderId']:
-                            self.multibot.open_orders.pop(coin + '-' + self.EXCHANGE_NAME)
+                self.cancel_responses.update({order_id: response})
+                # if self.multibot:
+                #     if order_id in self.multibot.deleted_orders:
+                #         self.multibot.deleted_orders.remove(order_id)
+                #     if 'maker' in response.get('clientOrderId', '') and self.EXCHANGE_NAME == self.multibot.mm_exchange:
+                #         coin = symbol.split('_')[0]
+                #         if self.multibot.open_orders.get(coin + '-' + self.EXCHANGE_NAME)[0] == response['orderId']:
+                #             self.multibot.open_orders.pop(coin + '-' + self.EXCHANGE_NAME)
             except:
                 # print(resp.text)
                 await asyncio.sleep(0.1)
                 # await self.cancel_order(symbol, order_id)
                 self.cancel_all_orders()
-                if self.multibot:
-                    if self.EXCHANGE_NAME == self.multibot.mm_exchange:
-                        self.multibot.open_orders = {}
+                # if self.multibot:
+                #     if self.EXCHANGE_NAME == self.multibot.mm_exchange:
+                #         self.multibot.open_orders = {}
 
     # example = {'orderId': 422806159063, 'clientOrderId': 'maker-WHITEBIT-XRP-1003947', 'market': 'XRP_PERP',
     #            'side': 'buy', 'type': 'margin limit', 'timestamp': 1705924757.295865, 'dealMoney': '0',
@@ -703,11 +705,8 @@ class WhiteBitClient(BaseClient):
             self.LAST_ORDER_ID = order_id
             if not order_id:
                 self.error_info = response
-
-
             if client_id:
                 self.responses.update({client_id: order_res})
-
             # except:
             #     # if self.EXCHANGE_NAME != self.multibot.mm_exchange:
             #     # print(message)

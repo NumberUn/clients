@@ -54,8 +54,7 @@ class BitmexClient(BaseClient):
         self.api_key = keys['API_KEY']
         self.api_secret = keys['API_SECRET']
         self.subscriptions = ['margin', 'position', 'execution']
-        self.orderbook_type = 'orderBook10'  # 'orderBookL2_25'  #
-
+        self.orderbook_type = 'orderBook10'  # 'orderBookL2_25'
         self.auth = Auth(self.BASE_URL, self.api_key, self.api_secret)
         self.amount = 0
         self.amount_contracts = 0
