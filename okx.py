@@ -75,8 +75,8 @@ class OkxClient(BaseClient):
 
     @staticmethod
     @try_exc_regular
-    def id_generator(size=4, chars=string.ascii_letters):
-        return ''.join(random.choice(chars) for _ in range(size))
+    def id_generator(size=2, chars=string.ascii_letters):
+        return "".join(random.choice(chars) for _ in range(size))
 
     @try_exc_regular
     def run_updater(self):
@@ -179,7 +179,7 @@ class OkxClient(BaseClient):
         # if 'taker' in client_id:
         #     msg['args'][0].update({"ordType": 'market'})
         # else:
-        msg['args'][0].update({"ordType": 'limit',
+        msg["args"][0].update({"ordType": "limit",
                                "px": price})
         await self.orders_ws.send_json(msg)
         await self.receiving.wait()

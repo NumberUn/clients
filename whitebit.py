@@ -192,7 +192,7 @@ class WhiteBitClient(BaseClient):
         # message += f"{time_start - self.request_timer=}\n"
         # message += f"{self.total_requests=}\n"
         # message += f"{time_start - self.total_start_time=}\n"
-        path = '/api/v4/order/cancel'
+        path = "/api/v4/order/cancel"
         params = {"market": symbol,
                   "orderId": order_id}
         if order_id in self.deleted_orders:

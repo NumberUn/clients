@@ -88,8 +88,6 @@ class BtseClient(BaseClient):
         self.pings_amend = []
         self.cancel_pings = []
         self.orderbook_broken = False
-        self.restart_task = asyncio.Event()
-        self.takers = []
         if multibot:
             self.cancel_all_orders()
 
@@ -155,12 +153,12 @@ class BtseClient(BaseClient):
         sz = int(sz / contract_value)
         body = {"symbol": market,
                 "side": side.upper(),
-                'size': sz if sz else 1}
+                "size": sz if sz else 1}
         # if 'taker' in client_id:
         #     body.update({"type": "MARKET"})
         # else:
         body.update({"price": price,
-                     'type': 'LIMIT'})
+                     "type": 'LIMIT'})
         # if client_id:
         #     body.update({'clOrderID': client_id})
         # print(f"{self.EXCHANGE_NAME} SENDING ORDER: {body}")
@@ -173,7 +171,6 @@ class BtseClient(BaseClient):
                 # print(f"Create order time, s: {response[0]['timestamp'] / 1000 - time_start}")
                 # print(f"Average create order time, ms: {sum(self.pings) / len(self.pings) * 1000}")
                 if not client_id or 'taker' in client_id:
-                    self.takers.append(response[0].get('orderID'))
                     print(f"{self.EXCHANGE_NAME} ORDER CREATE RESPONSE: {response}")
                     print(f"{self.EXCHANGE_NAME} ORDER CREATE PING: {response[0]['timestamp'] / 1000 - time_start}")
             except Exception:
@@ -220,13 +217,20 @@ class BtseClient(BaseClient):
             # if self.market_finder:
             #     loop.create_task(self.check_extra_orders())
             await self.get_balance_async()
-            if self.multibot.market_maker and self.multibot.mm_exchange == self.EXCHANGE_NAME:
-                return
-#             market = self.markets[self.markets_list[random.randint(0, len(self.markets_list) - 1)]]
+            if self.multibot:
+                if self.multibot.market_maker:
+                    if self.multibot.mm_exchange == self.EXCHANGE_NAME:
+                        return
+#           market = self.markets[self.markets_list[random.randint(0, len(self.markets_list) - 1)]]
             market = 'BTCPFC'
             price = self.get_orderbook(market)['asks'][0][0] * 0.95
-            price, size = self.fit_sizes(price, self.instruments[market]['min_size'], market)
+            min_size = self.instruments[market]['min_size']
+            tick_size = self.instruments[market]['tick_size']
+            price, size = self.fit_sizes(price, min_size, market)
             await self.create_fast_order(price, size, 'buy', market, 'keep-alive')
+            await self.create_fast_order(price + tick_size * 1, size * 2, 'buy', market, 'keep-alive')
+            await self.create_fast_order(price + tick_size * 2, size * 3, 'buy', market, 'keep-alive')
+            await self.create_fast_order(price + tick_size * 3, size * 4, 'buy', market, 'keep-alive')
             resp = self.responses.get('keep-alive')
             ex_order_id = resp['exchange_order_id']
             await self.cancel_order(market, ex_order_id)
@@ -410,11 +414,11 @@ class BtseClient(BaseClient):
     @try_exc_async
     async def amend_order(self, price, sz, order_id, market, old_order_size):
         time_start = time.time()
-        path = '/api/v2.1/order'
+        path = "/api/v2.1/order"
         body = {"symbol": market,
                 "orderID": order_id,
-                "type": 'PRICE' if old_order_size == sz else 'ALL'}
-        if body['type'] == 'ALL':
+                "type": "PRICE" if old_order_size == sz else "ALL"}
+        if body['type'] == "ALL":
             contract_value = self.instruments[market]['contract_value']
             body.update({"orderSize": int(sz / contract_value),
                          "orderPrice": price})
@@ -564,18 +568,13 @@ class BtseClient(BaseClient):
                 print(f"BTSE: connected {ws_type}")
                 if ws_type == 'private':
                     self._ws_private = ws
-                    await loop.create_task(self.subscribe_privates())
+                    await self.subscribe_privates()
                 else:
                     self._ws_public = ws
-                    # await loop.create_task(self.subscribe_orderbooks())
-                    await loop.create_task(self.subscribe_snapshot_orderbooks())
+                    await self.subscribe_snapshot_orderbooks()
                 loop.create_task(self._ping(ws))
                 async for msg in ws:
-                    loop.create_task(self.process_ws_msg(msg))
-                    if self.orderbook_broken:
-                        self.orderbook_broken = False
-                        self.restart_task.set()
-                        break
+                    await self.process_ws_msg(msg)
             await ws.close()
 
     @try_exc_async
@@ -631,9 +630,6 @@ class BtseClient(BaseClient):
     async def _ping(self, ws):
         while True:
             await asyncio.sleep(25)
-            if self.restart_task.is_set():
-                self.restart_task.clear()
-                return
             # Adjust the ping interval as needed
             await ws.ping()
         # print(f'PING SENT: {datetime.utcnow()}')
@@ -683,15 +679,12 @@ class BtseClient(BaseClient):
 
     @try_exc_async
     async def cancel_order(self, symbol: str, order_id: str):
-        if order_id in self.takers:
-            print(f"ATTEMPT TO DELETE TAKER LIMIT ORDER!: {order_id}")
-            return
         start = time.time()
         path = '/api/v2.1/order'
-        data = {'symbol': symbol,
-                'orderId': order_id}
+        data = {"symbol": symbol,
+                "orderID": order_id}
         self.get_private_headers(path, data)
-        path += '?' + "&".join([f"{key}={data[key]}" for key in sorted(data)])
+        path += "?" + "&".join([f"{key}={data[key]}" for key in sorted(data)])
         async with self.async_session.delete(url=self.BASE_URL + path, headers=self.session.headers, json=data) as resp:
             try:
                 response = await resp.json()
