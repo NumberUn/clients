@@ -56,6 +56,7 @@ class BitmexClient(BaseClient):
         self.subscriptions = ['margin', 'position', 'execution']
         self.orderbook_type = 'orderBook10'  # 'orderBookL2_25'
         self.auth = Auth(self.BASE_URL, self.api_key, self.api_secret)
+        self.order_loop = asyncio.new_event_loop()
         self.amount = 0
         self.amount_contracts = 0
         self.taker_fee = 0.0005
@@ -150,7 +151,7 @@ class BitmexClient(BaseClient):
         wst.start()
         time.sleep(2)
         if self.state == 'Bot':
-            wst = threading.Thread(target=self._run_ws_forever, args=[asyncio.new_event_loop(), self._run_order_loop])
+            wst = threading.Thread(target=self._run_ws_forever, args=[self.order_loop, self._run_order_loop])
             wst.daemon = True
             wst.start()
         # self.__wait_for_account()

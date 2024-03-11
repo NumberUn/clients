@@ -525,7 +525,7 @@ class WhiteBitClient(BaseClient):
                       'datetime_update': datetime.utcnow(),
                       'ts_update': order['mtime']}
             self.orders.update({order['id']: result})
-            if client_id := self.clients_ids.get(order['ordId']):
+            if client_id := self.clients_ids.get(order['id']):
                 self.responses.update({client_id: result})
         loop.create_task(self.multibot.update_all_av_balances())
         print(f'ORDERS UPDATE {self.EXCHANGE_NAME} {datetime.utcnow()}', data)
