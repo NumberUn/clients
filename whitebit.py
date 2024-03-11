@@ -445,7 +445,7 @@ class WhiteBitClient(BaseClient):
                     # if self.stop_all:
                     #     await asyncio.sleep(0.0015)
                     #     self.stop_all = False
-                    await self.process_ws_msg(msg)
+                    loop.create_task(self.process_ws_msg(msg))
                 await ws.close()
     #
     # @try_exc_async
@@ -460,16 +460,19 @@ class WhiteBitClient(BaseClient):
     @try_exc_async
     async def process_ws_msg(self, msg: aiohttp.WSMessage):
         data = json.loads(msg.data)
-        if data.get('method') == 'depth_update':
+        method = data.get('method')
+        if method == 'ordersExecuted_update':
+            await self.update_orders(data)
+            print(data, datetime.utcnow())
+        elif method == 'depth_update':
             if data['params'][0]:
                 await self.update_orderbook_snapshot(data)
             else:
                 await self.update_orderbook(data)
-        elif data.get('method') == 'balanceMargin_update':
+        elif method == 'balanceMargin_update':
             await self.update_balances(data)
-        elif data.get('method') in ['ordersExecuted_update', 'ordersPending_update']:
-            await self.update_orders(data)
-            print(data, datetime.utcnow())
+        else:
+            print(method, data)
 
     @try_exc_async
     async def _ping(self, ws):
@@ -933,7 +936,7 @@ class WhiteBitClient(BaseClient):
     def first_positions_update(self):
         while set(self.orderbook.keys()) < set([self.markets[x] for x in self.markets_list if self.markets.get(x)]):
             time.sleep(0.01)
-            print('WHITEBIT.GOT ALL MARKETS')
+            print('WHITEBIT GOT ALL MARKETS')
             self.get_position()
 
 
