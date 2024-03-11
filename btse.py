@@ -225,12 +225,8 @@ class BtseClient(BaseClient):
             market = 'BTCPFC'
             price = self.get_orderbook(market)['asks'][0][0] * 0.95
             min_size = self.instruments[market]['min_size']
-            tick_size = self.instruments[market]['tick_size']
             price, size = self.fit_sizes(price, min_size, market)
-            await self.create_fast_order(price, size, 'buy', market, 'keep-alive')
-            await self.create_fast_order(price + tick_size * 1, size * 2, 'buy', market, 'keep-alive')
-            await self.create_fast_order(price + tick_size * 2, size * 3, 'buy', market, 'keep-alive')
-            await self.create_fast_order(price + tick_size * 3, size * 4, 'buy', market, 'keep-alive')
+            await self.create_fast_order(price, size, "buy", market, "keep-alive")
             resp = self.responses.get('keep-alive')
             ex_order_id = resp['exchange_order_id']
             await self.cancel_order(market, ex_order_id)
