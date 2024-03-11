@@ -74,7 +74,7 @@ class BtseClient(BaseClient):
         self.orderbook = {}
         self.snap_orderbook = {}
         self.orders = {}
-        self.rate_limit_orders = 75
+        self.rate_limit_orders = 200
         self.taker_fee = 0.0005 * 0.75
         self.maker_fee = 0.0001 * 0.75
         self.orig_sizes = {}
@@ -128,7 +128,7 @@ class BtseClient(BaseClient):
                         await asyncio.sleep(request_pause)
                     elif task[0] == 'cancel_order':
                         if task[1]['order_id'] not in self.deleted_orders:
-                            if len(self.deleted_orders) > 1000:
+                            if len(self.deleted_orders) > 100:
                                 self.deleted_orders = []
                             self.deleted_orders.append(task[1]['order_id'])
                             loop.create_task(self.cancel_order(task[1]['market'], task[1]['order_id']))
@@ -148,17 +148,19 @@ class BtseClient(BaseClient):
     @try_exc_async
     async def create_fast_order(self, price, sz, side, market, client_id=None, session=None):
         time_start = time.time()
-        path = '/api/v2.1/order'
+        path = "/api/v2.1/order"
         contract_value = self.instruments[market]['contract_value']
         sz = int(sz / contract_value)
         body = {"symbol": market,
                 "side": side.upper(),
-                "size": sz if sz else 1}
+                "size": sz if sz else 1,
+                "price": price,
+                "type": "LIMIT"}
         # if 'taker' in client_id:
         #     body.update({"type": "MARKET"})
-        # else:
-        body.update({"price": price,
-                     "type": 'LIMIT'})
+        # # else:
+        # body.update({"price": price,
+        #              "type": 'LIMIT'})
         # if client_id:
         #     body.update({'clOrderID': client_id})
         # print(f"{self.EXCHANGE_NAME} SENDING ORDER: {body}")
@@ -172,7 +174,7 @@ class BtseClient(BaseClient):
                 # print(f"Average create order time, ms: {sum(self.pings) / len(self.pings) * 1000}")
                 if not client_id or 'taker' in client_id:
                     print(f"{self.EXCHANGE_NAME} ORDER CREATE RESPONSE: {response}")
-                    print(f"{self.EXCHANGE_NAME} ORDER CREATE PING: {response[0]['timestamp'] / 1000 - time_start}")
+                    # print(f"{self.EXCHANGE_NAME} ORDER CREATE PING: {response[0]['timestamp'] / 1000 - time_start}")
             except Exception:
                 # if self.EXCHANGE_NAME != self.multibot.mm_exchange:
                 print(body)
@@ -458,7 +460,7 @@ class BtseClient(BaseClient):
 
     @try_exc_async
     async def create_order(self, symbol, side, price, size, session, expire=10000, client_id=None, expiration=None):
-        path = '/api/v2.1/order'
+        path = "/api/v2.1/order"
         contract_value = self.instruments[symbol]['contract_value']
         body = {"symbol": symbol,
                 "side": side.upper(),
@@ -498,7 +500,7 @@ class BtseClient(BaseClient):
         params = {}
         path = "/api/v2.1/order"
         if order_id:
-            params['orderID'] = order_id
+            params["orderID"] = order_id
             final_path = f"/api/v2.1/order?orderID={order_id}"
         else:
             params['clOrderID'] = cl_order_id
@@ -676,7 +678,7 @@ class BtseClient(BaseClient):
     @try_exc_async
     async def cancel_order(self, symbol: str, order_id: str):
         start = time.time()
-        path = '/api/v2.1/order'
+        path = "/api/v2.1/order"
         data = {"symbol": symbol,
                 "orderID": order_id}
         self.get_private_headers(path, data)
@@ -934,7 +936,7 @@ class BtseClient(BaseClient):
     @try_exc_async
     async def get_orderbook_by_symbol(self, symbol):
         async with aiohttp.ClientSession() as session:
-            path = f'/api/v2.1/orderbook'
+            path = "/api/v2.1/orderbook"
             params = {'symbol': symbol, 'depth': 10}
             post_string = '?' + "&".join([f"{key}={params[key]}" for key in sorted(params)])
             async with session.get(url=self.BASE_URL + path + post_string, headers=self.headers, data=params) as resp:
