@@ -471,8 +471,8 @@ class WhiteBitClient(BaseClient):
                 await self.update_orderbook(data)
         elif method == 'balanceMargin_update':
             await self.update_balances(data)
-        else:
-            print(method, data)
+        # else:
+        #     print(method, data)
 
     @try_exc_async
     async def _ping(self, ws):
@@ -771,13 +771,15 @@ class WhiteBitClient(BaseClient):
 
     @try_exc_async
     async def subscribe_privates(self):
-        method_auth = {"id": 1, "method": "authorize", "params": [self.websocket_token, "public"]}
-        orders_ex = {"id": 2, "method": "ordersExecuted_subscribe", "params": [list(self.markets.values()), 0]}
-        balance = {"id": 3, "method": "balanceMargin_subscribe", "params": ["USDT"]}
+        method_auth = {"id": 123456, "method": "authorize", "params": [self.websocket_token, "public"]}
         await self._ws.send_json(method_auth)
-        time.sleep(1)
+        await self._ws.receive_json()
+        orders_ex = {"id": 2, "method": "ordersExecuted_subscribe", "params": [list(self.markets.values()), 0]}
         await self._ws.send_json(orders_ex)
+        await self._ws.receive_json()
+        balance = {"id": 3, "method": "balanceMargin_subscribe", "params": ["USDT"]}
         await self._ws.send_json(balance)
+        await self._ws.receive_json()
 
     @try_exc_regular
     def get_all_tops(self):
