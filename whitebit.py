@@ -662,7 +662,7 @@ class WhiteBitClient(BaseClient):
                     'status': status}
 
     @try_exc_async
-    async def create_fast_order(self, price, sz, side, market, client_id=None, session=None):
+    async def create_fast_order(self, price: float, sz: float, side: str, market: str, client_id: str=None):
         time_start = time.time()
         # message = f'ORDER CREATE ERROR\n'
         # message += f"{time_start=}\n"
@@ -675,6 +675,8 @@ class WhiteBitClient(BaseClient):
                 "side": side,
                 "amount": sz,
                 "price": price}
+        if client_id and client_id.startswith('maker'):
+            body.update({'clientOrderId': client_id})
         body = self.get_auth_for_request(body, path)
         path += self._create_uri(body)
         async with self.async_session.post(url=self.BASE_URL + path, headers=self.session.headers, json=body) as resp:
