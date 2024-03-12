@@ -113,12 +113,17 @@ class WhiteBitClient(BaseClient):
                         else:
                             loop.create_task(self.create_fast_order(price, size, side, market, client_id))
                     elif task[0] == 'cancel_order':
+                        if task[1]['order_id'] not in self.deleted_orders:
+                            if len(self.deleted_orders) > 100:
+                                self.deleted_orders = []
+                            self.deleted_orders.append(task[1]['order_id'])
                         loop.create_task(self.cancel_order(task[1]['market'], task[1]['order_id']))
                     elif task[0] == 'amend_order':
-                        market = task[1]['market']
-                        loop.create_task(self.cancel_order(market, task[1]['order_id']))
-                        loop.create_task(self.create_fast_order(task[1]['price'], task[1]['size'], task[1]['side'],
-                                                                market, task[1]['client_id']))
+                        if task[1]['order_id'] not in self.deleted_orders:
+                            market = task[1]['market']
+                            loop.create_task(self.cancel_order(market, task[1]['order_id']))
+                            loop.create_task(self.create_fast_order(task[1]['price'], task[1]['size'], task[1]['side'],
+                                                                    market, task[1]['client_id']))
                     self.async_tasks.remove(task)
                 await asyncio.sleep(0.00001)
 
@@ -196,9 +201,6 @@ class WhiteBitClient(BaseClient):
         path = "/api/v4/order/cancel"
         params = {"market": symbol,
                   "orderId": order_id}
-        if order_id in self.deleted_orders:
-            return
-        self.deleted_orders.append(order_id)
         params = self.get_auth_for_request(params, path)
         async with self.async_session.post(url=self.BASE_URL + path, headers=self.session.headers, json=params) as resp:
             try:
@@ -213,8 +215,8 @@ class WhiteBitClient(BaseClient):
                 #         if self.multibot.open_orders.get(coin + '-' + self.EXCHANGE_NAME)[0] == response['orderId']:
                 #             self.multibot.open_orders.pop(coin + '-' + self.EXCHANGE_NAME)
             except:
-                # print(resp.text)
-                await asyncio.sleep(0.1)
+                print(resp.text)
+                # await asyncio.sleep(0.1)
                 # await self.cancel_order(symbol, order_id)
                 self.cancel_all_orders()
                 # if self.multibot:
