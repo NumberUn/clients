@@ -333,7 +333,7 @@ class OkxClient(BaseClient):
     async def _ping(self, ws):
         while True:
             await ws.ping()
-            await asyncio.sleep(15)  # Adjust the ping interval as needed
+            await asyncio.sleep(5)  # Adjust the ping interval as needed
 
     @try_exc_regular
     def get_balance(self):
