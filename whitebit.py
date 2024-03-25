@@ -162,7 +162,7 @@ class WhiteBitClient(BaseClient):
         markets = {}
         for market in resp:
             if market['type'] == 'futures' and market['tradesEnabled']:
-                volume = [x for x in resp_volumes['result'] if x['ticker_id'] == market['name']][0]['money_volume']
+                volume = float([x for x in resp_volumes['result'] if x['ticker_id'] == market['name']][0]['money_volume'])
                 if volume < 500000:
                     continue
                 markets.update({market['stock']: market['name']})
