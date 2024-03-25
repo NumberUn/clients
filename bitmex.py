@@ -59,8 +59,8 @@ class BitmexClient(BaseClient):
         self.order_loop = asyncio.new_event_loop()
         self.amount = 0
         self.amount_contracts = 0
-        self.taker_fee = 0.0005
-        self.maker_fee = -0.0001
+        self.taker_fee = 0.00075
+        self.maker_fee = -0.00015
         self.requestLimit = 1200
         self.price = 0
         self.orders = {}
@@ -111,14 +111,17 @@ class BitmexClient(BaseClient):
                                 self.deleted_orders = []
                             self.deleted_orders.append(task[1]['order_id'])
                             self.cancel_all_orders()
-                    # elif task[0] == 'amend_order':
-                    #     if task[1]['order_id'] not in self.deleted_orders:
-                    #         price = task[1]['price']
-                    #         size = task[1]['size']
-                    #         order_id = task[1]['order_id']
-                    #         market = task[1]['market']
-                    #         old_order_size = task[1]['old_order_size']
-                    #         loop.create_task(self.amend_order(price, size, order_id, market, old_order_size))
+                    elif task[0] == 'amend_order':
+                        if task[1]['order_id'] not in self.deleted_orders:
+                            price = task[1]['price']
+                            size = task[1]['size']
+                            order_id = task[1]['order_id']
+                            old_order_size = task[1]['old_order_size']
+                            if size == old_order_size:
+                                loop.create_task(self.amend_order(price=price, order_id=order_id))
+                            else:
+                                loop.create_task(self.amend_order(price=price, amount=size, order_id=order_id))
+
                     self.async_tasks.remove(task)
                 await asyncio.sleep(0.00001)
 
@@ -581,7 +584,7 @@ class BitmexClient(BaseClient):
     #                     'timestamp': '2024-02-28T12:55:19.104Z'}
 
     @try_exc_regular
-    def change_order(self, amount: float, price: float, order_id: str):
+    def amend_order(self, amount: float, price: float, order_id: str):
         if amount:
             self.swagger_client.Order.Order_amend(orderID=order_id, orderQty=amount, price=price).result()
         else:
