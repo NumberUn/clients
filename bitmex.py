@@ -182,6 +182,8 @@ class BitmexClient(BaseClient):
         for instr in instruments[0]:
             if '2' in instr['symbol'] or '_' in instr['symbol']:
                 continue
+            if instr['foreignNotional24h'] < 300000:
+                continue
             contract_value = instr['underlyingToPositionMultiplier']
             price_precision = self.get_price_precision(instr['tickSize'])
             step_size = instr['lotSize'] / contract_value
@@ -192,8 +194,8 @@ class BitmexClient(BaseClient):
                                                              'min_size': instr['lotSize'] / contract_value,
                                                              'quantity_precision': quantity_precision,
                                                              'contract_value': contract_value,
-                                                             'coin': instr['rootSymbol']
-                                                             }})
+                                                             'coin': instr['rootSymbol'],
+                                                             '24h_volume': instr['foreignNotional24h']}})
         return refactored_instruments
 
     @staticmethod
@@ -752,8 +754,10 @@ if __name__ == '__main__':
     config.read(sys.argv[1], "utf-8")
     client = BitmexClient(keys=config['BITMEX'],
                           leverage=float(config['SETTINGS']['LEVERAGE']),
-                          markets_list=['ETH', 'LINK', 'LTC', 'BCH', 'SOL', 'MINA', 'XRP', 'PEPE', 'CFX', 'FIL'],
                           state='Bot')
+    time.sleep(1)
+    # markets_list = ['ETH', 'LINK', 'LTC', 'BCH', 'SOL', 'MINA', 'XRP', 'PEPE', 'CFX', 'FIL']
+    client.markets_list = [x for x in client.markets.keys()]
     client.run_updater()
 
 

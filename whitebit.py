@@ -157,9 +157,14 @@ class WhiteBitClient(BaseClient):
     def get_markets(self):
         path = "/api/v4/public/markets"
         resp = self.session.get(url=self.BASE_URL + path).json()
+        path_volumes = '/api/v4/public/futures'
+        resp_volumes = self.session.get(url=self.BASE_URL + path_volumes).json()
         markets = {}
         for market in resp:
             if market['type'] == 'futures' and market['tradesEnabled']:
+                volume = [x for x in resp_volumes['result'] if x['ticker_id'] == market['name']][0]['money_volume']
+                if volume < 500000:
+                    continue
                 markets.update({market['stock']: market['name']})
                 price_precision = int(market['moneyPrec'])
                 step_size = float(market['minAmount'])
@@ -169,7 +174,8 @@ class WhiteBitClient(BaseClient):
                                                     'step_size': step_size,
                                                     'quantity_precision': quantity_precision,
                                                     'price_precision': price_precision,
-                                                    'min_size': step_size}
+                                                    'min_size': step_size,
+                                                    '24h_volume': volume}
         return markets
 
     @try_exc_regular
