@@ -59,7 +59,7 @@ class BitmexClient(BaseClient):
         self.order_loop = asyncio.new_event_loop()
         self.amount = 0
         self.amount_contracts = 0
-        self.taker_fee = 0
+        self.taker_fee = 0.00075
         self.maker_fee = -0.00015
         self.requestLimit = 1200
         self.price = 0
