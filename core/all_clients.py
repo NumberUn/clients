@@ -10,17 +10,20 @@ from clients.globederivative import GlobeClient
 from clients.bit import BitClient
 from clients.btse import BtseClient
 from clients.whitebit import WhiteBitClient
+from clients.bitkub import BitKubClient
 
 ALL_CLIENTS = {
-    'BITMEX': BitmexClient,
+    # 'BITMEX': BitmexClient,
     # 'DYDX': DydxClient,
     # 'BINANCE': BinanceClient,
     # 'APOLLOX': ApolloxClient,
+    'BITKUB': BitKubClient,
     'OKX': OkxClient,
     # 'KRAKEN': KrakenClient,
     # 'HITBTC': HitbtcClient,
     # 'BITMAKE': BitmakeClient,
     # 'GLOBE': GlobeClient,
     # 'BIT': BitClient,
-    'BTSE': BtseClient,
-    'WHITEBIT': WhiteBitClient}
+    # 'BTSE': BtseClient,
+    # 'WHITEBIT': WhiteBitClient
+}
