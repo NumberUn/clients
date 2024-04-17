@@ -6,6 +6,7 @@ import hashlib
 import aiohttp
 import asyncio
 import threading
+from core.wrappers import try_exc_regular, try_exc_async
 
 
 class BitKubClient:
@@ -49,29 +50,35 @@ class BitKubClient:
         self.balance = {'total': 0,
                         'free': 0}
 
+    @try_exc_regular
     def get_balance(self):
         return self.balance
 
+    @try_exc_regular
     def get_orderbook(self, market):
         return self.orderbook[market]
 
+    @try_exc_regular
     def get_server_time(self):
         path = '/api/v3/servertime'
         resp = self.session.get(url=self.BASE_URL + path)
         diff = time.time() * 1000 - resp.json()
         print('Timestamp difference, ms', int(diff))
 
+    @try_exc_regular
     def run_updater(self):
         wst_public = threading.Thread(target=self._run_ws_forever, args=[asyncio.new_event_loop()])
         wst_public.daemon = True
         wst_public.start()
 
+    @try_exc_regular
     def _run_ws_forever(self, loop):
         while True:
             for market in self.markets_list[:-1]:
                 loop.create_task(self._run_ws_loop(loop, market))
             loop.run_until_complete(self._run_ws_loop(loop, self.markets_list[-1]))
 
+    @try_exc_async
     async def _run_ws_loop(self, loop: asyncio.new_event_loop, market: str):
         async with aiohttp.ClientSession() as session:
             endpoint = self.PUBLIC_WS_ENDPOINT
@@ -86,9 +93,11 @@ class BitKubClient:
             await ws.close()
 
     @staticmethod
+    @try_exc_regular
     def get_positions():
         return {}
 
+    @try_exc_regular
     def merge_similar_orders(self, ob: list) -> list:
         last_order = None
         for order in ob:
@@ -102,11 +111,13 @@ class BitKubClient:
         return ob
 
     @staticmethod
+    @try_exc_regular
     def get_available_balance():
         return {'buy': 0,
                 'sell': 0,
                 'balance': 0}
 
+    @try_exc_async
     async def process_ws_msg(self, msg: aiohttp.WSMessage):
         data = json.loads(msg.data)
         if market_id := data.get('pairing_id'):
@@ -150,6 +161,7 @@ class BitKubClient:
                 self.orderbook[market]['bids'] = new_bids
 
     @staticmethod
+    @try_exc_async
     async def _ping(ws: aiohttp.ClientSession.ws_connect):
         while True:
             await asyncio.sleep(25)
@@ -157,6 +169,7 @@ class BitKubClient:
             await ws.ping()
         # print(f'PING SENT: {datetime.utcnow()}')
 
+    @try_exc_regular
     def get_active_markets_names(self):
         path = '/api/market/symbols'
         response = self.session.get(url=self.BASE_URL + path)
@@ -169,14 +182,17 @@ class BitKubClient:
                 self.get_http_orderbook(market['symbol'])
                 time.sleep(0.1)
 
+    @try_exc_regular
     def get_markets(self):
         return self.markets
 
+    @try_exc_regular
     def get_thb_rate(self):
         ob = self.orderbook['THB_USDT']
         change_rate = (ob['asks'][0][0] + ob['bids'][0][0]) / 2
         return change_rate
 
+    @try_exc_regular
     def get_http_orderbook(self, market: str, limit: int = 10):
         path = '/api/market/depth'
         params = {'sym': market,
@@ -205,6 +221,7 @@ class BitKubClient:
                              'timestamp': ts})
             self.orderbook.update({market: response})
 
+    @try_exc_regular
     def get_signature(self, timestamp: int, req_type: str, path: str, body: dict = None):
         payload = list()
         payload.append(str(timestamp))
@@ -215,6 +232,7 @@ class BitKubClient:
         payload_string = ''.join(payload)
         return hmac.new(self.api_secret.encode('utf-8'), payload_string.encode('utf-8'), hashlib.sha256).hexdigest()
 
+    @try_exc_regular
     def get_auth_for_request(self, params: dict, path: str, method: str):
         ts = str(round(time.time() * 1000))
         signature = self.get_signature(ts, method, path, params)
