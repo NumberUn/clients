@@ -124,15 +124,19 @@ class BitKubClient:
             market = self.market_id_list[market_id]
             event = data['event']
             side = None
-            top_bid = self.orderbook[market]['bids'][0][0]
-            top_ask = self.orderbook[market]['asks'][0][0]
+            top_bid = None
+            top_ask = None
+            if len(self.orderbook[market]['bids']):
+                top_bid = self.orderbook[market]['bids'][0][0]
+            if len(self.orderbook[market]['asks']):
+                top_ask = self.orderbook[market]['asks'][0][0]
             ts = time.time()
             if event == 'bidschanged':
                 if market != 'THB_USDT':
                     change = self.get_thb_rate()
-                    new_bids = [[x[1] / change, x[2]] for x in data['data']]
+                    new_bids = [[x[1] / change, x[2]] for x in data['data'][:self.ob_len]]
                 else:
-                    new_bids = [[x[1], x[2]] for x in data['data']]
+                    new_bids = [[x[1], x[2]] for x in data['data'][:self.ob_len]]
                 new_bids = self.merge_similar_orders(new_bids)
                 self.orderbook[market].update({'ts_ms': ts,
                                                'timestamp': ts})
@@ -147,9 +151,9 @@ class BitKubClient:
             elif event == 'askschanged':
                 if market != 'THB_USDT':
                     change = self.get_thb_rate()
-                    new_asks = [[x[1] / change, x[2]] for x in data['data']]
+                    new_asks = [[x[1] / change, x[2]] for x in data['data'][:self.ob_len]]
                 else:
-                    new_asks = [[x[1], x[2]] for x in data['data']]
+                    new_asks = [[x[1], x[2]] for x in data['data'][:self.ob_len]]
                 self.orderbook[market].update({'ts_ms': ts,
                                                'timestamp': ts})
                 new_asks = self.merge_similar_orders(new_asks)
@@ -165,11 +169,11 @@ class BitKubClient:
                 timestamp = min([data['data'][0][0][0], data['data'][0][1][0]])
                 if market != 'THB_USDT':
                     change = self.get_thb_rate()
-                    new_asks = [[x[1] / change, x[2]] for x in data['data'][2]]
-                    new_bids = [[x[1] / change, x[2]] for x in data['data'][1]]
+                    new_asks = [[x[1] / change, x[2]] for x in data['data'][2][:self.ob_len]]
+                    new_bids = [[x[1] / change, x[2]] for x in data['data'][1][:self.ob_len]]
                 else:
-                    new_asks = [[x[1], x[2]] for x in data['data'][2]]
-                    new_bids = [[x[1], x[2]] for x in data['data'][1]]
+                    new_asks = [[x[1], x[2]] for x in data['data'][2][:self.ob_len]]
+                    new_bids = [[x[1], x[2]] for x in data['data'][1][:self.ob_len]]
                 new_asks = self.merge_similar_orders(new_asks)
                 new_bids = self.merge_similar_orders(new_bids)
                 self.orderbook[market].update({'ts_ms': ts,
@@ -258,7 +262,7 @@ class BitKubClient:
 
     @try_exc_regular
     def get_auth_for_request(self, params: dict, path: str, method: str):
-        ts = str(round(time.time() * 1000))
+        ts = int(round(time.time() * 1000))
         signature = self.get_signature(ts, method, path, params)
         self.session.headers.update({
             'Accept': 'application/json',
