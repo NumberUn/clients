@@ -102,10 +102,11 @@ class BitKubClient:
         return ob
 
     @staticmethod
-    def get_available_balance(self):
+    def get_available_balance():
         return {'buy': 0,
                 'sell': 0,
                 'balance': 0}
+
     async def process_ws_msg(self, msg: aiohttp.WSMessage):
         data = json.loads(msg.data)
         if market_id := data.get('pairing_id'):
@@ -183,6 +184,7 @@ class BitKubClient:
         post_string = '?' + "&".join([f"{key}={params[key]}" for key in sorted(params)])
         resp = self.session.get(url=self.BASE_URL + path + post_string)
         response = resp.json()
+        ts = time.time()
         if error_code := response.get('error'):
             print(market, response)
             if error_code == 11:
@@ -199,6 +201,8 @@ class BitKubClient:
                     ask[0] = ask[0] / change_rate
                 for bid in response['bids']:
                     bid[0] = bid[0] / change_rate
+            response.update({'ts_ms': ts,
+                             'timestamp': ts})
             self.orderbook.update({market: response})
 
     def get_signature(self, timestamp: int, req_type: str, path: str, body: dict = None):
