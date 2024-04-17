@@ -80,17 +80,19 @@ class BitKubClient:
 
     @try_exc_async
     async def _run_ws_loop(self, loop: asyncio.new_event_loop, market: str):
-        async with aiohttp.ClientSession() as session:
-            endpoint = self.PUBLIC_WS_ENDPOINT
-            for id, market_name in self.market_id_list.items():
-                if market in market_name:
-                    break
-            async with session.ws_connect(endpoint + str(id)) as ws:
-                self._ws_public = ws
-                loop.create_task(self._ping(ws))
-                async for msg in ws:
-                    await self.process_ws_msg(msg)
-            await ws.close()
+        while True:
+            async with aiohttp.ClientSession() as session:
+                endpoint = self.PUBLIC_WS_ENDPOINT
+                for id, market_name in self.market_id_list.items():
+                    if market in market_name:
+                        break
+                async with session.ws_connect(endpoint + str(id)) as ws:
+                    self._ws_public = ws
+                    loop.create_task(self._ping(ws))
+                    async for msg in ws:
+                        await self.process_ws_msg(msg)
+                await ws.close()
+                time.sleep(5)
 
     @staticmethod
     @try_exc_regular
