@@ -65,6 +65,55 @@ class BitKubClient:
         diff = time.time() * 1000 - resp.json()
         print('Timestamp difference, ms', int(diff))
 
+    @staticmethod
+    @try_exc_regular
+    def gen_query_param(url, query_param):
+        req = requests.PreparedRequest()
+        req.prepare_url(url, query_param)
+        return req.url.replace(url, "")
+
+    @try_exc_regular
+    def create_order(self, price: float, size: float, side: str, market: str, client_id: str = None):
+        bid_ask = 'bid' if side == 'buy' else 'ask'
+        path = f'/api/v3/market/place-{bid_ask}'
+        market = market.split('_')[1] + '_THB'
+        req_body = {
+            'sym': market.lower(),  # {quote}_{base}
+            'amt': size,
+            'rat': price,
+            'typ': 'limit'  # limit, market
+        }
+        print(req_body)
+        if market != 'USDT_THB':
+            change = self.get_thb_rate()
+            req_body['rat'] = req_body['rat'] * change
+        self.get_auth_for_request(path=path, method='POST', body=req_body)
+        response = self.session.post(self.BASE_URL + path, data=json.dumps(req_body), verify=False)
+        return response.json()
+        # example = {"error": 0,
+        #            "result": {"id": "46850668", "hash": "fwQ6dnQjgbQVtCX1PXkFRuLJNXu", "typ": "limit", "amt": 30,
+        #                       "rat": 1846.75, "fee": 138.51, "cre": 0, "rec": 55263.99, "ts": "1713445973"}}
+
+    @try_exc_regular
+    def cancel_order(self, hash_id):
+        path = f'/api/v3/market/cancel-order'
+        req_body = {
+            'hash': hash_id
+        }
+        self.get_auth_for_request(path=path, method='POST', body=req_body)
+        response = self.session.post(self.BASE_URL + path, data=json.dumps(req_body), verify=False)
+        return response.json()
+
+    @try_exc_regular
+    def get_real_balance(self):
+        path = '/api/market/wallet'
+        ts = str(int(round(time.time() * 1000)))
+        req_body = {'ts': ts}
+        self.get_auth_for_request(path=path, method='GET', body=req_body)
+        response = self.session.post(url=self.BASE_URL + path, data=json.dumps(req_body))
+        print(response.text)
+        return response.json()
+
     @try_exc_regular
     def run_updater(self):
         wst_public = threading.Thread(target=self._run_ws_forever, args=[asyncio.new_event_loop()])
@@ -252,20 +301,20 @@ class BitKubClient:
             self.orderbook.update({market: response})
 
     @try_exc_regular
-    def get_signature(self, timestamp: int, req_type: str, path: str, body: dict = None):
+    def get_signature(self, timestamp: str, req_type: str, path: str, body: dict = {}):
         payload = list()
-        payload.append(str(timestamp))
+        payload.append(timestamp)
         payload.append(req_type)
         payload.append(path)
-        if body:
-            payload.append(json.dumps(body))
+        payload.append(json.dumps(body))
         payload_string = ''.join(payload)
         return hmac.new(self.api_secret.encode('utf-8'), payload_string.encode('utf-8'), hashlib.sha256).hexdigest()
 
     @try_exc_regular
-    def get_auth_for_request(self, params: dict, path: str, method: str):
-        ts = int(round(time.time() * 1000))
-        signature = self.get_signature(ts, method, path, params)
+    def get_auth_for_request(self, path: str, method: str, body: dict = {}, ts: str = ''):
+        if not ts:
+            ts = str(int(round(time.time() * 1000)))
+        signature = self.get_signature(ts, method, path, body)
         self.session.headers.update({
             'Accept': 'application/json',
             'Content-type': 'application/json',
@@ -288,8 +337,14 @@ if __name__ == '__main__':
 
     client.run_updater()
 
-    while True:
-        time.sleep(1)
-        # client.get_server_time()
-        # client.get_markets_names()
-        # asyncio.run(test_order())
+    time.sleep(3)
+    order_data = client.create_order(50, 30, 'sell', 'THB_USDT')
+    print(f"{order_data=}")
+    cancel_data = client.cancel_order(order_data['result']['hash'])
+    print(f"{cancel_data=}")
+    balance_data = client.get_real_balance()
+    print(f"{balance_data=}")
+
+    # client.get_server_time()
+    # client.get_markets_names()
+    # asyncio.run(test_order())
