@@ -197,7 +197,7 @@ class BitKubClient:
                 elif top_bid and top_bid < self.orderbook[market]['asks'][0][0]:
                     side = 'sell'
                 if self.finder and side:  # and ts_ms - ts_ob < self.top_ws_ping:
-                    coin = market.split('-')[1]
+                    coin = market.split('_')[1]
                     await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, 'ob')
             elif event == 'askschanged':
                 if market != 'THB_USDT':
@@ -214,7 +214,7 @@ class BitKubClient:
                 elif top_bid and top_bid < self.orderbook[market]['asks'][0][0]:
                     side = 'sell'
                 if self.finder and side:  # and ts_ms - ts_ob < self.top_ws_ping:
-                    coin = market.split('-')[1]
+                    coin = market.split('_')[1]
                     await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, 'ob')
             elif event == 'tradeschanged':
                 timestamp = min([data['data'][0][0][0], data['data'][0][1][0]])
@@ -236,7 +236,7 @@ class BitKubClient:
                 elif top_bid and top_bid < self.orderbook[market]['asks'][0][0]:
                     side = 'sell'
                 if self.finder and side:  # and ts_ms - ts_ob < self.top_ws_ping:
-                    coin = market.split('-')[1]
+                    coin = market.split('_')[1]
                     await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, 'ob')
 
     @staticmethod
