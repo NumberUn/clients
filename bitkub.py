@@ -7,6 +7,17 @@ import aiohttp
 import asyncio
 import threading
 from core.wrappers import try_exc_regular, try_exc_async
+from datetime import datetime
+import uvloop
+import gc
+import socket
+import aiodns
+from aiohttp.resolver import AsyncResolver
+from clients.core.enums import ResponseStatus, OrderStatus
+import string
+import random
+
+asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
 
 class BitKubClient:
@@ -32,11 +43,12 @@ class BitKubClient:
         self.markets = {}
         self.market_id_list = {}
         self.orderbook = {}
-        self.get_http_orderbook('THB_USDT')
+        self.get_orderbook_by_symbol('THB_USDT')
         self.get_active_markets_names()
         if self.state == 'Bot':
             self.api_key = keys['API_KEY']
             self.api_secret = keys['API_SECRET']
+            self.order_loop = asyncio.new_event_loop()
         self.ob_len = ob_len
         self.leverage = leverage
         self.max_pos_part = max_pos_part
@@ -47,30 +59,127 @@ class BitKubClient:
         self.async_tasks = []
         self.responses = {}
         self.orders = {}
+        self.rate_limit_orders = 200
         self.balance = {'total': 0,
                         'free': 0}
+        self.cancel_responses = {}
+        self.positions = {}
 
     @try_exc_regular
     def get_balance(self):
         return self.balance['total']
 
+    @staticmethod
+    @try_exc_regular
+    def id_generator(size=4, chars=string.ascii_letters):
+        return "".join(random.choice(chars) for _ in range(size))
+
+    @try_exc_async
+    async def _run_order_loop(self, loop):
+        request_pause = 1.02 / self.rate_limit_orders
+        # connector = aiohttp.TCPConnector(family=socket.AF_INET6)
+        resolver = AsyncResolver()
+        connector = aiohttp.TCPConnector(resolver=resolver, family=socket.AF_INET)
+        async with aiohttp.ClientSession(connector=connector) as self.async_session:
+            self.async_session.headers.update(self.headers)
+            loop.create_task(self.keep_alive_order())
+            while True:
+                for task in self.async_tasks:
+                    if task[0] == 'create_order':
+                        price = task[1]['price']
+                        size = task[1]['size']
+                        side = task[1]['side']
+                        market = task[1]['market']
+                        client_id = task[1].get('client_id')
+                        if task[1].get('hedge'):
+                            await self.create_fast_order(price, size, side, market, client_id)
+                        else:
+                            loop.create_task(self.create_fast_order(price, size, side, market, client_id))
+                        await asyncio.sleep(request_pause)
+                    elif task[0] == 'cancel_order':
+                        if task[1]['order_id'] not in self.deleted_orders:
+                            if len(self.deleted_orders) > 100:
+                                self.deleted_orders = []
+                            self.deleted_orders.append(task[1]['order_id'])
+                            loop.create_task(self.cancel_order(task[1]['order_id']))
+                            await asyncio.sleep(request_pause)
+                    elif task[0] == 'amend_order':
+                        if task[1]['order_id'] not in self.deleted_orders:
+                            price = task[1]['price']
+                            size = task[1]['size']
+                            order_id = task[1]['order_id']
+                            market = task[1]['market']
+                            old_order_size = task[1]['old_order_size']
+                            loop.create_task(self.amend_order(price, size, order_id, market, old_order_size))
+                            await asyncio.sleep(request_pause)
+                    self.async_tasks.remove(task)
+                await asyncio.sleep(0.00001)
+
+    @try_exc_async
+    async def keep_alive_order(self):
+        while True:
+            await asyncio.sleep(3)
+            # if self.market_finder:
+            # loop.create_task(self.check_extra_orders())
+            await self.get_balance_async()
+            if self.multibot:
+                if self.multibot.market_maker:
+                    if self.multibot.mm_exchange == self.EXCHANGE_NAME:
+                        return
+            # market = self.markets[self.markets_list[random.randint(0, len(self.markets_list) - 1)]]
+            market = 'THB_USDT'
+            price = self.get_orderbook(market)['bids'][0][0] * .9
+            await self.create_fast_order(price, 10, "buy", market, "keep-alive")
+            resp = self.responses.pop('keep-alive', {})
+            if resp:
+                ex_order_id = resp['exchange_order_id']
+                canceled = await self.cancel_order(ex_order_id)
+                print(f"Canceled order resp: {canceled}")
+            else:
+                print(f'KEEP ALIVE ORDER WAS NOT CREATED')
+
+    @try_exc_async
+    async def amend_order(self, price: float, size: float, order_id: str, market: str, old_order_size: float):
+        pass
+
+    @try_exc_regular
+    def fit_sizes(self, price: float, amount: float, market: str) -> (float, float):
+        return price, amount
+
+    @try_exc_regular
+    def get_available_balance(self):
+        max_pos_part = self.max_pos_part
+        positions = self.positions
+        balance = self.balance
+        available_balances = {}
+        position_value_abs = 0
+        available_margin = balance['total']
+        avl_margin_per_market = available_margin / 100 * max_pos_part
+        for symbol, position in positions.items():
+            if position.get('amount_usd'):
+                # position_value += position['amount_usd']
+                position_value_abs += position['amount_usd']
+                available_balances.update({symbol: {'buy': avl_margin_per_market - position['amount_usd'],
+                                                    'sell': position['amount_usd']}})
+        if position_value_abs <= available_margin:
+            # Это по сути доступный баланс для открытия новых позиций
+            available_balances['buy'] = available_margin - position_value_abs
+            available_balances['sell'] = position_value_abs
+        else:
+            for symbol, position in positions.items():
+                if position.get('amount_usd'):
+                    if position['amount_usd'] < 0:
+                        available_balances.update({symbol: {'buy': abs(position['amount_usd']), 'sell': 0}})
+                    else:
+                        available_balances.update({symbol: {'buy': 0, 'sell': abs(position['amount_usd'])}})
+            available_balances['buy'] = 0
+            available_balances['sell'] = 0
+        available_balances['balance'] = balance['total']
+        return available_balances
+
     @try_exc_regular
     def get_orderbook(self, market):
         return self.orderbook[market]
-
-    @try_exc_regular
-    def get_server_time(self):
-        path = '/api/v3/servertime'
-        resp = self.session.get(url=self.BASE_URL + path)
-        diff = time.time() * 1000 - resp.json()
-        print('Timestamp difference, ms', int(diff))
-
-    @staticmethod
-    @try_exc_regular
-    def gen_query_param(url, query_param):
-        req = requests.PreparedRequest()
-        req.prepare_url(url, query_param)
-        return req.url.replace(url, "")
 
     @try_exc_regular
     def create_order(self, price: float, size: float, side: str, market: str, client_id: str = None):
@@ -83,42 +192,230 @@ class BitKubClient:
             'rat': price,
             'typ': 'limit'  # limit, market
         }
-        print(req_body)
+        print(self.EXCHANGE_NAME, 'CREATING ORDER', req_body)
         if market != 'USDT_THB':
             change = self.get_thb_rate()
             req_body['rat'] = req_body['rat'] * change
-        self.get_auth_for_request(path=path, method='POST', body=req_body)
-        response = self.session.post(self.BASE_URL + path, data=json.dumps(req_body), verify=False)
-        return response.json()
+        headers = self.get_auth_for_request(path=path, method='POST', body=req_body)
+        response = self.session.post(self.BASE_URL + path, data=json.dumps(req_body), headers=headers)
+        resp = response.json()
+        if resp['error']:
+            self.error_info = response.text
+            return {'exchange_name': self.EXCHANGE_NAME,
+                    'exchange_order_id': None,
+                    'timestamp': int(round((datetime.utcnow().timestamp()) * 1000)),
+                    'status': ResponseStatus.ERROR}
+        else:
+            exchange_order_id = resp['result']['hash']
+            self.LAST_ORDER_ID = exchange_order_id
+            return {'exchange_name': self.EXCHANGE_NAME,
+                    'exchange_order_id': exchange_order_id,
+                    'timestamp': int(resp['result']['ts']),
+                    'status': ResponseStatus.SUCCESS}
         # example = {"error": 0,
         #            "result": {"id": "46850668", "hash": "fwQ6dnQjgbQVtCX1PXkFRuLJNXu", "typ": "limit", "amt": 30,
         #                       "rat": 1846.75, "fee": 138.51, "cre": 0, "rec": 55263.99, "ts": "1713445973"}}
 
+    @try_exc_async
+    async def create_fast_order(self, price: float, size: float, side: str, market: str, client_id: str = None):
+        time_start = time.time()
+        bid_ask = 'bid' if side == 'buy' else 'ask'
+        path = f'/api/v3/market/place-{bid_ask}'
+        market = market.split('_')[1] + '_THB'
+        req_body = {
+            'sym': market.lower(),  # {quote}_{base}
+            'amt': size,
+            'rat': price,
+            'typ': 'limit'  # limit, market
+        }
+        print(self.EXCHANGE_NAME, req_body)
+        if market != 'USDT_THB':
+            change = self.get_thb_rate()
+            req_body['rat'] = req_body['rat'] * change
+        headers = self.get_auth_for_request(path=path, method='POST', body=req_body)
+        async with self.async_session.post(self.BASE_URL + path, data=json.dumps(req_body), headers=headers) as resp:
+            response = await resp.json()
+            print(f'{self.EXCHANGE_NAME} order response: {response}')
+            if response['error']:
+                print(f'{self.EXCHANGE_NAME} create order error: {response}')
+            else:
+                print(f"{self.EXCHANGE_NAME} create order time: {time.time() - time_start}")
+                order_id = response['result'].get('hash', 'default')
+                result = self.get_order_by_id(market, order_id)
+                order_res = {'exchange_name': self.EXCHANGE_NAME,
+                             'exchange_order_id': order_id,
+                             'timestamp': response['result']['ts'] if response['result'].get('ts') else time.time(),
+                             'status': result['status'],
+                             'api_response': response['result'],
+                             'size': result['factual_amount_coin'],
+                             'price': result['factual_price'],
+                             'time_order_sent': time_start,
+                             'create_order_time': float(response['result']['ts']) - time_start}
+                if client_id:
+                    self.responses.update({client_id: order_res})
+                    self.LAST_ORDER_ID = order_id
+                else:
+                    self.responses.update({order_id: order_res})
+                # example = {'error': 0,
+                #  'result': {'id': '46999726', 'hash': 'fwQ6dnQjgbQVtT8Lu9MLodY7mpP', 'typ': 'limit', 'amt': 1, 'rat': 37.01,
+                #             'fee': 0.1, 'cre': 0, 'rec': 36.91, 'ts': '1713692356'}}
+                # example_get = {'error': 0,
+                #                'result': {'amount': 9.71, 'client_id': '', 'credit': 0, 'fee': 0.03, 'filled': 0,
+                #                           'first': '57987204', 'history': [], 'id': '57987204', 'last': '',
+                #                           'parent': '0', 'partial_filled': False, 'post_only': False, 'rate': 33.36,
+                #                           'remaining': 9.71, 'side': 'buy', 'status': 'unfilled', 'total': 9.71}}
+
     @try_exc_regular
-    def cancel_order(self, hash_id):
+    def get_order_status(self, response):
+        status = OrderStatus.PROCESSING
+        if response['result']['status'] == 'filled':
+            status = OrderStatus.FULLY_EXECUTED
+        elif response['result']['status'] == 'unfilled' and response['result']['partial_filled']:
+            status = OrderStatus.PARTIALLY_EXECUTED
+        elif response['result']['status'] == 'cancelled' and not response['result']['partial_filled']:
+            status = OrderStatus.NOT_EXECUTED
+        return status
+
+    @try_exc_regular
+    def get_orders(self):
+        return self.orders
+
+    @try_exc_regular
+    def get_order_by_id(self, symbol, order_id: str):
+        path = '/api/v3/market/order-info'
+        query = {'hash': order_id}
+        post_string = '?' + "&".join([f"{key}={query[key]}" for key in sorted(query)])
+        # print(f"{post_string=}")
+        headers = self.get_auth_for_request(path=path + post_string, method='GET')
+        response = self.session.get(self.BASE_URL + path + post_string, headers=headers)
+        resp = response.json()
+        print('GET ORDER BY ID RESPONSE', self.EXCHANGE_NAME, resp)
+        if resp['error']:
+            print(f"GET ORDER BY ID ERROR: {resp}")
+        else:
+            timestamp = resp['result']['history'][0]['timestamp'] / 1000 if len(
+                resp['result']['history']) else time.time()
+            real_price = 0
+            real_size = 0
+            real_size_usd = 0
+            thb_rate = self.get_thb_rate()
+            for fill in resp['result']['history']:
+                real_size += fill['amount']
+                real_size_usd += fill['rate'] * fill['amount']
+            if symbol != 'THB_USDT':
+                if real_size:
+                    real_price = real_size_usd / real_size / thb_rate
+            else:
+                if real_size:
+                    real_price = real_size_usd / real_size
+            result = {'exchange_order_id': order_id,
+                      'exchange_name': self.EXCHANGE_NAME,
+                      'status': self.get_order_status(resp),
+                      'factual_price': real_price,
+                      'factual_amount_coin': real_size,
+                      'factual_amount_usd': real_size_usd,
+                      'datetime_update': datetime.utcnow(),
+                      'ts_update': timestamp}
+            self.orders.update({order_id: result})
+            return result
+
+    @try_exc_async
+    async def cancel_order(self, order_id):
         path = f'/api/v3/market/cancel-order'
         req_body = {
-            'hash': hash_id
+            'hash': order_id
         }
-        self.get_auth_for_request(path=path, method='POST', body=req_body)
-        response = self.session.post(self.BASE_URL + path, data=json.dumps(req_body), verify=False)
-        return response.json()
+        headers = self.get_auth_for_request(path=path, method='POST', body=req_body)
+        async with self.async_session.post(self.BASE_URL + path,
+                                           data=json.dumps(req_body),
+                                           headers=headers) as response:
+            resp = await response.json()
+            if resp['error']:
+                print(f"{self.EXCHANGE_NAME} canceling order error: {resp}")
+            else:
+                self.cancel_responses.update({order_id: resp})
+                return resp
+
+    @try_exc_async
+    async def get_balance_async(self):
+        path = '/api/v3/market/wallet'
+        # ts = str(int(round(time.time() * 1000)))
+        req_body = {}  # {'ts': ts}
+        headers = self.get_auth_for_request(path=path, method='POST', body=req_body)
+        async with self.async_session.post(url=self.BASE_URL + path,
+                                           headers=headers,
+                                           data=json.dumps(req_body)) as response:
+            resp = await response.json()
+            if resp['error']:
+                print('Fetching http async balance error', self.EXCHANGE_NAME, response)
+            else:
+                self.unpack_wallet_data(resp)
 
     @try_exc_regular
     def get_real_balance(self):
-        path = '/api/market/wallet'
-        ts = str(int(round(time.time() * 1000)))
-        req_body = {'ts': ts}
-        self.get_auth_for_request(path=path, method='GET', body=req_body)
-        response = self.session.post(url=self.BASE_URL + path, data=json.dumps(req_body))
-        print(response.text)
-        return response.json()
+        path = '/api/v3/market/wallet'
+        # ts = str(int(round(time.time() * 1000)))
+        req_body = {}  # {'ts': ts}
+        headers = self.get_auth_for_request(path=path, method='POST', body=req_body)
+        response = self.session.post(url=self.BASE_URL + path, data=json.dumps(req_body), headers=headers)
+        resp = response.json()
+        if resp['error']:
+            print('Fetching http balance error', self.EXCHANGE_NAME, response)
+        else:
+            self.unpack_wallet_data(resp)
+
+    @try_exc_regular
+    def unpack_wallet_data(self, resp):
+        total_balance_usdt = 0
+        for coin, amount in resp['result'].items():
+            if amount:
+                if coin == 'USDT':
+                    total_balance_usdt += amount
+                elif coin == 'THB':
+                    change_rate = self.get_thb_rate()
+                    total_balance_usdt += amount / change_rate
+                else:
+                    change_ob = self.get_orderbook(self.markets[coin])
+                    change_rate = (change_ob['asks'][0][0] + change_ob['bids'][0][0]) / 2
+                    total_balance_usdt += amount * change_rate
+        resp['result'].update({'total': total_balance_usdt,
+                               'timestamp': round(datetime.utcnow().timestamp())})
+        if resp['result'] != self.balance:
+            self.order_loop.create_task(self.multibot.update_all_av_balances())
+        self.balance.update(resp['result'])
+        self.update_positions()
+
+    @try_exc_regular
+    def update_positions(self):
+        for coin, position in self.balance.items():
+            if coin in ['timestamp', 'total', 'THB', 'USDT']:
+                continue
+            if position:
+                market = self.markets[coin]
+                change_ob = self.get_orderbook(market)
+                change_rate = (change_ob['asks'][0][0] + change_ob['bids'][0][0]) / 2
+                self.positions.update({market: {'side': 'LONG',
+                                                'amount_usd': position * change_rate,
+                                                'amount': position,
+                                                'entry_price': 0,
+                                                'unrealized_pnl_usd': 0,
+                                                'realized_pnl_usd': 0,
+                                                'lever': self.leverage}})
+
+    @try_exc_regular
+    def deals_thread_func(self, loop):
+        while True:
+            loop.run_until_complete(self._run_order_loop(loop))
 
     @try_exc_regular
     def run_updater(self):
         wst_public = threading.Thread(target=self._run_ws_forever, args=[asyncio.new_event_loop()])
         wst_public.daemon = True
         wst_public.start()
+        if self.state == 'Bot':
+            orders_thread = threading.Thread(target=self.deals_thread_func, args=[self.order_loop])
+            orders_thread.daemon = True
+            orders_thread.start()
 
     @try_exc_regular
     def _run_ws_forever(self, loop):
@@ -143,10 +440,9 @@ class BitKubClient:
                 await ws.close()
                 time.sleep(5)
 
-    @staticmethod
     @try_exc_regular
-    def get_positions():
-        return {}
+    def get_positions(self):
+        return self.positions
 
     @try_exc_regular
     def merge_similar_orders(self, ob: list) -> list:
@@ -160,13 +456,6 @@ class BitKubClient:
                     break
             last_order = order
         return ob
-
-    @staticmethod
-    @try_exc_regular
-    def get_available_balance():
-        return {'buy': 0,
-                'sell': 0,
-                'balance': 0}
 
     @try_exc_async
     async def process_ws_msg(self, msg: aiohttp.WSMessage):
@@ -258,7 +547,7 @@ class BitKubClient:
                 self.market_id_list.update({market['id']: market['symbol']})
                 coin = market['symbol'].split('_')[1]
                 self.markets.update({coin: market['symbol']})
-                self.get_http_orderbook(market['symbol'])
+                self.get_orderbook_by_symbol(market['symbol'])
                 time.sleep(0.1)
 
     @try_exc_regular
@@ -272,7 +561,7 @@ class BitKubClient:
         return change_rate
 
     @try_exc_regular
-    def get_http_orderbook(self, market: str, limit: int = 10):
+    def get_orderbook_by_symbol(self, market: str, limit: int = 10):
         path = '/api/market/depth'
         params = {'sym': market,
                   'lmt': limit}
@@ -288,7 +577,7 @@ class BitKubClient:
             else:
                 print(f"RATE LIMIT REACHED")
                 time.sleep(30)
-                self.get_http_orderbook(market)
+                self.get_orderbook_by_symbol(market)
         else:
             if market != 'THB_USDT':
                 change_rate = self.get_thb_rate()
@@ -299,6 +588,7 @@ class BitKubClient:
             response.update({'ts_ms': ts,
                              'timestamp': ts})
             self.orderbook.update({market: response})
+            return response
 
     @try_exc_regular
     def get_signature(self, timestamp: str, req_type: str, path: str, body: dict = {}):
@@ -306,7 +596,8 @@ class BitKubClient:
         payload.append(timestamp)
         payload.append(req_type)
         payload.append(path)
-        payload.append(json.dumps(body))
+        if req_type == 'POST':
+            payload.append(json.dumps(body))
         payload_string = ''.join(payload)
         return hmac.new(self.api_secret.encode('utf-8'), payload_string.encode('utf-8'), hashlib.sha256).hexdigest()
 
@@ -315,14 +606,15 @@ class BitKubClient:
         if not ts:
             ts = str(int(round(time.time() * 1000)))
         signature = self.get_signature(ts, method, path, body)
-        self.session.headers.update({
+        headers = {
             'Accept': 'application/json',
             'Content-type': 'application/json',
             'X-BTK-APIKEY': self.api_key,
             'X-BTK-TIMESTAMP': ts,
             'X-BTK-SIGN': signature,
             'Connection': 'keep-alive'
-        })
+        }
+        return headers
 
 
 if __name__ == '__main__':
@@ -338,12 +630,31 @@ if __name__ == '__main__':
     client.run_updater()
 
     time.sleep(3)
-    order_data = client.create_order(50, 30, 'sell', 'THB_USDT')
-    print(f"{order_data=}")
-    cancel_data = client.cancel_order(order_data['result']['hash'])
-    print(f"{cancel_data=}")
-    balance_data = client.get_real_balance()
-    print(f"{balance_data=}")
+    # price = client.get_orderbook('THB_USDT')['bids'][0][0] * 0.95
+    # order_data = client.create_order(price, 5, 'sell', 'THB_USDT')
+    # print(f"{order_data=}")
+    # cancel_data = client.cancel_order(order_data['exchange_order_id'])
+    # client.get_real_balance()
+    while True:
+        time.sleep(1)
+        # print(client.balance)
+        # print(client.responses)
+
+    # print(f"{cancel_data=}")
+    # print(f"{client.balance=}")
+    # print(f"{client.positions=}")
+    # print(f"{client.get_available_balance()}")
+    # price = client.get_orderbook('THB_USDT')['bids'][0][0]
+    # order_data = {'market': 'THB_USDT',
+    #               'client_id': f'takerxxx{client.EXCHANGE_NAME}xxx' + client.id_generator() + 'xxx' + 'THB',
+    #               'price': price,
+    #               'size': 1,
+    #               'side': 'sell'}
+    # print(f"{order_data=}")
+    # client.async_tasks.append(['create_order', order_data])
+    # time.sleep(1)
+    # print(client.responses)
+    # time.sleep(1)
 
     # client.get_server_time()
     # client.get_markets_names()

@@ -225,7 +225,7 @@ class BtseClient(BaseClient):
                         return
 #           market = self.markets[self.markets_list[random.randint(0, len(self.markets_list) - 1)]]
             market = 'BTCPFC'
-            price = self.get_orderbook(market)['asks'][0][0] * 0.95
+            price = self.get_orderbook(market)['bids'][0][0] * 0.95
             min_size = self.instruments[market]['min_size']
             price, size = self.fit_sizes(price, min_size, market)
             await self.create_fast_order(price, size, "buy", market, "keep-alive")
@@ -677,7 +677,6 @@ class BtseClient(BaseClient):
 
     @try_exc_async
     async def cancel_order(self, symbol: str, order_id: str):
-        start = time.time()
         path = "/api/v2.1/order"
         data = {"symbol": symbol,
                 "orderID": order_id}
