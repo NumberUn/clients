@@ -180,7 +180,10 @@ class BitKubClient:
 
     @try_exc_regular
     def get_orderbook(self, market):
-        return self.orderbook[market]
+        ob = self.orderbook.get(market)
+        if not ob:
+            ob = self.get_orderbook_by_symbol(market)
+        return ob
 
     @try_exc_regular
     def create_order(self, price: float, size: float, side: str, market: str, client_id: str = None):
@@ -337,6 +340,29 @@ class BitKubClient:
                 self.cancel_responses.update({order_id: resp})
                 return resp
 
+    @try_exc_regular
+    def get_all_open_orders(self):
+        path = '/api/market/my-open-orders'
+        open_orders = []
+        for market in self.markets.values():
+            req_body = {'sym': market}
+            headers = self.get_auth_for_request(path=path, method='POST', body=req_body)
+            response = self.session.post(url=self.BASE_URL + path, data=json.dumps(req_body), headers=headers)
+            resp = response.json()
+            if resp['error']:
+                print(f'Fetching open orders for {market} error', self.EXCHANGE_NAME, response)
+            else:
+                for order in resp['result']:
+                    order.update({'market': market})
+                    open_orders.append(order)
+        return open_orders
+
+    @try_exc_regular
+    def cancel_all_orders(self):
+        open_orders = self.get_all_open_orders()
+        for order in open_orders:
+            self.cancel_order(order['hash'])
+
     @try_exc_async
     async def get_balance_async(self):
         path = '/api/v3/market/wallet'
@@ -398,6 +424,8 @@ class BitKubClient:
             if position:
                 market = self.markets[coin]
                 change_ob = self.get_orderbook(market)
+                if not change_ob:
+
                 change_rate = (change_ob['asks'][0][0] + change_ob['bids'][0][0]) / 2
                 self.positions.update({market: {'side': 'LONG',
                                                 'amount_usd': position * change_rate,
@@ -562,7 +590,7 @@ class BitKubClient:
 
     @try_exc_regular
     def get_thb_rate(self):
-        ob = self.orderbook['THB_USDT']
+        ob = self.get_orderbook('THB_USDT')
         change_rate = (ob['asks'][0][0] + ob['bids'][0][0]) / 2
         return change_rate
 
