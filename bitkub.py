@@ -48,7 +48,6 @@ class BitKubClient:
         if keys:
             self.api_key = keys['API_KEY']
             self.api_secret = keys['API_SECRET']
-        if self.state == 'Bot':
             self.order_loop = asyncio.new_event_loop()
         self.ob_len = ob_len
         self.leverage = leverage
@@ -411,7 +410,7 @@ class BitKubClient:
                     total_balance_usdt += amount * change_rate
         resp['result'].update({'total': total_balance_usdt,
                                'timestamp': round(datetime.utcnow().timestamp())})
-        if resp['result'] != self.balance:
+        if resp['result'] != self.balance and self.state == 'Bot':
             self.order_loop.create_task(self.multibot.update_all_av_balances())
         self.balance.update(resp['result'])
         self.update_positions()
