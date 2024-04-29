@@ -341,15 +341,17 @@ class BitKubClient:
 
     @try_exc_regular
     def get_all_open_orders(self):
-        path = '/api/market/my-open-orders'
+        path = '/api/v3/market/my-open-orders'
         open_orders = []
-        for market in self.markets.values():
+        for _market in self.markets.values():
+            market = _market.split('_')[1] + '_THB'
             req_body = {'sym': market}
-            headers = self.get_auth_for_request(path=path, method='POST', body=req_body)
-            response = self.session.post(url=self.BASE_URL + path, data=json.dumps(req_body), headers=headers)
+            post_string = '?' + "&".join([f"{key}={req_body[key]}" for key in sorted(req_body)])
+            headers = self.get_auth_for_request(path=path + post_string, method='GET')
+            response = self.session.get(url=self.BASE_URL + path + post_string, headers=headers)
             resp = response.json()
             if resp['error']:
-                print(f'Fetching open orders for {market} error', self.EXCHANGE_NAME, response)
+                print(f'Fetching open orders for {market} error', self.EXCHANGE_NAME, response, response.text)
             else:
                 for order in resp['result']:
                     order.update({'market': market})
@@ -410,7 +412,7 @@ class BitKubClient:
                     total_balance_usdt += amount * change_rate
         resp['result'].update({'total': total_balance_usdt,
                                'timestamp': round(datetime.utcnow().timestamp())})
-        if resp['result'] != self.balance and self.state == 'Bot':
+        if resp['result'] != self.balance and self.state == 'Bot' and self.multibot:
             self.order_loop.create_task(self.multibot.update_all_av_balances())
         self.balance.update(resp['result'])
         self.update_positions()
@@ -697,6 +699,7 @@ if __name__ == '__main__':
     # cancel_data = client.cancel_order(order_data['exchange_order_id'])
     # client.get_real_balance()
     while True:
+        print(client.get_all_open_orders())
         time.sleep(1)
         # print(client.balance)
         # print(client.responses)
