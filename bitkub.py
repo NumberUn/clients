@@ -43,7 +43,7 @@ class BitKubClient:
         self.markets = {}
         self.market_id_list = {}
         self.orderbook = {}
-        self.get_orderbook_by_symbol_reg_reg('THB_USDT')
+        self.get_orderbook_by_symbol_reg('THB_USDT')
         self.get_active_markets_names()
         if keys:
             self.api_key = keys['API_KEY']
