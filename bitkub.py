@@ -547,7 +547,8 @@ class BitKubClient:
                 self.market_id_list.update({market['id']: market['symbol']})
                 coin = market['symbol'].split('_')[1]
                 self.markets.update({coin: market['symbol']})
-                self.get_orderbook_by_symbol(market['symbol'])
+                if self.state == 'Bot':
+                    self.get_orderbook_by_symbol(market['symbol'])
                 time.sleep(0.1)
 
     @try_exc_regular
