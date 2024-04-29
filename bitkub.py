@@ -352,6 +352,10 @@ class BitKubClient:
                 self.unpack_wallet_data(resp)
 
     @try_exc_regular
+    def get_position(self):
+        self.get_real_balance()
+
+    @try_exc_regular
     def get_real_balance(self):
         path = '/api/v3/market/wallet'
         # ts = str(int(round(time.time() * 1000)))
