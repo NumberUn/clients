@@ -134,7 +134,7 @@ class BitKubClient:
             if resp:
                 ex_order_id = resp['exchange_order_id']
                 canceled = await self.cancel_order(ex_order_id)
-                print(f"Canceled order resp: {canceled}")
+                # print(f"Canceled order resp: {canceled}")
             else:
                 print(f'KEEP ALIVE ORDER WAS NOT CREATED')
 
@@ -231,14 +231,15 @@ class BitKubClient:
             'rat': price,
             'typ': 'limit'  # limit, market
         }
-        print(self.EXCHANGE_NAME, req_body)
+        # print(self.EXCHANGE_NAME, req_body)
         if market != 'USDT_THB':
             change = self.get_thb_rate()
             req_body['rat'] = req_body['rat'] * change
         headers = self.get_auth_for_request(path=path, method='POST', body=req_body)
         async with self.async_session.post(self.BASE_URL + path, data=json.dumps(req_body), headers=headers) as resp:
             response = await resp.json()
-            print(f'{self.EXCHANGE_NAME} order response: {response}')
+            if client_id != 'keep-alive':
+                print(f'{self.EXCHANGE_NAME} order response: {response}')
             if response['error']:
                 print(f'{self.EXCHANGE_NAME} create order error: {response}')
             else:
@@ -294,7 +295,7 @@ class BitKubClient:
         resp = response.json()
         print('GET ORDER BY ID RESPONSE', self.EXCHANGE_NAME, resp)
         if resp['error']:
-            print(f"GET ORDER BY ID ERROR: {resp}")
+            print(f"GET ORDER BY ID ERROR {self.EXCHANGE_NAME}: {resp}")
         else:
             timestamp = resp['result']['history'][0]['timestamp'] / 1000 if len(
                 resp['result']['history']) else time.time()
