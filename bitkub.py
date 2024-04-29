@@ -45,9 +45,10 @@ class BitKubClient:
         self.orderbook = {}
         self.get_orderbook_by_symbol('THB_USDT')
         self.get_active_markets_names()
-        if self.state in ['Bot', 'Balancing']:
+        if keys:
             self.api_key = keys['API_KEY']
             self.api_secret = keys['API_SECRET']
+        if self.state == 'Bot':
             self.order_loop = asyncio.new_event_loop()
         self.ob_len = ob_len
         self.leverage = leverage
