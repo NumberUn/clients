@@ -63,6 +63,7 @@ class BitKubClient:
         self.balance = {'total': 0,
                         'free': 0}
         self.cancel_responses = {}
+        self.top_ws_ping = 0.3
         self.positions = {}
 
     @try_exc_regular
