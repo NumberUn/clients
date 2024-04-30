@@ -363,7 +363,22 @@ class BitKubClient:
     def cancel_all_orders(self):
         open_orders = self.get_all_open_orders()
         for order in open_orders:
-            self.cancel_order(order['hash'])
+            self.cancel_order_reg(order['hash'])
+
+    @try_exc_async
+    async def cancel_order_reg(self, order_id):
+        path = f'/api/v3/market/cancel-order'
+        req_body = {
+            'hash': order_id
+        }
+        headers = self.get_auth_for_request(path=path, method='POST', body=req_body)
+        response = self.session.post(self.BASE_URL + path, data=json.dumps(req_body), headers=headers)
+        resp = response.json()
+        if resp['error']:
+            print(f"{self.EXCHANGE_NAME} canceling order error: {resp}")
+        else:
+            self.cancel_responses.update({order_id: resp})
+            return resp
 
     @try_exc_async
     async def get_balance_async(self):
