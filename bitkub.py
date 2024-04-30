@@ -250,10 +250,10 @@ class BitKubClient:
                 order_res = {'exchange_name': self.EXCHANGE_NAME,
                              'exchange_order_id': order_id,
                              'timestamp': response['result']['ts'] if response['result'].get('ts') else time.time(),
-                             'status': result['status'],
+                             'status': result['status'] if result else OrderStatus.NOT_PLACED,
                              'api_response': response['result'],
-                             'size': result['factual_amount_coin'],
-                             'price': result['factual_price'],
+                             'size': result['factual_amount_coin'] if result else 0,
+                             'price': result['factual_price'] if result else 0,
                              'time_order_sent': time_start,
                              'create_order_time': float(response['result']['ts']) - time_start}
                 if client_id:
@@ -581,7 +581,7 @@ class BitKubClient:
     @try_exc_async
     async def _ping(ws: aiohttp.ClientSession.ws_connect):
         while True:
-            await asyncio.sleep(25)
+            await asyncio.sleep(10)
             # Adjust the ping interval as needed
             await ws.ping()
         # print(f'PING SENT: {datetime.utcnow()}')
@@ -710,8 +710,9 @@ if __name__ == '__main__':
     client.run_updater()
 
     time.sleep(3)
-    # price = client.get_orderbook('THB_USDT')['bids'][0][0] * 0.95
-    # order_data = client.create_order(price, 5, 'sell', 'THB_USDT')
+    price = client.get_orderbook('THB_USDT')['bids'][0][0] * 0.95
+    order_data = client.create_order(price, 32, 'sell', 'THB_USDT')
+    time.sleep(3)
     # print(f"{order_data=}")
     # cancel_data = client.cancel_order(order_data['exchange_order_id'])
     client.get_real_balance()
