@@ -598,6 +598,11 @@ class BitKubClient:
                 self.markets.update({coin: market['symbol']})
                 if self.state == 'Bot':
                     self.get_orderbook_by_symbol_reg(market['symbol'])
+                px = self.get_orderbook(market['symbol'])['asks'][0][0]
+                self.instruments.update({market['symbol']: {'coin': coin,
+                                                            'quantity_precision': 0.0000000001,
+                                                            'min_size': 20 / px,
+                                                            'price_precision': 0.00000000001}})
                 time.sleep(0.1)
 
     @try_exc_regular
