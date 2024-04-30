@@ -293,7 +293,7 @@ class BitKubClient:
         headers = self.get_auth_for_request(path=path + post_string, method='GET')
         response = self.session.get(self.BASE_URL + path + post_string, headers=headers)
         resp = response.json()
-        print('GET ORDER BY ID RESPONSE', self.EXCHANGE_NAME, resp)
+        # print('GET ORDER BY ID RESPONSE', self.EXCHANGE_NAME, resp)
         if resp['error']:
             print(f"GET ORDER BY ID ERROR {self.EXCHANGE_NAME}: {resp}")
         else:
@@ -713,9 +713,11 @@ if __name__ == '__main__':
     # order_data = client.create_order(price, 5, 'sell', 'THB_USDT')
     # print(f"{order_data=}")
     # cancel_data = client.cancel_order(order_data['exchange_order_id'])
-    # client.get_real_balance()
+    client.get_real_balance()
+    print(client.balance)
+    print(client.positions)
     while True:
-        print(client.get_all_open_orders())
+        # print(client.get_all_open_orders())
         time.sleep(1)
         # print(client.balance)
         # print(client.responses)
