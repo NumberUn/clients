@@ -365,8 +365,8 @@ class BitKubClient:
         for order in open_orders:
             self.cancel_order_reg(order['hash'])
 
-    @try_exc_async
-    async def cancel_order_reg(self, order_id):
+    @try_exc_regular
+    def cancel_order_reg(self, order_id):
         path = f'/api/v3/market/cancel-order'
         req_body = {
             'hash': order_id
