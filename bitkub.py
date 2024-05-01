@@ -619,7 +619,6 @@ class BitKubClient:
                                                                     'min_size': 20 / px,
                                                                     'price_precision': 0.00000000001}})
 
-
     @try_exc_regular
     def get_markets(self):
         return self.markets
@@ -636,29 +635,30 @@ class BitKubClient:
         params = {'sym': market,
                   'lmt': limit}
         post_string = '?' + "&".join([f"{key}={params[key]}" for key in sorted(params)])
-        async with self.async_session.get(url=self.BASE_URL + path + post_string) as resp:
-            response = await resp.json()
-            ts = time.time()
-            if error_code := response.get('error'):
-                print(market, response)
-                if error_code == 11:
-                    coin = market.split('_')[1]
-                    self.markets.pop(coin)
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url=self.BASE_URL + path + post_string, headers=self.headers) as resp:
+                response = await resp.json()
+                ts = time.time()
+                if error_code := response.get('error'):
+                    print(market, response)
+                    if error_code == 11:
+                        coin = market.split('_')[1]
+                        self.markets.pop(coin)
+                    else:
+                        print(f"RATE LIMIT REACHED")
+                        time.sleep(30)
+                        await self.get_orderbook_by_symbol(market)
                 else:
-                    print(f"RATE LIMIT REACHED")
-                    time.sleep(30)
-                    await self.get_orderbook_by_symbol(market)
-            else:
-                if market != 'THB_USDT':
-                    change_rate = self.get_thb_rate()
-                    for ask in response['asks']:
-                        ask[0] = ask[0] / change_rate
-                    for bid in response['bids']:
-                        bid[0] = bid[0] / change_rate
-                response.update({'ts_ms': ts,
-                                 'timestamp': ts})
-                self.orderbook.update({market: response})
-                return response
+                    if market != 'THB_USDT':
+                        change_rate = self.get_thb_rate()
+                        for ask in response['asks']:
+                            ask[0] = ask[0] / change_rate
+                        for bid in response['bids']:
+                            bid[0] = bid[0] / change_rate
+                    response.update({'ts_ms': ts,
+                                     'timestamp': ts})
+                    self.orderbook.update({market: response})
+                    return response
 
     @try_exc_regular
     def get_orderbook_by_symbol_reg(self, market: str, limit: int = 10):
