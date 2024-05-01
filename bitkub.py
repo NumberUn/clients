@@ -596,9 +596,9 @@ class BitKubClient:
                 self.market_id_list.update({market['id']: market['symbol']})
                 coin = market['symbol'].split('_')[1]
                 self.markets.update({coin: market['symbol']})
-                if self.state == 'Bot':
-                    self.get_orderbook_by_symbol_reg(market['symbol'])
-                time.sleep(0.1)
+                # if self.state == 'Bot':
+                self.get_orderbook_by_symbol_reg(market['symbol'])
+                time.sleep(0.2)
                 if self.markets.get(coin):
                     px = self.get_orderbook(market['symbol'])['asks'][0][0]
                     self.instruments.update({market['symbol']: {'coin': coin,
