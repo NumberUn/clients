@@ -43,13 +43,16 @@ class BitKubClient:
         self.markets = {}
         self.market_id_list = {}
         self.orderbook = {}
-        self.get_orderbook_by_symbol_reg('THB_USDT')
-        self.get_real_balance()
-        self.get_active_markets_names()
+        self.positions = {}
+        self.balance = {'total': 0,
+                        'free': 0}
         if keys:
             self.api_key = keys['API_KEY']
             self.api_secret = keys['API_SECRET']
             self.order_loop = asyncio.new_event_loop()
+        self.get_orderbook_by_symbol_reg('THB_USDT')
+        self.get_real_balance()
+        self.get_active_markets_names()
         self.ob_len = ob_len
         self.leverage = leverage
         self.max_pos_part = max_pos_part
@@ -61,11 +64,9 @@ class BitKubClient:
         self.responses = {}
         self.orders = {}
         self.rate_limit_orders = 200
-        self.balance = {'total': 0,
-                        'free': 0}
+
         self.cancel_responses = {}
         self.top_ws_ping = 0.3
-        self.positions = {}
 
     @try_exc_regular
     def get_balance(self):
