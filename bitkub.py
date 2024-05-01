@@ -44,6 +44,7 @@ class BitKubClient:
         self.market_id_list = {}
         self.orderbook = {}
         self.get_orderbook_by_symbol_reg('THB_USDT')
+        self.get_real_balance()
         self.get_active_markets_names()
         if keys:
             self.api_key = keys['API_KEY']
@@ -596,17 +597,27 @@ class BitKubClient:
                 self.market_id_list.update({market['id']: market['symbol']})
                 coin = market['symbol'].split('_')[1]
                 self.markets.update({coin: market['symbol']})
-                # if self.state == 'Bot':
-                self.get_orderbook_by_symbol_reg(market['symbol'])
-                time.sleep(0.3)
-                if self.markets.get(coin):
-                    px = self.get_orderbook(market['symbol'])['asks'][0][0]
-                    self.instruments.update({market['symbol']: {'coin': coin,
-                                                                'quantity_precision': 0.0000000001,
-                                                                'tick_size': 0.0000000001,
-                                                                'step_size': 0.00000000001,
-                                                                'min_size': 20 / px,
-                                                                'price_precision': 0.00000000001}})
+                if self.state == 'Bot':
+                    self.get_orderbook_by_symbol_reg(market['symbol'])
+                    time.sleep(0.3)
+                    if self.markets.get(coin):
+                        px = self.get_orderbook(market['symbol'])['asks'][0][0]
+                        self.instruments.update({market['symbol']: {'coin': coin,
+                                                                    'quantity_precision': 0.0000000001,
+                                                                    'tick_size': 0.0000000001,
+                                                                    'step_size': 0.00000000001,
+                                                                    'min_size': 20 / px,
+                                                                    'price_precision': 0.00000000001}})
+                else:
+                    for market in self.positions.keys():
+                        px = self.get_orderbook(market['symbol'])['asks'][0][0]
+                        self.instruments.update({market['symbol']: {'coin': coin,
+                                                                    'quantity_precision': 0.0000000001,
+                                                                    'tick_size': 0.0000000001,
+                                                                    'step_size': 0.00000000001,
+                                                                    'min_size': 20 / px,
+                                                                    'price_precision': 0.00000000001}})
+
 
     @try_exc_regular
     def get_markets(self):
