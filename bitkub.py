@@ -598,12 +598,13 @@ class BitKubClient:
                 self.markets.update({coin: market['symbol']})
                 if self.state == 'Bot':
                     self.get_orderbook_by_symbol_reg(market['symbol'])
-                px = self.get_orderbook(market['symbol'])['asks'][0][0]
-                self.instruments.update({market['symbol']: {'coin': coin,
-                                                            'quantity_precision': 0.0000000001,
-                                                            'min_size': 20 / px,
-                                                            'price_precision': 0.00000000001}})
                 time.sleep(0.1)
+                if self.markets.get(coin):
+                    px = self.get_orderbook(market['symbol'])['asks'][0][0]
+                    self.instruments.update({market['symbol']: {'coin': coin,
+                                                                'quantity_precision': 0.0000000001,
+                                                                'min_size': 20 / px,
+                                                                'price_precision': 0.00000000001}})
 
     @try_exc_regular
     def get_markets(self):
@@ -658,7 +659,7 @@ class BitKubClient:
             print(market, response)
             if error_code == 11:
                 coin = market.split('_')[1]
-                self.markets.pop(coin)
+                self.markets.pop(coin, '')
             else:
                 print(f"RATE LIMIT REACHED")
                 time.sleep(30)
@@ -691,14 +692,12 @@ class BitKubClient:
         if not ts:
             ts = str(int(round(time.time() * 1000)))
         signature = self.get_signature(ts, method, path, body)
-        headers = {
-            'Accept': 'application/json',
-            'Content-type': 'application/json',
-            'X-BTK-APIKEY': self.api_key,
-            'X-BTK-TIMESTAMP': ts,
-            'X-BTK-SIGN': signature,
-            'Connection': 'keep-alive'
-        }
+        headers = {'Accept': 'application/json',
+                   'Content-type': 'application/json',
+                   'X-BTK-APIKEY': self.api_key,
+                   'X-BTK-TIMESTAMP': ts,
+                   'X-BTK-SIGN': signature,
+                   'Connection': 'keep-alive'}
         return headers
 
 
