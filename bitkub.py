@@ -46,15 +46,18 @@ class BitKubClient:
         self.positions = {}
         self.balance = {'total': 0,
                         'free': 0}
+        self.leverage = leverage
         if keys:
             self.api_key = keys['API_KEY']
             self.api_secret = keys['API_SECRET']
             self.order_loop = asyncio.new_event_loop()
         self.get_orderbook_by_symbol_reg('THB_USDT')
+        self.get_markets_names()
+        print(self.markets)
         self.get_real_balance()
-        self.get_active_markets_names()
+        self.fill_instruments()
+        self.clean_empty_markets()
         self.ob_len = ob_len
-        self.leverage = leverage
         self.max_pos_part = max_pos_part
         self.error_info = None
         self.LAST_ORDER_ID = 'default'
@@ -64,7 +67,6 @@ class BitKubClient:
         self.responses = {}
         self.orders = {}
         self.rate_limit_orders = 200
-
         self.cancel_responses = {}
         self.top_ws_ping = 0.3
 
@@ -191,7 +193,7 @@ class BitKubClient:
     def create_order(self, price: float, size: float, side: str, market: str, client_id: str = None):
         bid_ask = 'bid' if side == 'buy' else 'ask'
         path = f'/api/v3/market/place-{bid_ask}'
-        market = market.split('_')[1] + '_THB'
+        market = self.market_rename(market)
         req_body = {
             'sym': market.lower(),  # {quote}_{base}
             'amt': size,
@@ -222,12 +224,18 @@ class BitKubClient:
         #            "result": {"id": "46850668", "hash": "fwQ6dnQjgbQVtCX1PXkFRuLJNXu", "typ": "limit", "amt": 30,
         #                       "rat": 1846.75, "fee": 138.51, "cre": 0, "rec": 55263.99, "ts": "1713445973"}}
 
+    @try_exc_regular
+    def market_rename(self, market: str) -> str:
+        if market.startswith('THB') or market.startswith('thb'):
+            return market.split('_')[1] + '_THB'
+        return market
+
     @try_exc_async
     async def create_fast_order(self, price: float, size: float, side: str, market: str, client_id: str = None):
         time_start = time.time()
         bid_ask = 'bid' if side == 'buy' else 'ask'
         path = f'/api/v3/market/place-{bid_ask}'
-        market = market.split('_')[1] + '_THB'
+        market = self.market_rename(market)
         req_body = {
             'sym': market.lower(),  # {quote}_{base}
             'amt': size,
@@ -583,13 +591,13 @@ class BitKubClient:
     @try_exc_async
     async def _ping(ws: aiohttp.ClientSession.ws_connect):
         while True:
-            await asyncio.sleep(10)
+            await asyncio.sleep(5)
             # Adjust the ping interval as needed
             await ws.ping()
         # print(f'PING SENT: {datetime.utcnow()}')
 
     @try_exc_regular
-    def get_active_markets_names(self):
+    def get_markets_names(self):
         path = '/api/market/symbols'
         response = self.session.get(url=self.BASE_URL + path)
         resp = response.json()
@@ -598,26 +606,38 @@ class BitKubClient:
                 self.market_id_list.update({market['id']: market['symbol']})
                 coin = market['symbol'].split('_')[1]
                 self.markets.update({coin: market['symbol']})
-                if self.state == 'Bot':
-                    self.get_orderbook_by_symbol_reg(market['symbol'])
-                    time.sleep(0.3)
-                    if self.markets.get(coin):
-                        px = self.get_orderbook(market['symbol'])['asks'][0][0]
-                        self.instruments.update({market['symbol']: {'coin': coin,
-                                                                    'quantity_precision': 0.0000000001,
-                                                                    'tick_size': 0.0000000001,
-                                                                    'step_size': 0.00000000001,
-                                                                    'min_size': 20 / px,
-                                                                    'price_precision': 0.00000000001}})
-                else:
-                    for market in self.positions.keys():
-                        px = self.get_orderbook(market['symbol'])['asks'][0][0]
-                        self.instruments.update({market['symbol']: {'coin': coin,
-                                                                    'quantity_precision': 0.0000000001,
-                                                                    'tick_size': 0.0000000001,
-                                                                    'step_size': 0.00000000001,
-                                                                    'min_size': 20 / px,
-                                                                    'price_precision': 0.00000000001}})
+
+    @try_exc_regular
+    def fill_instruments(self):
+        for coin, market in self.markets.items():
+            if self.state == 'Bot':
+                self.get_orderbook_by_symbol_reg(market)
+                time.sleep(0.3)
+                if self.markets.get(coin):
+                    px = self.get_orderbook(market)['asks'][0][0]
+                    self.instruments.update({market: {'coin': coin,
+                                                      'quantity_precision': 0.0000000001,
+                                                      'tick_size': 0.0000000001,
+                                                      'step_size': 0.00000000001,
+                                                      'min_size': 20 / px,
+                                                      'price_precision': 0.00000000001}})
+            else:
+                for market in self.positions.keys():
+                    px = self.get_orderbook(market)['asks'][0][0]
+                    self.instruments.update({market: {'coin': coin,
+                                                      'quantity_precision': 0.0000000001,
+                                                      'tick_size': 0.0000000001,
+                                                      'step_size': 0.00000000001,
+                                                      'min_size': 20 / px,
+                                                      'price_precision': 0.00000000001}})
+
+    @try_exc_regular
+    def clean_empty_markets(self):
+        for coin, market in self.markets.items():
+            if not market:
+                del self.markets[coin]
+                self.clean_empty_markets()
+                break
 
     @try_exc_regular
     def get_markets(self):
@@ -672,8 +692,9 @@ class BitKubClient:
         if error_code := response.get('error'):
             print(market, response)
             if error_code == 11:
-                coin = market.split('_')[1]
-                self.markets.pop(coin, '')
+                market = self.market_rename(market)
+                coin = market.split('_')[0]
+                self.markets.update({coin: None})
             else:
                 print(f"RATE LIMIT REACHED")
                 time.sleep(30)
@@ -723,13 +744,13 @@ if __name__ == '__main__':
     client = BitKubClient(keys=config['BITKUB'],
                           leverage=float(config['SETTINGS']['LEVERAGE']),
                           max_pos_part=int(config['SETTINGS']['PERCENT_PER_MARKET']),
-                          markets_list=['TWT', 'USDT'])
+                          markets_list=['USDT'])
 
     client.run_updater()
 
-    time.sleep(3)
-    price = client.get_orderbook('THB_USDT')['bids'][0][0] * 0.95
-    order_data = client.create_order(price, 32, 'sell', 'THB_USDT')
+    # time.sleep(3)
+    # price = client.get_orderbook('THB_USDT')['bids'][0][0] * 0.95
+    # order_data = client.create_order(price, 32, 'sell', 'THB_USDT')
     time.sleep(3)
     # print(f"{order_data=}")
     # cancel_data = client.cancel_order(order_data['exchange_order_id'])
