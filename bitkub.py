@@ -618,8 +618,6 @@ class BitKubClient:
     def fill_instruments(self):
         for coin, market in self.markets.items():
             if self.state == 'Bot':
-                self.get_orderbook_by_symbol_reg(market)
-                time.sleep(0.3)
                 if self.markets.get(coin):
                     px = self.get_orderbook(market)['asks'][0][0]
                     self.instruments.update({market: {'coin': coin,
@@ -628,6 +626,8 @@ class BitKubClient:
                                                       'step_size': 0.00000000001,
                                                       'min_size': 20 / px,
                                                       'price_precision': 0.00000000001}})
+                    time.sleep(0.1)
+
             else:
                 for market in self.positions.keys():
                     px = self.get_orderbook(market)['asks'][0][0]
