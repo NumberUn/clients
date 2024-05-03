@@ -53,7 +53,6 @@ class BitKubClient:
             self.order_loop = asyncio.new_event_loop()
         self.get_orderbook_by_symbol_reg('THB_USDT')
         self.get_markets_names()
-        print(self.markets)
         self.get_real_balance()
         self.fill_instruments()
         self.clean_empty_markets()
@@ -69,6 +68,7 @@ class BitKubClient:
         self.rate_limit_orders = 200
         self.cancel_responses = {}
         self.top_ws_ping = 0.3
+        print(f"{self.EXCHANGE_NAME} INITIALIZED. STATE: {self.state}\n")
 
     @try_exc_regular
     def get_balance(self):
