@@ -1,5 +1,7 @@
 import time
 import json
+import traceback
+
 import requests
 import hmac
 import hashlib
@@ -490,14 +492,14 @@ class BitKubClient:
                 endpoint = self.PUBLIC_WS_ENDPOINT
                 for id, market_name in self.market_id_list.items():
                     if market in market_name:
+                        async with session.ws_connect(endpoint + str(id)) as ws:
+                            self._ws_public = ws
+                            loop.create_task(self._ping(ws))
+                            async for msg in ws:
+                                await self.process_ws_msg(msg)
+                        await ws.close()
+                        time.sleep(5)
                         break
-                async with session.ws_connect(endpoint + str(id)) as ws:
-                    self._ws_public = ws
-                    loop.create_task(self._ping(ws))
-                    async for msg in ws:
-                        await self.process_ws_msg(msg)
-                await ws.close()
-                time.sleep(5)
 
     @try_exc_regular
     def get_positions(self):
@@ -540,9 +542,9 @@ class BitKubClient:
                 self.orderbook[market].update({'ts_ms': ts,
                                                'timestamp': ts})
                 self.orderbook[market]['bids'] = new_bids
-                if top_ask and top_ask > self.orderbook[market]['asks'][0][0]:
+                if top_ask and top_ask > self.orderbook[market]['bids'][0][0]:
                     side = 'buy'
-                elif top_bid and top_bid < self.orderbook[market]['asks'][0][0]:
+                elif top_bid and top_bid < self.orderbook[market]['bids'][0][0]:
                     side = 'sell'
                 if self.finder and side:  # and ts_ms - ts_ob < self.top_ws_ping:
                     coin = market.split('_')[1]
@@ -565,7 +567,11 @@ class BitKubClient:
                     coin = market.split('_')[1]
                     await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, 'ob')
             elif event == 'tradeschanged':
-                timestamp = min([data['data'][0][0][0], data['data'][0][1][0]])
+                try:
+                    timestamp = min([data['data'][0][0][0], data['data'][0][1][0]])
+                except:
+                    traceback.print_exc()
+                    print(data['data'])
                 if market != 'THB_USDT':
                     change = self.get_thb_rate()
                     new_asks = [[x[1] / change, x[2]] for x in data['data'][2][:self.ob_len]]
