@@ -572,6 +572,7 @@ class BitKubClient:
                 except:
                     traceback.print_exc()
                     print(data['data'])
+                    timestamp = time.time()
                 if market != 'THB_USDT':
                     change = self.get_thb_rate()
                     new_asks = [[x[1] / change, x[2]] for x in data['data'][2][:self.ob_len]]
@@ -594,13 +595,15 @@ class BitKubClient:
                     await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, 'ob')
 
     @staticmethod
-    @try_exc_async
     async def _ping(ws: aiohttp.ClientSession.ws_connect):
         while True:
-            await asyncio.sleep(5)
+            try:
+                await asyncio.sleep(10)
             # Adjust the ping interval as needed
-            await ws.ping()
-        # print(f'PING SENT: {datetime.utcnow()}')
+                await ws.ping()
+            except:
+                return
+            # print(f'PING SENT: {datetime.utcnow()}')
 
     @try_exc_regular
     def get_markets_names(self):
