@@ -251,10 +251,10 @@ class BitKubClient:
             response = await resp.json()
             if client_id != 'keep-alive':
                 print(f'{self.EXCHANGE_NAME} order response: {response}')
+                print(f"{self.EXCHANGE_NAME} create order time: {time.time() - time_start}")
             if response['error']:
                 print(f'{self.EXCHANGE_NAME} create order error: {response}')
             else:
-                print(f"{self.EXCHANGE_NAME} create order time: {time.time() - time_start}")
                 order_id = response['result'].get('hash', 'default')
                 result = self.get_order_by_id(market, order_id)
                 order_res = {'exchange_name': self.EXCHANGE_NAME,
