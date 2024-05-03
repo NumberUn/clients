@@ -273,6 +273,7 @@ class BitKubClient:
                     self.LAST_ORDER_ID = order_id
                 else:
                     self.responses.update({order_id: order_res})
+                print(self.responses)
                 # example = {'error': 0,
                 #  'result': {'id': '46999726', 'hash': 'fwQ6dnQjgbQVtT8Lu9MLodY7mpP', 'typ': 'limit', 'amt': 1, 'rat': 37.01,
                 #             'fee': 0.1, 'cre': 0, 'rec': 36.91, 'ts': '1713692356'}}
@@ -618,16 +619,14 @@ class BitKubClient:
     def fill_instruments(self):
         for coin, market in self.markets.items():
             if self.state == 'Bot':
-                if self.markets.get(coin):
-                    px = self.get_orderbook(market)['asks'][0][0]
-                    self.instruments.update({market: {'coin': coin,
-                                                      'quantity_precision': 0.0000000001,
-                                                      'tick_size': 0.0000000001,
-                                                      'step_size': 0.00000000001,
-                                                      'min_size': 20 / px,
-                                                      'price_precision': 0.00000000001}})
-                    time.sleep(0.1)
-
+                px = self.get_orderbook(market)['asks'][0][0]
+                self.instruments.update({market: {'coin': coin,
+                                                  'quantity_precision': 0.0000000001,
+                                                  'tick_size': 0.0000000001,
+                                                  'step_size': 0.00000000001,
+                                                  'min_size': 20 / px,
+                                                  'price_precision': 0.00000000001}})
+                time.sleep(0.1)
             else:
                 for market in self.positions.keys():
                     px = self.get_orderbook(market)['asks'][0][0]
