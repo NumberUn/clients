@@ -69,7 +69,7 @@ class BitKubClient:
         self.orders = {}
         self.rate_limit_orders = 200
         self.cancel_responses = {}
-        self.top_ws_ping = 0.3
+        self.top_ws_ping = 3
         print(f"{self.EXCHANGE_NAME} INITIALIZED. STATE: {self.state}\n")
 
     @try_exc_regular
@@ -261,7 +261,7 @@ class BitKubClient:
                 result = self.get_order_by_id(market, order_id)
                 order_res = {'exchange_name': self.EXCHANGE_NAME,
                              'exchange_order_id': order_id,
-                             'timestamp': response['result']['ts'] if response['result'].get('ts') else time.time(),
+                             'timestamp': float(response['result']['ts']) if response['result'].get('ts') else time.time(),
                              'status': result['status'] if result else OrderStatus.NOT_PLACED,
                              'api_response': response['result'],
                              'size': result['factual_amount_coin'] if result else 0,
@@ -271,9 +271,10 @@ class BitKubClient:
                 if client_id:
                     self.responses.update({client_id: order_res})
                     self.LAST_ORDER_ID = order_id
+                    if not client_id.startswith('keep'):
+                        print(self.responses)
                 else:
                     self.responses.update({order_id: order_res})
-                print(self.responses)
                 # example = {'error': 0,
                 #  'result': {'id': '46999726', 'hash': 'fwQ6dnQjgbQVtT8Lu9MLodY7mpP', 'typ': 'limit', 'amt': 1, 'rat': 37.01,
                 #             'fee': 0.1, 'cre': 0, 'rec': 36.91, 'ts': '1713692356'}}
@@ -311,7 +312,7 @@ class BitKubClient:
         if resp['error']:
             print(f"GET ORDER BY ID ERROR {self.EXCHANGE_NAME}: {resp}")
         else:
-            timestamp = resp['result']['history'][0]['timestamp'] / 1000 if len(
+            timestamp = float(resp['result']['history'][0]['timestamp']) / 1000 if len(
                 resp['result']['history']) else time.time()
             real_price = 0
             real_size = 0
