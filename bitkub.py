@@ -540,9 +540,9 @@ class BitKubClient:
                     new_bids = [[x[1], x[2]] for x in data['data'][:self.ob_len]]
                 new_bids = self.merge_similar_orders(new_bids)
                 self.orderbook[market].update({'ts_ms': ts,
-                                               'timestamp': ts})
-                self.orderbook[market]['bids'] = new_bids
-                if top_ask and top_ask > self.orderbook[market]['bids'][0][0]:
+                                               'timestamp': ts,
+                                               'bids': new_bids})
+                if top_ask and top_ask > self.orderbook[market]['asks'][0][0]:
                     side = 'buy'
                 elif top_bid and top_bid < self.orderbook[market]['bids'][0][0]:
                     side = 'sell'
@@ -555,23 +555,21 @@ class BitKubClient:
                     new_asks = [[x[1] / change, x[2]] for x in data['data'][:self.ob_len]]
                 else:
                     new_asks = [[x[1], x[2]] for x in data['data'][:self.ob_len]]
-                self.orderbook[market].update({'ts_ms': ts,
-                                               'timestamp': ts})
                 new_asks = self.merge_similar_orders(new_asks)
-                self.orderbook[market]['asks'] = new_asks
+                self.orderbook[market].update({'ts_ms': ts,
+                                               'timestamp': ts,
+                                               'asks': new_asks})
                 if top_ask and top_ask > self.orderbook[market]['asks'][0][0]:
                     side = 'buy'
-                elif top_bid and top_bid < self.orderbook[market]['asks'][0][0]:
+                elif top_bid and top_bid < self.orderbook[market]['bids'][0][0]:
                     side = 'sell'
                 if self.finder and side:  # and ts_ms - ts_ob < self.top_ws_ping:
                     coin = market.split('_')[1]
                     await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, 'ob')
             elif event == 'tradeschanged':
-                try:
+                if len(data['data'][0]):
                     timestamp = min([data['data'][0][0][0], data['data'][0][1][0]])
-                except:
-                    traceback.print_exc()
-                    print(data['data'])
+                else:
                     timestamp = time.time()
                 if market != 'THB_USDT':
                     change = self.get_thb_rate()
@@ -583,9 +581,9 @@ class BitKubClient:
                 new_asks = self.merge_similar_orders(new_asks)
                 new_bids = self.merge_similar_orders(new_bids)
                 self.orderbook[market].update({'ts_ms': ts,
-                                               'timestamp': timestamp})
-                self.orderbook[market]['asks'] = new_asks
-                self.orderbook[market]['bids'] = new_bids
+                                               'timestamp': timestamp,
+                                               'asks': new_asks,
+                                               'bids': new_bids})
                 if top_ask and top_ask > self.orderbook[market]['asks'][0][0]:
                     side = 'buy'
                 elif top_bid and top_bid < self.orderbook[market]['asks'][0][0]:
@@ -597,9 +595,9 @@ class BitKubClient:
     @staticmethod
     async def _ping(ws: aiohttp.ClientSession.ws_connect):
         while True:
-            try:
-                await asyncio.sleep(10)
+            await asyncio.sleep(10)
             # Adjust the ping interval as needed
+            try:
                 await ws.ping()
             except:
                 return
