@@ -619,7 +619,11 @@ class BitKubClient:
     def fill_instruments(self):
         for coin, market in self.markets.items():
             if self.state == 'Bot':
-                px = self.get_orderbook(market)['asks'][0][0]
+                ob = self.get_orderbook(market)
+                if ob:
+                    px = ob['asks'][0][0]
+                else:
+                    continue
                 self.instruments.update({market: {'coin': coin,
                                                   'quantity_precision': 0.0000000001,
                                                   'tick_size': 0.0000000001,
