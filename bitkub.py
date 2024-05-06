@@ -191,7 +191,7 @@ class BitKubClient:
             ob = self.get_orderbook_by_symbol_reg(market)
         return ob
 
-    @try_exc_asyncio
+    @try_exc_async
     async def create_order(self, symbol, side, price, size, session, expire=10000, client_id: str = None):
         bid_ask = 'bid' if side == 'buy' else 'ask'
         path = f'/api/v3/market/place-{bid_ask}'
