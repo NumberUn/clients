@@ -255,7 +255,11 @@ class BitKubClient:
                 print(f'{self.EXCHANGE_NAME} order response: {response}')
                 print(f"{self.EXCHANGE_NAME} create order time: {time.time() - time_start}")
             if response['error']:
-                print(f'{self.EXCHANGE_NAME} create order error: {response}')
+                print(f'{self.EXCHANGE_NAME} create order {market} error: {response}')
+                self.responses.update({client_id: {'exchange_name': self.EXCHANGE_NAME,
+                                                   'status': OrderStatus.NOT_PLACED,
+                                                   'api_response': response,
+                                                   'exchange_order_id': None}})
             else:
                 order_id = response['result'].get('hash', 'default')
                 result = self.get_order_by_id(market, order_id)
@@ -450,6 +454,7 @@ class BitKubClient:
 
     @try_exc_regular
     def update_positions(self):
+        self.positions = {}
         for coin, position in self.balance.items():
             if coin in ['timestamp', 'total', 'THB', 'USDT']:
                 continue
@@ -760,16 +765,55 @@ if __name__ == '__main__':
     # order_data = client.create_order(price, 32, 'sell', 'THB_USDT')
     time.sleep(3)
     # print(f"{order_data=}")
-    # cancel_data = client.cancel_order(order_data['exchange_order_id'])
-    client.get_real_balance()
-    print(client.balance)
-    print(client.positions)
-    while True:
-        # print(client.get_all_open_orders())
-        for market, book in client.orderbook.items():
-            print(market, time.time() - book['timestamp'])
-        print('\n\n\n')
-        time.sleep(1)
+    # client.get_real_balance()
+    # print(client.balance)
+    poses = client.positions
+    for market in client.markets.values():
+        min_size_buy = 0
+        min_size_sell = 0
+        resp_code = 1
+        ob = client.get_orderbook(market)
+        price_buy = ob['bids'][0][0] * 0.98
+        price_sell = ob['asks'][0][0] * 1.05
+        size_buy = 10 / price_buy
+        size_sell = 10 / price_sell
+        while not resp_code == 0:
+            client_id = f'takerxxx{client.EXCHANGE_NAME}xxx' + client.id_generator() + 'xxx' + 'THB'
+            order_data = {'market': market,
+                          'client_id': client_id,
+                          'price': price_buy,
+                          'size': size_buy,
+                          'side': 'buy'}
+            client.async_tasks.append(['create_order', order_data])
+            time.sleep(1.5)
+            resp = client.responses.get(client_id)
+            if resp:
+                if resp['exchange_order_id']:
+                    client.cancel_order_reg(resp['exchange_order_id'])
+                resp_code = resp['api_response']['error']
+                if resp_code == 15:
+                    size_buy += 10 / price_buy
+                    print(f"Market: {market} | Size: {size_buy} | NOT ENOUGH")
+                elif resp_code == 18:
+                    size_buy = 300 / price_buy
+                    break
+                else:
+                    print(resp['api_response'])
+                    break
+            else:
+                print(f"NO RESPONSE")
+                continue
+        with open('min_sizes_bitkub.txt', 'a') as file:
+            file.write(f"{market} | {size_buy}")
+
+
+
+    # while True:
+    #     # print(client.get_all_open_orders())
+    #     for market, book in client.orderbook.items():
+    #         print(market, time.time() - book['timestamp'])
+    #     print('\n\n\n')
+    #     time.sleep(1)
         # print(client.balance)
         # print(client.responses)
 
