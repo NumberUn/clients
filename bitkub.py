@@ -275,8 +275,8 @@ class BitKubClient:
                 if client_id:
                     self.responses.update({client_id: order_res})
                     self.LAST_ORDER_ID = order_id
-                    if not client_id.startswith('keep'):
-                        print(self.responses)
+                    # if not client_id.startswith('keep'):
+                    #     print(self.responses)
                 else:
                     self.responses.update({order_id: order_res})
                 # example = {'error': 0,
@@ -641,7 +641,14 @@ class BitKubClient:
                                                       'step_size': 0.00000000001,
                                                       'min_size': 20 / px,
                                                       'price_precision': 0.00000000001}})
-
+        with open('min_sizes_bitkub.txt', 'r') as file:
+            data = file.read()
+            data = data.split('\n')
+            for market__size in data:
+                params = market__size.split(' | ')
+                if self.instruments.get(params[0]):
+                    self.instruments[params[0]].update({'min_size': float(params[1])})
+        print(self.instruments)
     @try_exc_regular
     def clean_empty_markets(self):
         for coin, market in self.markets.items():
@@ -767,44 +774,52 @@ if __name__ == '__main__':
     # print(f"{order_data=}")
     # client.get_real_balance()
     # print(client.balance)
-    poses = client.positions
-    for market in client.markets.values():
-        min_size_buy = 0
-        min_size_sell = 0
-        resp_code = 1
-        ob = client.get_orderbook(market)
-        price_buy = ob['bids'][0][0] * 0.98
-        price_sell = ob['asks'][0][0] * 1.05
-        size_buy = 10 / price_buy
-        size_sell = 10 / price_sell
-        while not resp_code == 0:
-            client_id = f'takerxxx{client.EXCHANGE_NAME}xxx' + client.id_generator() + 'xxx' + 'THB'
-            order_data = {'market': market,
-                          'client_id': client_id,
-                          'price': price_buy,
-                          'size': size_buy,
-                          'side': 'buy'}
-            client.async_tasks.append(['create_order', order_data])
-            time.sleep(1.5)
-            resp = client.responses.get(client_id)
-            if resp:
-                if resp['exchange_order_id']:
-                    client.cancel_order_reg(resp['exchange_order_id'])
-                resp_code = resp['api_response']['error']
-                if resp_code == 15:
-                    size_buy += 10 / price_buy
-                    print(f"Market: {market} | Size: {size_buy} | NOT ENOUGH")
-                elif resp_code == 18:
-                    size_buy = 300 / price_buy
-                    break
-                else:
-                    print(resp['api_response'])
-                    break
-            else:
-                print(f"NO RESPONSE")
-                continue
-        with open('min_sizes_bitkub.txt', 'a') as file:
-            file.write(f"{market} | {size_buy}")
+
+    ### FOR DEFINING MIN SIZES
+    #
+    # for market in client.markets.values():
+    #     min_size_buy = 0
+    #     min_size_sell = 0
+    #     resp_code = 1
+    #     ob = client.get_orderbook(market)
+    #     price_buy = ob['bids'][0][0] * 0.99
+    #     price_sell = ob['asks'][0][0] * 1.02
+    #     size_buy = 10 / price_buy
+    #     size_sell = 10 / price_sell
+    #     while resp_code:
+    #         ob = client.get_orderbook(market)
+    #         price_buy = ob['bids'][0][0] * 0.995
+    #         client_id = f'takerxxx{client.EXCHANGE_NAME}xxx' + client.id_generator() + 'xxx' + 'THB'
+    #         order_data = {'market': market,
+    #                       'client_id': client_id,
+    #                       'price': price_buy,
+    #                       'size': size_buy,
+    #                       'side': 'buy'}
+    #         client.async_tasks.append(['create_order', order_data])
+    #         time.sleep(1.5)
+    #         resp = client.responses.pop(client_id, {})
+    #         if resp:
+    #             if resp['exchange_order_id']:
+    #                 client.cancel_order_reg(resp['exchange_order_id'])
+    #             resp_code = resp['api_response'].get('error')
+    #             if resp_code == 15:
+    #                 if size_buy * price_buy > 500:
+    #                     print(f"Min order size is too high!")
+    #                     break
+    #                 size_buy += 10 / price_buy
+    #                 print(f"Market: {market} | Size: {size_buy} | NOT ENOUGH")
+    #             elif resp_code == 18:
+    #                 size_buy = 300 / price_buy
+    #                 break
+    #             else:
+    #                 print(resp['api_response'])
+    #                 break
+    #         else:
+    #             print(f"NO RESPONSE")
+    #             continue
+    #     with open('min_sizes_bitkub.txt', 'a') as file:
+    #         file.write(f"{market} | {size_buy}\n")
+    ### FOR DEFINING MIN SIZES
 
 
 
