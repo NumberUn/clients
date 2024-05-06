@@ -179,6 +179,7 @@ class OkxClient(BaseClient):
         # if 'taker' in client_id:
         #     msg['args'][0].update({"ordType": 'market'})
         # else:
+        print(f"Sending to {self.EXCHANGE_NAME}: {msg}\n*{contract_value=}")
         msg["args"][0].update({"ordType": "limit",
                                "px": price})
         await self.orders_ws.send_json(msg)
