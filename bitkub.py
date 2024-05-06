@@ -648,7 +648,7 @@ class BitKubClient:
                 params = market__size.split(' | ')
                 if self.instruments.get(params[0]):
                     self.instruments[params[0]].update({'min_size': float(params[1])})
-        print(self.instruments)
+
     @try_exc_regular
     def clean_empty_markets(self):
         for coin, market in self.markets.items():
