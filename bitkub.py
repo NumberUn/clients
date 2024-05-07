@@ -189,13 +189,6 @@ class BitKubClient:
         ob = self.orderbook.get(market)
         if not ob:
             ob = self.get_orderbook_by_symbol_reg(market)
-        else:
-            if market != 'THB_USDT':
-                thb_rate = self.get_thb_rate()
-                for ask in ob['asks']:
-                    ask[0] = ask[0] / thb_rate
-                for bid in ob['bids']:
-                    bid[0] = bid[0] / thb_rate
         return ob
 
     @try_exc_async
@@ -590,10 +583,10 @@ class BitKubClient:
             ts = time.time()
             if event == 'bidschanged':
                 if market != 'THB_USDT':
-                    # change = self.get_thb_rate()
-                    new_bids = [[x[1], x[2]] for x in data['data'][:self.ob_len]]
+                    change = self.get_thb_rate()
+                    new_bids = [[x[1] / change, x[2]] for x in data['data'][:1]]
                 else:
-                    new_bids = [[x[1], x[2]] for x in data['data'][:self.ob_len]]
+                    new_bids = [[x[1], x[2]] for x in data['data'][:1]]
                 new_bids = self.merge_similar_orders(new_bids)
                 self.orderbook[market].update({'ts_ms': ts,
                                                'timestamp': ts,
@@ -604,10 +597,10 @@ class BitKubClient:
                     side = 'sell'
             elif event == 'askschanged':
                 if market != 'THB_USDT':
-                    # change = self.get_thb_rate()
-                    new_asks = [[x[1], x[2]] for x in data['data'][:self.ob_len]]
+                    change = self.get_thb_rate()
+                    new_asks = [[x[1] / change, x[2]] for x in data['data'][:1]]
                 else:
-                    new_asks = [[x[1], x[2]] for x in data['data'][:self.ob_len]]
+                    new_asks = [[x[1], x[2]] for x in data['data'][:1]]
                 new_asks = self.merge_similar_orders(new_asks)
                 self.orderbook[market].update({'ts_ms': ts,
                                                'timestamp': ts,
@@ -622,14 +615,14 @@ class BitKubClient:
                 # else:
                 timestamp = time.time()
                 if market != 'THB_USDT':
-                    # change = self.get_thb_rate()
-                    new_asks = [[x[1], x[2]] for x in data['data'][2][:self.ob_len]]
-                    new_bids = [[x[1], x[2]] for x in data['data'][1][:self.ob_len]]
+                    change = self.get_thb_rate()
+                    new_asks = [[x[1] / change, x[2]] for x in data['data'][2][:1]]
+                    new_bids = [[x[1] / change, x[2]] for x in data['data'][1][:1]]
                 else:
-                    new_asks = [[x[1], x[2]] for x in data['data'][2][:self.ob_len]]
-                    new_bids = [[x[1], x[2]] for x in data['data'][1][:self.ob_len]]
-                new_asks = self.merge_similar_orders(new_asks)
-                new_bids = self.merge_similar_orders(new_bids)
+                    new_asks = [[x[1], x[2]] for x in data['data'][2][:1]]
+                    new_bids = [[x[1], x[2]] for x in data['data'][1][:1]]
+                # new_asks = self.merge_similar_orders(new_asks)
+                # new_bids = self.merge_similar_orders(new_bids)
                 self.orderbook[market].update({'ts_ms': ts,
                                                'timestamp': timestamp,
                                                'asks': new_asks,
@@ -735,15 +728,15 @@ class BitKubClient:
                         time.sleep(30)
                         await self.get_orderbook_by_symbol(market)
                 else:
-                    response.update({'ts_ms': ts,
-                                     'timestamp': ts})
-                    self.orderbook.update({market: response})
                     if market != 'THB_USDT':
                         change_rate = self.get_thb_rate()
                         for ask in response['asks']:
                             ask[0] = ask[0] / change_rate
                         for bid in response['bids']:
                             bid[0] = bid[0] / change_rate
+                    response.update({'ts_ms': ts,
+                                     'timestamp': ts})
+                    self.orderbook.update({market: response})
                     return response
 
     @try_exc_regular
