@@ -242,7 +242,7 @@ class BitKubClient:
         top_rate_ob = self.get_orderbook(market)
         top_rate = top_rate_ob['asks'][0][0] if side == 'buy' else top_rate_ob['bids'][0][0]
         body_price = price
-        if market != 'USDT_THB':
+        if market != 'THB_USDT':
             change = self.get_thb_rate()
             body_price = price * change
             if side == 'buy' and body_price < top_rate:
