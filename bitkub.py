@@ -268,16 +268,23 @@ class BitKubClient:
             else:
                 order_id = response['result'].get('hash', 'default')
                 result = self.get_order_by_id(market, order_id)
-                if client_id != 'keep-alive':
-                    print(result)
+                if not result and response['result']['rec']:
+                    executed_amount_coin = response['result']['rec']
+                    thb_rate = self.get_thb_rate()
+                    real_price = response['result']['rat'] / thb_rate
+                    status = OrderStatus.FULLY_EXECUTED
+                elif result:
+                    executed_amount_coin = result['factual_amount_coin']
+                    real_price = result['factual_price']
+                    status = result['status']
                 order_res = {'exchange_name': self.EXCHANGE_NAME,
                              'exchange_order_id': order_id,
                              'timestamp': float(response['result']['ts']) if response['result'].get(
                                  'ts') else time.time(),
-                             'status': result['status'] if result else OrderStatus.NOT_PLACED,
+                             'status': status,
                              'api_response': response['result'],
-                             'size': result['factual_amount_coin'] if result else 0,
-                             'price': result['factual_price'] if result else 0,
+                             'size': executed_amount_coin,
+                             'price': real_price,
                              'time_order_sent': time_start,
                              'create_order_time': float(response['result']['ts']) - time_start}
                 if client_id:
