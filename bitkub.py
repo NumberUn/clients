@@ -327,9 +327,14 @@ class BitKubClient:
             real_size = 0
             real_size_usd = 0
             thb_rate = self.get_thb_rate()
-            for fill in resp['result']['history']:
-                real_size += fill['amount']
-                real_size_usd += fill['rate'] * fill['amount']
+            if resp['result']['side'] == 'buy':
+                for fill in resp['result']['history']:
+                    real_size += fill['amount'] / fill['rate']
+                    real_size_usd += fill['amount'] / thb_rate
+            else:
+                for fill in resp['result']['history']:
+                    real_size += fill['amount']
+                    real_size_usd += fill['rate'] * fill['amount']
             if symbol != 'THB_USDT':
                 if real_size:
                     real_price = real_size_usd / real_size / thb_rate
@@ -346,10 +351,21 @@ class BitKubClient:
                       'ts_update': timestamp}
             self.orders.update({order_id: result})
             return result
-        # exapmple = {'error': 0, 'result': {'amount': 331.04, 'client_id': '', 'credit': 0, 'fee': 0.83, 'filled': 0,
-        #                                    'first': '58462570', 'history': [], 'id': '58462570', 'last': '',
-        #                                    'parent': '0', 'partial_filled': False, 'post_only': False, 'rate': 33.12,
-        #                                    'remaining': 331.04, 'side': 'buy', 'status': 'unfilled', 'total': 331.04}}
+        # exapmple_buy = {'error': 0,
+        #             'result': {'amount': 736.44, 'client_id': '', 'credit': 0, 'fee': 1.85, 'filled': 736.25,
+        #                        'first': '58463312', 'history': [
+        #                     {'amount': 736.25, 'credit': 0, 'fee': 1.85, 'hash': 'Mj1JmbsDn6oePTxCid6',
+        #                      'id': '58463312', 'rate': 36.83, 'timestamp': 1715076377000,
+        #                      'txn_id': 'USDTBUY0023890285'}], 'id': '58463312', 'last': '58463312', 'parent': '0',
+        #                        'partial_filled': True, 'post_only': False, 'rate': 36.84, 'remaining': 0.19,
+        #                        'side': 'buy', 'status': 'unfilled', 'total': 736.44}}
+        # example_sell = {'error': 0, 'result': {'amount': 0.9, 'client_id': '', 'credit': 0, 'fee': 0.09,
+        # 'filled': 0.9, 'first': '47666807', 'history': [
+        #         {'amount': 0.9, 'credit': 0, 'fee': 0.09, 'hash': '2aUQGaad3Asa4LSswcSNo', 'id': '47666807',
+        #          'rate': 36.82, 'timestamp': 1715076654000, 'txn_id': 'USDTSELL0023890354'}], 'id': '47666807',
+        #                                        'last': '47666807', 'parent': '0', 'partial_filled': False,
+        #                                        'post_only': False, 'rate': 36.81, 'remaining': 0, 'side': 'sell',
+        #                                        'status': 'filled', 'total': 0.9}}
 
     @try_exc_async
     async def cancel_order(self, order_id):
@@ -777,9 +793,26 @@ if __name__ == '__main__':
     client.run_updater()
 
     time.sleep(3)
-    price = client.get_orderbook('THB_BTC')['bids'][0][0]
-    order_data = asyncio.run(client.create_order(price, 30, 'buy', 'THB_USDT'))
-    ord_id = order_data['exchange_order_id']
+    # orderbook = client.get_orderbook('THB_USDT')
+    # price_buy = orderbook['asks'][1][0]
+    # client_id = f'takerxxx{client.EXCHANGE_NAME}xxx' + client.id_generator() + 'xxx' + 'THB'
+    # order_data = {'market': 'THB_USDT',
+    #               'client_id': client_id,
+    #               'price': price_buy,
+    #               'size': 20,
+    #               'side': 'buy'}
+    # client.async_tasks.append(['create_order', order_data])
+    # time.sleep(2)
+    orderbook = client.get_orderbook('THB_USDT')
+    price_sell = orderbook['bids'][1][0]
+    client_id = f'takerxxx{client.EXCHANGE_NAME}xxx' + client.id_generator() + 'xxx' + 'THB'
+    order_data = {'market': 'THB_USDT',
+                  'client_id': client_id,
+                  'price': price_sell,
+                  'size': 0.9,
+                  'side': 'sell'}
+    client.async_tasks.append(['create_order', order_data])
+    # ord_id = order_data['exchange_order_id']
     # client.get_
     time.sleep(3)
     # print(f"{order_data=}")
