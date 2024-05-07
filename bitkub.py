@@ -251,7 +251,7 @@ class BitKubClient:
             req_body['rat'] = req_body['rat'] * change
         if side == 'buy':
             req_body['amt'] *= req_body['rat']
-        if client_id and client_id != 'keep_alive':
+        if client_id and client_id != 'keep-alive':
             print(self.EXCHANGE_NAME, side, req_body)
         headers = self.get_auth_for_request(path=path, method='POST', body=req_body)
         async with self.async_session.post(self.BASE_URL + path, data=json.dumps(req_body), headers=headers) as resp:
