@@ -248,6 +248,8 @@ class BitKubClient:
         if market != 'USDT_THB':
             change = self.get_thb_rate()
             req_body['rat'] = req_body['rat'] * change
+        if side == 'buy':
+            req_body['amt'] *= req_body['rat']
         headers = self.get_auth_for_request(path=path, method='POST', body=req_body)
         async with self.async_session.post(self.BASE_URL + path, data=json.dumps(req_body), headers=headers) as resp:
             response = await resp.json()
@@ -641,13 +643,13 @@ class BitKubClient:
                                                       'step_size': 0.00000000001,
                                                       'min_size': 20 / px,
                                                       'price_precision': 0.00000000001}})
-        with open('min_sizes_bitkub.txt', 'r') as file:
-            data = file.read()
-            data = data.split('\n')
-            for market__size in data:
-                params = market__size.split(' | ')
-                if self.instruments.get(params[0]):
-                    self.instruments[params[0]].update({'min_size': float(params[1])})
+        # with open('min_sizes_bitkub.txt', 'r') as file:
+        #     data = file.read()
+        #     data = data.split('\n')
+        #     for market__size in data:
+        #         params = market__size.split(' | ')
+        #         if self.instruments.get(params[0]):
+        #             self.instruments[params[0]].update({'min_size': float(params[1])})
 
     @try_exc_regular
     def clean_empty_markets(self):
