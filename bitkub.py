@@ -206,6 +206,8 @@ class BitKubClient:
         if market != 'USDT_THB':
             change = self.get_thb_rate()
             req_body['rat'] = req_body['rat'] * change
+        if side == 'buy':
+            req_body['amt'] *= req_body['rat']
         headers = self.get_auth_for_request(path=path, method='POST', body=req_body)
         response = self.session.post(self.BASE_URL + path, data=json.dumps(req_body), headers=headers)
         resp = response.json()
@@ -267,7 +269,8 @@ class BitKubClient:
                 result = self.get_order_by_id(market, order_id)
                 order_res = {'exchange_name': self.EXCHANGE_NAME,
                              'exchange_order_id': order_id,
-                             'timestamp': float(response['result']['ts']) if response['result'].get('ts') else time.time(),
+                             'timestamp': float(response['result']['ts']) if response['result'].get(
+                                 'ts') else time.time(),
                              'status': result['status'] if result else OrderStatus.NOT_PLACED,
                              'api_response': response['result'],
                              'size': result['factual_amount_coin'] if result else 0,
@@ -314,7 +317,7 @@ class BitKubClient:
         headers = self.get_auth_for_request(path=path + post_string, method='GET')
         response = self.session.get(self.BASE_URL + path + post_string, headers=headers)
         resp = response.json()
-        # print('GET ORDER BY ID RESPONSE', self.EXCHANGE_NAME, resp)
+        print('GET ORDER BY ID RESPONSE', self.EXCHANGE_NAME, resp)
         if resp['error']:
             print(f"GET ORDER BY ID ERROR {self.EXCHANGE_NAME}: {resp}")
         else:
@@ -343,6 +346,10 @@ class BitKubClient:
                       'ts_update': timestamp}
             self.orders.update({order_id: result})
             return result
+        # exapmple = {'error': 0, 'result': {'amount': 331.04, 'client_id': '', 'credit': 0, 'fee': 0.83, 'filled': 0,
+        #                                    'first': '58462570', 'history': [], 'id': '58462570', 'last': '',
+        #                                    'parent': '0', 'partial_filled': False, 'post_only': False, 'rate': 33.12,
+        #                                    'remaining': 331.04, 'side': 'buy', 'status': 'unfilled', 'total': 331.04}}
 
     @try_exc_async
     async def cancel_order(self, order_id):
@@ -643,13 +650,13 @@ class BitKubClient:
                                                       'step_size': 0.00000000001,
                                                       'min_size': 20 / px,
                                                       'price_precision': 0.00000000001}})
-        # with open('min_sizes_bitkub.txt', 'r') as file:
-        #     data = file.read()
-        #     data = data.split('\n')
-        #     for market__size in data:
-        #         params = market__size.split(' | ')
-        #         if self.instruments.get(params[0]):
-        #             self.instruments[params[0]].update({'min_size': float(params[1])})
+        with open('min_sizes_bitkub.txt', 'r') as file:
+            data = file.read()
+            data = data.split('\n')
+            for market__size in data:
+                params = market__size.split(' | ')
+                if self.instruments.get(params[0]):
+                    self.instruments[params[0]].update({'min_size': float(params[1])})
 
     @try_exc_regular
     def clean_empty_markets(self):
@@ -769,9 +776,11 @@ if __name__ == '__main__':
 
     client.run_updater()
 
-    # time.sleep(3)
-    # price = client.get_orderbook('THB_USDT')['bids'][0][0] * 0.95
-    # order_data = client.create_order(price, 32, 'sell', 'THB_USDT')
+    time.sleep(3)
+    price = client.get_orderbook('THB_BTC')['bids'][0][0]
+    order_data = asyncio.run(client.create_order(price, 30, 'buy', 'THB_USDT'))
+    ord_id = order_data['exchange_order_id']
+    # client.get_
     time.sleep(3)
     # print(f"{order_data=}")
     # client.get_real_balance()
@@ -784,13 +793,13 @@ if __name__ == '__main__':
     #     min_size_sell = 0
     #     resp_code = 1
     #     ob = client.get_orderbook(market)
-    #     price_buy = ob['bids'][0][0] * 0.99
+    #     price_buy = ob['bids'][0][0] * 0.98
     #     price_sell = ob['asks'][0][0] * 1.02
     #     size_buy = 10 / price_buy
     #     size_sell = 10 / price_sell
     #     while resp_code:
     #         ob = client.get_orderbook(market)
-    #         price_buy = ob['bids'][0][0] * 0.995
+    #         price_buy = ob['bids'][0][0] * 0.98
     #         client_id = f'takerxxx{client.EXCHANGE_NAME}xxx' + client.id_generator() + 'xxx' + 'THB'
     #         order_data = {'market': market,
     #                       'client_id': client_id,
@@ -823,14 +832,12 @@ if __name__ == '__main__':
     #         file.write(f"{market} | {size_buy}\n")
     ### FOR DEFINING MIN SIZES
 
-
-
-    # while True:
-    #     # print(client.get_all_open_orders())
-    #     for market, book in client.orderbook.items():
-    #         print(market, time.time() - book['timestamp'])
-    #     print('\n\n\n')
-    #     time.sleep(1)
+    while True:
+        #     # print(client.get_all_open_orders())
+        #     for market, book in client.orderbook.items():
+        #         print(market, time.time() - book['timestamp'])
+        #     print('\n\n\n')
+        time.sleep(1)
         # print(client.balance)
         # print(client.responses)
 
