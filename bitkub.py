@@ -246,7 +246,8 @@ class BitKubClient:
             'rat': price,
             'typ': 'limit'  # limit, market
         }
-        # print(self.EXCHANGE_NAME, req_body)
+        if client_id and client_id != 'keep_alive':
+            print(self.EXCHANGE_NAME, side, req_body)
         if market != 'USDT_THB':
             change = self.get_thb_rate()
             req_body['rat'] = req_body['rat'] * change
