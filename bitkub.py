@@ -317,7 +317,7 @@ class BitKubClient:
         headers = self.get_auth_for_request(path=path + post_string, method='GET')
         response = self.session.get(self.BASE_URL + path + post_string, headers=headers)
         resp = response.json()
-        print('GET ORDER BY ID RESPONSE', self.EXCHANGE_NAME, resp)
+        # print('GET ORDER BY ID RESPONSE', self.EXCHANGE_NAME, resp)
         if resp['error']:
             print(f"GET ORDER BY ID ERROR {self.EXCHANGE_NAME}: {resp}")
         else:
@@ -865,12 +865,12 @@ if __name__ == '__main__':
     #         file.write(f"{market} | {size_buy}\n")
     ### FOR DEFINING MIN SIZES
 
-    while True:
+    # while True:
         #     # print(client.get_all_open_orders())
         #     for market, book in client.orderbook.items():
         #         print(market, time.time() - book['timestamp'])
         #     print('\n\n\n')
-        time.sleep(1)
+        # time.sleep(1)
         # print(client.balance)
         # print(client.responses)
 
