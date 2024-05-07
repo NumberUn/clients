@@ -587,7 +587,7 @@ class BitKubClient:
                     new_bids = [[x[1] / change, x[2]] for x in data['data'][:1]]
                 else:
                     new_bids = [[x[1], x[2]] for x in data['data'][:1]]
-                new_bids = self.merge_similar_orders(new_bids)
+                # new_bids = self.merge_similar_orders(new_bids)
                 self.orderbook[market].update({'ts_ms': ts,
                                                'timestamp': ts,
                                                'bids': new_bids})
@@ -601,7 +601,7 @@ class BitKubClient:
                     new_asks = [[x[1] / change, x[2]] for x in data['data'][:1]]
                 else:
                     new_asks = [[x[1], x[2]] for x in data['data'][:1]]
-                new_asks = self.merge_similar_orders(new_asks)
+                # new_asks = self.merge_similar_orders(new_asks)
                 self.orderbook[market].update({'ts_ms': ts,
                                                'timestamp': ts,
                                                'asks': new_asks})
