@@ -246,13 +246,13 @@ class BitKubClient:
             'rat': price,
             'typ': 'limit'  # limit, market
         }
-        if client_id and client_id != 'keep_alive':
-            print(self.EXCHANGE_NAME, side, req_body)
         if market != 'USDT_THB':
             change = self.get_thb_rate()
             req_body['rat'] = req_body['rat'] * change
         if side == 'buy':
             req_body['amt'] *= req_body['rat']
+        if client_id and client_id != 'keep_alive':
+            print(self.EXCHANGE_NAME, side, req_body)
         headers = self.get_auth_for_request(path=path, method='POST', body=req_body)
         async with self.async_session.post(self.BASE_URL + path, data=json.dumps(req_body), headers=headers) as resp:
             response = await resp.json()
@@ -268,6 +268,8 @@ class BitKubClient:
             else:
                 order_id = response['result'].get('hash', 'default')
                 result = self.get_order_by_id(market, order_id)
+                if client_id != 'keep-alive':
+                    print(result)
                 order_res = {'exchange_name': self.EXCHANGE_NAME,
                              'exchange_order_id': order_id,
                              'timestamp': float(response['result']['ts']) if response['result'].get(
@@ -336,12 +338,8 @@ class BitKubClient:
                 for fill in resp['result']['history']:
                     real_size += fill['amount']
                     real_size_usd += fill['rate'] * fill['amount']
-            if symbol != 'THB_USDT':
-                if real_size:
-                    real_price = real_size_usd / real_size / thb_rate
-            else:
-                if real_size:
-                    real_price = real_size_usd / real_size
+            if real_size:
+                real_price = real_size_usd / real_size
             result = {'exchange_order_id': order_id,
                       'exchange_name': self.EXCHANGE_NAME,
                       'status': self.get_order_status(resp),
@@ -349,7 +347,8 @@ class BitKubClient:
                       'factual_amount_coin': real_size,
                       'factual_amount_usd': real_size_usd,
                       'datetime_update': datetime.utcnow(),
-                      'ts_update': timestamp}
+                      'ts_update': timestamp,
+                      'api_response': resp}
             self.orders.update({order_id: result})
             return result
         # exapmple_buy = {'error': 0,
