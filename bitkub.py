@@ -1,7 +1,6 @@
 import time
 import json
 import traceback
-
 import requests
 import hmac
 import hashlib
@@ -251,18 +250,18 @@ class BitKubClient:
         time_start = time.time()
         bid_ask = 'bid' if side == 'buy' else 'ask'
         path = f'/api/v3/market/place-{bid_ask}'
-        # top_rate_ob = self.get_orderbook(market)
-        # top_rate = top_rate_ob['asks'][0][0] if side == 'buy' else top_rate_ob['bids'][0][0]
+        top_rate_ob = self.get_orderbook_by_symbol_reg(market)
+        top_rate = top_rate_ob['asks'][0][0] if side == 'buy' else top_rate_ob['bids'][0][0]
         body_price = price
         change = self.get_thb_rate()
         if market != 'THB_USDT':
             body_price = price * change
-            # if side == 'buy' and body_price < top_rate:
-            #     print(f"{self.EXCHANGE_NAME} body price changed due to changed ob!")
-            #     body_price = top_rate * 1.001 * change
-            # elif side == 'sell' and body_price > top_rate:
-            #     print(f"{self.EXCHANGE_NAME} body price changed due to changed ob!")
-            #     body_price = top_rate * 0.999 * change
+            if side == 'buy' and body_price < top_rate:
+                print(f"{self.EXCHANGE_NAME} body price changed due to changed ob!")
+                body_price = top_rate * 1.001 * change
+            elif side == 'sell' and body_price > top_rate:
+                print(f"{self.EXCHANGE_NAME} body price changed due to changed ob!")
+                body_price = top_rate * 0.999 * change
         market = self.market_rename(market)
         req_body = {
             'sym': market.lower(),  # {quote}_{base}
