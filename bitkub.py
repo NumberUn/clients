@@ -270,12 +270,7 @@ class BitKubClient:
             'typ': 'limit'  # limit, market
         }
         if client_id != 'keep-alive':
-            req_body = {
-                'sym': market.lower(),  # {quote}_{base}
-                'amt': size,
-                # 'rat': body_price,
-                'typ': 'market'  # limit, market
-            }
+            req_body.update({'typ': 'market'})  # limit, market
         if side == 'buy':
             req_body['amt'] *= body_price
         if client_id and client_id != 'keep-alive':
