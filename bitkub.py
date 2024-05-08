@@ -289,6 +289,8 @@ class BitKubClient:
                 order_id = response['result'].get('hash', 'default')
                 time.sleep(1)
                 result = self.get_order_by_id(market, order_id)
+                if client_id != 'keep-alive':
+                    print(result)
                 if result:
                     executed_amount_coin = result['factual_amount_coin']
                     real_price = result['factual_price']
