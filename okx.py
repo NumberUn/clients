@@ -348,7 +348,6 @@ class OkxClient(BaseClient):
         way = '/api/v5/account/positions'
         headers = self.get_private_headers('GET', way)
         resp = requests.get(url=self.BASE_URL + way, headers=headers).json()
-        print(resp)
         for pos in resp['data']:
             side = 'LONG' if float(pos['pos']) > 0 else 'SHORT'
             amount_usd = float(pos['notionalUsd'])
