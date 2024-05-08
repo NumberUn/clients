@@ -285,7 +285,13 @@ class BitKubClient:
                 self.responses.update({client_id: {'exchange_name': self.EXCHANGE_NAME,
                                                    'status': OrderStatus.NOT_PLACED,
                                                    'api_response': response,
-                                                   'exchange_order_id': None}})
+                                                   'exchange_order_id': None,
+                                                   'size': 0,
+                                                   'price': 0,
+                                                   'time_order_sent': time_start,
+                                                   'create_order_time': 0,
+                                                   'timestamp': 0
+                                                   }})
             else:
                 order_id = response['result'].get('hash', 'default')
                 time.sleep(1)
