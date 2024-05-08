@@ -63,7 +63,7 @@ class OkxClient(BaseClient):
         self.receiving = asyncio.Event()
         self.receiving.set()
         self.clients_ids = dict()
-        self.top_ws_ping = 3
+        self.top_ws_ping = 0.1
         self.public_trades = dict()
         if multibot:
             self.cancel_all_orders()
@@ -399,7 +399,7 @@ class OkxClient(BaseClient):
             side = 'buy'
         elif top_bid and top_bid < self.orderbook[market]['asks'][0][0]:
             side = 'sell'
-        if self.finder and side:  # and ts_ms - ts_ob < self.top_ws_ping:
+        if self.finder and side and ts_ms - ts_ob < self.top_ws_ping:
             coin = market.split('-')[0]
             await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, 'ob')
         if self.market_finder:
