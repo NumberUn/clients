@@ -297,6 +297,8 @@ class BitKubClient:
                 time.sleep(1)
                 result = self.get_order_by_id(market, order_id)
                 status = OrderStatus.PROCESSING
+                executed_amount_coin = 0
+                real_price = 0
                 if client_id != 'keep-alive':
                     print(result)
                 if result:
