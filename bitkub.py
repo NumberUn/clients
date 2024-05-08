@@ -177,6 +177,10 @@ class BitKubClient:
                 available_balances.update({symbol: {'buy': avl_margin_per_market - position['amount_usd'],
                                                     'sell': position['amount_usd']}})
         if position_value_abs <= available_margin:
+            max_new_pose = available_margin - position_value_abs
+            for symbol, sizes in available_balances.items():
+                if sizes['buy'] > max_new_pose:
+                    sizes['buy'] = max_new_pose
             # Это по сути доступный баланс для открытия новых позиций
             available_balances['buy'] = available_margin - position_value_abs
             available_balances['sell'] = 0
@@ -826,33 +830,29 @@ if __name__ == '__main__':
 
     client.run_updater()
 
-    orderbook = client.get_orderbook('THB_USDT')
-    price_buy = orderbook['asks'][1][0]
-    client_id = f'takerxxx{client.EXCHANGE_NAME}xxx' + client.id_generator() + 'xxx' + 'THB'
-    order_data = {'market': 'THB_USDT',
-                  'client_id': client_id,
-                  'price': price_buy,
-                  'size': 20,
-                  'side': 'buy'}
-
-
-
-    while True:
-        time.sleep(3)
-
-    # client.async_tasks.append(['create_order', order_data])
-    # time.sleep(2)
     # orderbook = client.get_orderbook('THB_USDT')
-    # price_sell = orderbook['bids'][1][0]
+    # price_buy = orderbook['asks'][1][0]
     # client_id = f'takerxxx{client.EXCHANGE_NAME}xxx' + client.id_generator() + 'xxx' + 'THB'
     # order_data = {'market': 'THB_USDT',
     #               'client_id': client_id,
-    #               'price': price_sell,
-    #               'size': 0.9,
-    #               'side': 'sell'}
-    # client.async_tasks.append(['create_order', order_data])
+    #               'price': price_buy,
+    #               'size': 20,
+    #               'side': 'buy'}
+
+    time.sleep(2)
+
+    orderbook = client.get_orderbook('THB_USDT')
+    price_sell = orderbook['asks'][0][0]
+    client_id = f'takerxxx{client.EXCHANGE_NAME}xxx' + client.id_generator() + 'xxx' + 'THB'
+    order_data = {'market': 'THB_USDT',
+                  'client_id': client_id,
+                  'price': price_sell,
+                  'size': 1,
+                  'side': 'buy'}
+    client.async_tasks.append(['create_order', order_data])
+    while True:
+        time.sleep(3)
     # ord_id = order_data['exchange_order_id']
-    # client.get_
 
     # print(f"{order_data=}")
     # client.get_real_balance()
