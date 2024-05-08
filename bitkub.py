@@ -273,6 +273,7 @@ class BitKubClient:
         headers = self.get_auth_for_request(path=path, method='POST', body=req_body)
         async with self.async_session.post(self.BASE_URL + path, data=json.dumps(req_body), headers=headers) as resp:
             response = await resp.json()
+            order_create_time = (time.time() - time_start) / 2
             # self.av_ping.append(time.time() - time_start)
             # print(f"{self.EXCHANGE_NAME} av create order time: {sum(self.av_ping) / len(self.av_ping)} sec")
             if client_id != 'keep-alive':
@@ -286,18 +287,12 @@ class BitKubClient:
                                                    'exchange_order_id': None}})
             else:
                 order_id = response['result'].get('hash', 'default')
-                if response['result']['rec']:
-                    executed_amount_coin = response['result']['rec']
-                    thb_rate = self.get_thb_rate()
-                    real_price = response['result']['rat'] / thb_rate
-                    status = OrderStatus.FULLY_EXECUTED
-                else:
-                    result = self.get_order_by_id(market, order_id)
-                    if result:
-                        executed_amount_coin = result['factual_amount_coin']
-                        real_price = result['factual_price']
-                        status = result['status']
-                order_create_time = (time.time() - time_start) / 2
+                time.sleep(1)
+                result = self.get_order_by_id(market, order_id)
+                if result:
+                    executed_amount_coin = result['factual_amount_coin']
+                    real_price = result['factual_price']
+                    status = result['status']
                 order_res = {'exchange_name': self.EXCHANGE_NAME,
                              'exchange_order_id': order_id,
                              'timestamp': time.time() - order_create_time,
