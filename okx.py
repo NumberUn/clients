@@ -63,7 +63,7 @@ class OkxClient(BaseClient):
         self.receiving = asyncio.Event()
         self.receiving.set()
         self.clients_ids = dict()
-        self.top_ws_ping = 0.1
+        self.top_ws_ping = 0.05
         self.public_trades = dict()
         if multibot:
             self.cancel_all_orders()
