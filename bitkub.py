@@ -300,7 +300,7 @@ class BitKubClient:
                 executed_amount_coin = 0
                 real_price = 0
                 if client_id != 'keep-alive':
-                    print(result)
+                    print(f"GET ORDER BY ID {self.EXCHANGE_NAME} {result=}\n")
                 if result:
                     executed_amount_coin = result['factual_amount_coin']
                     real_price = result['factual_price']
@@ -826,17 +826,20 @@ if __name__ == '__main__':
 
     client.run_updater()
 
-    time.sleep(3)
+    orderbook = client.get_orderbook('THB_USDT')
+    price_buy = orderbook['asks'][1][0]
+    client_id = f'takerxxx{client.EXCHANGE_NAME}xxx' + client.id_generator() + 'xxx' + 'THB'
+    order_data = {'market': 'THB_USDT',
+                  'client_id': client_id,
+                  'price': price_buy,
+                  'size': 20,
+                  'side': 'buy'}
+
+
+
     while True:
         time.sleep(3)
-    # orderbook = client.get_orderbook('THB_USDT')
-    # price_buy = orderbook['asks'][1][0]
-    # client_id = f'takerxxx{client.EXCHANGE_NAME}xxx' + client.id_generator() + 'xxx' + 'THB'
-    # order_data = {'market': 'THB_USDT',
-    #               'client_id': client_id,
-    #               'price': price_buy,
-    #               'size': 20,
-    #               'side': 'buy'}
+
     # client.async_tasks.append(['create_order', order_data])
     # time.sleep(2)
     # orderbook = client.get_orderbook('THB_USDT')
