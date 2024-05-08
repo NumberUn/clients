@@ -277,7 +277,7 @@ class BitKubClient:
                 'typ': 'market'  # limit, market
             }
         if side == 'buy':
-            req_body['amt'] *= req_body['rat']
+            req_body['amt'] *= body_price
         if client_id and client_id != 'keep-alive':
             print(self.EXCHANGE_NAME, side, req_body)
         headers = self.get_auth_for_request(path=path, method='POST', body=req_body)
