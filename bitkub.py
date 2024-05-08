@@ -70,6 +70,7 @@ class BitKubClient:
         self.rate_limit_orders = 200
         self.cancel_responses = {}
         self.top_ws_ping = 5
+        self.av_ping = []
         print(f"{self.EXCHANGE_NAME} INITIALIZED. STATE: {self.state}\n")
 
     @try_exc_regular
@@ -80,6 +81,12 @@ class BitKubClient:
     @try_exc_regular
     def id_generator(size=4, chars=string.ascii_letters):
         return "".join(random.choice(chars) for _ in range(size))
+
+    @try_exc_regular
+    def get_server_time(self):
+        path = '/api/v3/servertime'
+        ts = self.session.get(self.BASE_URL + path, headers=self.headers)
+        print(time.time() - (ts.json() / 1000))
 
     @try_exc_async
     async def _run_order_loop(self, loop):
@@ -136,7 +143,8 @@ class BitKubClient:
             # market = self.markets[self.markets_list[random.randint(0, len(self.markets_list) - 1)]]
             market = 'THB_USDT'
             price = self.get_orderbook(market)['bids'][0][0] * .9
-            await self.create_fast_order(price, 10, "buy", market, "keep-alive")
+            # self.get_server_time()
+            await self.create_fast_order(price, 1, "buy", market, "keep-alive")
             resp = self.responses.pop('keep-alive', {})
             if resp:
                 ex_order_id = resp['exchange_order_id']
@@ -265,6 +273,8 @@ class BitKubClient:
         headers = self.get_auth_for_request(path=path, method='POST', body=req_body)
         async with self.async_session.post(self.BASE_URL + path, data=json.dumps(req_body), headers=headers) as resp:
             response = await resp.json()
+            # self.av_ping.append(time.time() - time_start)
+            # print(f"{self.EXCHANGE_NAME} av create order time: {sum(self.av_ping) / len(self.av_ping)} sec")
             if client_id != 'keep-alive':
                 print(f'{self.EXCHANGE_NAME} order response: {response}')
                 print(f"{self.EXCHANGE_NAME} create order time: {time.time() - time_start}")
@@ -584,10 +594,10 @@ class BitKubClient:
             if event == 'bidschanged':
                 if market != 'THB_USDT':
                     change = self.get_thb_rate()
-                    new_bids = [[x[1] / change, x[2]] for x in data['data'][:1]]
+                    new_bids = [[x[1] / change, x[2]] for x in data['data'][:self.ob_len]]
                 else:
-                    new_bids = [[x[1], x[2]] for x in data['data'][:1]]
-                # new_bids = self.merge_similar_orders(new_bids)
+                    new_bids = [[x[1], x[2]] for x in data['data'][:self.ob_len]]
+                new_bids = self.merge_similar_orders(new_bids)
                 self.orderbook[market].update({'ts_ms': ts,
                                                'timestamp': ts,
                                                'bids': new_bids})
@@ -598,10 +608,10 @@ class BitKubClient:
             elif event == 'askschanged':
                 if market != 'THB_USDT':
                     change = self.get_thb_rate()
-                    new_asks = [[x[1] / change, x[2]] for x in data['data'][:1]]
+                    new_asks = [[x[1] / change, x[2]] for x in data['data'][:self.ob_len]]
                 else:
-                    new_asks = [[x[1], x[2]] for x in data['data'][:1]]
-                # new_asks = self.merge_similar_orders(new_asks)
+                    new_asks = [[x[1], x[2]] for x in data['data'][:self.ob_len]]
+                new_asks = self.merge_similar_orders(new_asks)
                 self.orderbook[market].update({'ts_ms': ts,
                                                'timestamp': ts,
                                                'asks': new_asks})
@@ -616,13 +626,13 @@ class BitKubClient:
                 timestamp = time.time()
                 if market != 'THB_USDT':
                     change = self.get_thb_rate()
-                    new_asks = [[x[1] / change, x[2]] for x in data['data'][2][:1]]
-                    new_bids = [[x[1] / change, x[2]] for x in data['data'][1][:1]]
+                    new_asks = [[x[1] / change, x[2]] for x in data['data'][2][:self.ob_len]]
+                    new_bids = [[x[1] / change, x[2]] for x in data['data'][1][:self.ob_len]]
                 else:
-                    new_asks = [[x[1], x[2]] for x in data['data'][2][:1]]
-                    new_bids = [[x[1], x[2]] for x in data['data'][1][:1]]
-                # new_asks = self.merge_similar_orders(new_asks)
-                # new_bids = self.merge_similar_orders(new_bids)
+                    new_asks = [[x[1], x[2]] for x in data['data'][2][:self.ob_len]]
+                    new_bids = [[x[1], x[2]] for x in data['data'][1][:self.ob_len]]
+                new_asks = self.merge_similar_orders(new_asks)
+                new_bids = self.merge_similar_orders(new_bids)
                 self.orderbook[market].update({'ts_ms': ts,
                                                'timestamp': timestamp,
                                                'asks': new_asks,
@@ -672,7 +682,7 @@ class BitKubClient:
                                                   'step_size': 0.00000000001,
                                                   'min_size': 20 / px,
                                                   'price_precision': 0.00000000001}})
-                time.sleep(0.1)
+                time.sleep(0.2)
             else:
                 for market in self.positions.keys():
                     px = self.get_orderbook(market)['asks'][0][0]
@@ -809,6 +819,8 @@ if __name__ == '__main__':
     client.run_updater()
 
     time.sleep(3)
+    while True:
+        time.sleep(3)
     # orderbook = client.get_orderbook('THB_USDT')
     # price_buy = orderbook['asks'][1][0]
     # client_id = f'takerxxx{client.EXCHANGE_NAME}xxx' + client.id_generator() + 'xxx' + 'THB'
@@ -819,18 +831,18 @@ if __name__ == '__main__':
     #               'side': 'buy'}
     # client.async_tasks.append(['create_order', order_data])
     # time.sleep(2)
-    orderbook = client.get_orderbook('THB_USDT')
-    price_sell = orderbook['bids'][1][0]
-    client_id = f'takerxxx{client.EXCHANGE_NAME}xxx' + client.id_generator() + 'xxx' + 'THB'
-    order_data = {'market': 'THB_USDT',
-                  'client_id': client_id,
-                  'price': price_sell,
-                  'size': 0.9,
-                  'side': 'sell'}
-    client.async_tasks.append(['create_order', order_data])
+    # orderbook = client.get_orderbook('THB_USDT')
+    # price_sell = orderbook['bids'][1][0]
+    # client_id = f'takerxxx{client.EXCHANGE_NAME}xxx' + client.id_generator() + 'xxx' + 'THB'
+    # order_data = {'market': 'THB_USDT',
+    #               'client_id': client_id,
+    #               'price': price_sell,
+    #               'size': 0.9,
+    #               'side': 'sell'}
+    # client.async_tasks.append(['create_order', order_data])
     # ord_id = order_data['exchange_order_id']
     # client.get_
-    time.sleep(3)
+
     # print(f"{order_data=}")
     # client.get_real_balance()
     # print(client.balance)
@@ -881,7 +893,6 @@ if __name__ == '__main__':
     #         file.write(f"{market} | {size_buy}\n")
     ### FOR DEFINING MIN SIZES
 
-    # while True:
         #     # print(client.get_all_open_orders())
         #     for market, book in client.orderbook.items():
         #         print(market, time.time() - book['timestamp'])
