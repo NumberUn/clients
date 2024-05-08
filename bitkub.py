@@ -286,26 +286,27 @@ class BitKubClient:
                                                    'exchange_order_id': None}})
             else:
                 order_id = response['result'].get('hash', 'default')
-                result = self.get_order_by_id(market, order_id)
-                if not result and response['result']['rec']:
+                if response['result']['rec']:
                     executed_amount_coin = response['result']['rec']
                     thb_rate = self.get_thb_rate()
                     real_price = response['result']['rat'] / thb_rate
                     status = OrderStatus.FULLY_EXECUTED
-                elif result:
-                    executed_amount_coin = result['factual_amount_coin']
-                    real_price = result['factual_price']
-                    status = result['status']
+                else:
+                    result = self.get_order_by_id(market, order_id)
+                    if result:
+                        executed_amount_coin = result['factual_amount_coin']
+                        real_price = result['factual_price']
+                        status = result['status']
+                order_create_time = (time.time() - time_start) / 2
                 order_res = {'exchange_name': self.EXCHANGE_NAME,
                              'exchange_order_id': order_id,
-                             'timestamp': float(response['result']['ts']) if response['result'].get(
-                                 'ts') else time.time(),
+                             'timestamp': time.time() - order_create_time,
                              'status': status,
                              'api_response': response['result'],
                              'size': executed_amount_coin,
                              'price': real_price,
                              'time_order_sent': time_start,
-                             'create_order_time': float(response['result']['ts']) - time_start}
+                             'create_order_time': order_create_time}
                 if client_id:
                     self.responses.update({client_id: order_res})
                     self.LAST_ORDER_ID = order_id
