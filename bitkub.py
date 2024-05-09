@@ -422,6 +422,7 @@ class BitKubClient:
             resp = await response.json()
             if resp['error']:
                 print(f"{self.EXCHANGE_NAME} canceling order error: {resp}")
+                self.cancel_all_orders()
             else:
                 self.cancel_responses.update({order_id: resp})
                 return resp
