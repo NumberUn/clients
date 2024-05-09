@@ -274,11 +274,11 @@ class BitKubClient:
         #     req_body.update({'typ': 'market'})  # limit, market
         if side == 'buy':
             req_body['amt'] *= body_price
-        if client_id and client_id != 'keep-alive':
-            print(self.EXCHANGE_NAME, side, req_body)
-
         headers = self.get_auth_for_request(path=path, method='POST', body=req_body)
         async with self.async_session.post(self.BASE_URL + path, data=json.dumps(req_body), headers=headers) as resp:
+            if client_id and client_id != 'keep-alive':
+                print(self.EXCHANGE_NAME, side, req_body)
+                self.sent_taker_order = market
             response = await resp.json()
             order_create_time = (time.time() - time_start) / 2
             # self.av_ping.append(time.time() - time_start)
@@ -638,6 +638,9 @@ class BitKubClient:
                 # if len(data['data'][0]):
                 #     timestamp = min([data['data'][0][0][0], data['data'][0][1][0]])
                 # else:
+                if self.sent_taker_order == market:
+                    print(f"TRADES CHANGE {self.EXCHANGE_NAME} GOT: {data['data']}")
+                    self.sent_taker_order = None
                 timestamp = time.time()
                 if market != 'THB_USDT':
                     change = self.get_thb_rate()
