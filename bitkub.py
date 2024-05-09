@@ -642,7 +642,9 @@ class BitKubClient:
                 #     timestamp = min([data['data'][0][0][0], data['data'][0][1][0]])
                 # else:
                 if self.sent_taker_order == market:
-                    print(f"TRADES CHANGE {self.EXCHANGE_NAME} GOT {time.time()}:\n {data['data'][0][0]} {data['data'][0][1]}")
+                    if len(data['data'][0]):
+                        print(f"TRADES CHANGE {self.EXCHANGE_NAME} GOT {time.time()}:")
+                        print(f"{data['data'][0][0]} {data['data'][0][1]}")
                     self.sent_taker_order = None
                 timestamp = time.time()
                 if market != 'THB_USDT':
