@@ -279,6 +279,7 @@ class BitKubClient:
             if client_id and client_id != 'keep-alive':
                 print(self.EXCHANGE_NAME, side, req_body)
                 self.sent_taker_order = market
+                print('ORDER SENT', time.time())
             response = await resp.json()
             order_create_time = (time.time() - time_start) / 2
             # self.av_ping.append(time.time() - time_start)
@@ -639,7 +640,7 @@ class BitKubClient:
                 #     timestamp = min([data['data'][0][0][0], data['data'][0][1][0]])
                 # else:
                 if self.sent_taker_order == market:
-                    print(f"TRADES CHANGE {self.EXCHANGE_NAME} GOT: {data['data']}")
+                    print(f"TRADES CHANGE {self.EXCHANGE_NAME} GOT {time.time()}:\n {data['data']}")
                     self.sent_taker_order = None
                 timestamp = time.time()
                 if market != 'THB_USDT':
