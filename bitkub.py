@@ -263,9 +263,9 @@ class BitKubClient:
         #     elif side == 'sell' and body_price > top_rate:
         #         print(f"{self.EXCHANGE_NAME} body price changed due to changed ob!")
         #         body_price = top_rate * 0.999 * change
-        market = self.market_rename(market)
+        market_updated = self.market_rename(market)
         req_body = {
-            'sym': market.lower(),  # {quote}_{base}
+            'sym': market_updated.lower(),  # {quote}_{base}
             'amt': size,
             'rat': body_price,
             'typ': 'limit'  # limit, market
