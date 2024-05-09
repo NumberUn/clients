@@ -563,11 +563,11 @@ class BitKubClient:
     @try_exc_async
     async def _run_ws_loop(self, loop: asyncio.new_event_loop, market: str):
         while True:
-            try:
-                async with aiohttp.ClientSession() as session:
-                    endpoint = self.PUBLIC_WS_ENDPOINT
-                    for id, market_name in self.market_id_list.items():
-                        if market in market_name:
+            async with aiohttp.ClientSession() as session:
+                endpoint = self.PUBLIC_WS_ENDPOINT
+                for id, market_name in self.market_id_list.items():
+                    if market in market_name:
+                        try:
                             print(f"+{self.EXCHANGE_NAME} MARKET {market_name} WEBSOCKET CONNECTED")
                             async with session.ws_connect(endpoint + str(id)) as ws:
                                 self._ws_public = ws
@@ -578,8 +578,8 @@ class BitKubClient:
                             await ws.close()
                             time.sleep(5)
                             break
-            except Exception:
-                traceback.print_exc()
+                        except:
+                            pass
 
     @try_exc_regular
     def get_positions(self):
