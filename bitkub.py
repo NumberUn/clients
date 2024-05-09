@@ -566,11 +566,13 @@ class BitKubClient:
                 endpoint = self.PUBLIC_WS_ENDPOINT
                 for id, market_name in self.market_id_list.items():
                     if market in market_name:
+                        print(f"+{self.EXCHANGE_NAME} MARKET {market_name} WEBSOCKET CONNECTED")
                         async with session.ws_connect(endpoint + str(id)) as ws:
                             self._ws_public = ws
                             loop.create_task(self._ping(ws))
                             async for msg in ws:
                                 await self.process_ws_msg(msg)
+                        print(f"-{self.EXCHANGE_NAME} MARKET {market_name} WEBSOCKET BROKEN")
                         await ws.close()
                         time.sleep(5)
                         break
