@@ -333,7 +333,10 @@ class OkxClient(BaseClient):
     @try_exc_async
     async def _ping(self, ws):
         while True:
-            await ws.ping()
+            try:
+                await ws.ping()
+            except:
+                return
             await asyncio.sleep(5)  # Adjust the ping interval as needed
 
     @try_exc_regular
