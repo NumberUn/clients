@@ -70,6 +70,7 @@ class BitKubClient:
         self.cancel_responses = {}
         self.top_ws_ping = 5
         self.av_ping = []
+        self.sent_taker_order = None
         print(f"{self.EXCHANGE_NAME} INITIALIZED. STATE: {self.state}\n")
 
     @try_exc_regular
@@ -269,12 +270,13 @@ class BitKubClient:
             'rat': body_price,
             'typ': 'limit'  # limit, market
         }
-        if client_id != 'keep-alive':
-            req_body.update({'typ': 'market'})  # limit, market
+        # if client_id != 'keep-alive':
+        #     req_body.update({'typ': 'market'})  # limit, market
         if side == 'buy':
             req_body['amt'] *= body_price
         if client_id and client_id != 'keep-alive':
             print(self.EXCHANGE_NAME, side, req_body)
+
         headers = self.get_auth_for_request(path=path, method='POST', body=req_body)
         async with self.async_session.post(self.BASE_URL + path, data=json.dumps(req_body), headers=headers) as resp:
             response = await resp.json()
