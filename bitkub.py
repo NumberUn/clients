@@ -603,6 +603,8 @@ class BitKubClient:
         data = json.loads(msg.data)
         if market_id := data.get('pairing_id'):
             market = self.market_id_list[market_id]
+            if not self.orderbook.get(market):
+                self.orderbook[market] = {}
             event = data['event']
             # print(market, event)
             side = None
