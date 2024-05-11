@@ -379,7 +379,7 @@ class BitKubClient:
             else:
                 for fill in resp['result']['history']:
                     real_size += fill['amount']
-                    real_size_usd += fill['rate'] * fill['amount']
+                    real_size_usd += fill['rate'] / thb_rate * fill['amount']
             if real_size:
                 real_price = real_size_usd / real_size
             result = {'exchange_order_id': order_id,
