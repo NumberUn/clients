@@ -504,7 +504,7 @@ class BitKubClient:
     def unpack_wallet_data(self, resp):
         total_balance_usdt = 0
         for coin, amounts in resp['result'].items():
-            if amounts:
+            if amounts['available'] or amounts['reserved']:
                 if coin == 'USDT':
                     total_balance_usdt += amounts['available'] + amounts['reserved']
                 elif coin == 'THB':
