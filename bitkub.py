@@ -503,6 +503,7 @@ class BitKubClient:
     @try_exc_regular
     def unpack_wallet_data(self, resp):
         total_balance_usdt = 0
+        balance = {}
         for coin, amounts in resp['result'].items():
             if amounts['available'] or amounts['reserved']:
                 if coin == 'USDT':
@@ -514,12 +515,12 @@ class BitKubClient:
                     change_ob = self.get_orderbook(self.markets[coin])
                     change_rate = (change_ob['asks'][0][0] + change_ob['bids'][0][0]) / 2
                     total_balance_usdt += (amounts['available'] + amounts['reserved']) * change_rate
-                resp['result'][coin] = amounts['available'] + amounts['reserved']
-        resp['result'].update({'total': total_balance_usdt,
-                               'timestamp': round(datetime.utcnow().timestamp())})
-        if resp['result'] != self.balance and self.state == 'Bot' and self.multibot:
+                balance[coin] = amounts['available'] + amounts['reserved']
+        balance.update({'total': total_balance_usdt,
+                        'timestamp': round(datetime.utcnow().timestamp())})
+        if balance != self.balance and self.state == 'Bot' and self.multibot:
             self.order_loop.create_task(self.multibot.update_all_av_balances())
-        self.balance.update(resp['result'])
+        self.balance = balance
         self.update_positions()
 
     @try_exc_regular
