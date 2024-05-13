@@ -469,7 +469,7 @@ class BitKubClient:
 
     @try_exc_async
     async def get_balance_async(self):
-        path = '/api/v3/market/wallet'
+        path = '/api/v3/market/balances'
         # ts = str(int(round(time.time() * 1000)))
         req_body = {}  # {'ts': ts}
         headers = self.get_auth_for_request(path=path, method='POST', body=req_body)
@@ -488,12 +488,13 @@ class BitKubClient:
 
     @try_exc_regular
     def get_real_balance(self):
-        path = '/api/v3/market/wallet'
+        path = '/api/v3/market/balances'
         # ts = str(int(round(time.time() * 1000)))
         req_body = {}  # {'ts': ts}
         headers = self.get_auth_for_request(path=path, method='POST', body=req_body)
         response = self.session.post(url=self.BASE_URL + path, data=json.dumps(req_body), headers=headers)
         resp = response.json()
+        # print(resp)
         if resp['error']:
             print('Fetching http balance error', self.EXCHANGE_NAME, response)
         else:
@@ -502,17 +503,18 @@ class BitKubClient:
     @try_exc_regular
     def unpack_wallet_data(self, resp):
         total_balance_usdt = 0
-        for coin, amount in resp['result'].items():
-            if amount:
+        for coin, amounts in resp['result'].items():
+            if amounts:
                 if coin == 'USDT':
-                    total_balance_usdt += amount
+                    total_balance_usdt += amounts['available'] + amounts['reserved']
                 elif coin == 'THB':
                     change_rate = self.get_thb_rate()
-                    total_balance_usdt += amount / change_rate
+                    total_balance_usdt += (amounts['available'] + amounts['reserved']) / change_rate
                 else:
                     change_ob = self.get_orderbook(self.markets[coin])
                     change_rate = (change_ob['asks'][0][0] + change_ob['bids'][0][0]) / 2
-                    total_balance_usdt += amount * change_rate
+                    total_balance_usdt += (amounts['available'] + amounts['reserved']) * change_rate
+                resp['result'][coin] = amounts['available'] + amounts['reserved']
         resp['result'].update({'total': total_balance_usdt,
                                'timestamp': round(datetime.utcnow().timestamp())})
         if resp['result'] != self.balance and self.state == 'Bot' and self.multibot:
