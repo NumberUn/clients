@@ -68,6 +68,7 @@ class BitKubClient:
         self.orders = {}
         self.rate_limit_orders = 200
         self.cancel_responses = {}
+        self.deleted_orders = []
         self.top_ws_ping = 5
         self.av_ping = []
         self.sent_taker_order = None
@@ -119,12 +120,12 @@ class BitKubClient:
                             await asyncio.sleep(request_pause)
                     elif task[0] == 'amend_order':
                         if task[1]['order_id'] not in self.deleted_orders:
-                            price = task[1]['price']
-                            size = task[1]['size']
-                            order_id = task[1]['order_id']
                             market = task[1]['market']
-                            old_order_size = task[1]['old_order_size']
-                            loop.create_task(self.amend_order(price, size, order_id, market, old_order_size))
+                            self.deleted_orders.append(task[1]['order_id'])
+                            loop.create_task(self.cancel_order(task[1]['order_id']))
+                            loop.create_task(
+                                self.create_fast_order(task[1]['price'], task[1]['size'], task[1]['side'],
+                                                       market, task[1]['client_id']))
                             await asyncio.sleep(request_pause)
                     self.async_tasks.remove(task)
                 await asyncio.sleep(0.00001)
@@ -390,7 +391,9 @@ class BitKubClient:
                       'factual_amount_usd': real_size_usd,
                       'datetime_update': datetime.utcnow(),
                       'ts_update': timestamp,
-                      'api_response': resp}
+                      'api_response': resp,
+                      'side': resp['result']['side']
+            }
             self.orders.update({order_id: result})
             return result
         # exapmple_buy = {'error': 0,
@@ -647,9 +650,23 @@ class BitKubClient:
                 elif top_bid and top_bid < self.orderbook[market]['bids'][0][0]:
                     side = 'sell'
             elif event == 'tradeschanged':
-                # if len(data['data'][0]):
-                #     timestamp = min([data['data'][0][0][0], data['data'][0][1][0]])
-                # else:
+                if self.multibot.market_maker and self.multibot.mm_exchange == self.EXCHANGE_NAME:
+                    coin = market.split('_')[1]
+                    market_key = coin + '-' + self.EXCHANGE_NAME
+                    if stored := self.multibot.open_orders.get(market_key):
+                        order_info = self.get_order_by_id(stored[0])
+                        if order_info['factual_amount_coin']:
+                            own_ts = time.time()
+                            deal = {'side': order_info['side'],
+                                    'size': order_info['factual_amount_coin'],
+                                    'coin': coin,
+                                    'price': order_info['factual_price'],
+                                    'timestamp': order_info['ts_update'],
+                                    'ts_ms': own_ts,
+                                    'order_id': stored[0],
+                                    'type': 'maker'}
+                            loop = asyncio.get_event_loop()
+                            loop.create_task(self.multibot.hedge_maker_position(deal))
                 if self.sent_taker_order == market:
                     if len(data['data'][0]):
                         print(f"TRADES CHANGE {self.EXCHANGE_NAME} GOT {time.time()}:")
