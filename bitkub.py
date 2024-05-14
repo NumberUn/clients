@@ -662,19 +662,20 @@ class BitKubClient:
                     coin = market.split('_')[1]
                     market_key = coin + '-' + self.EXCHANGE_NAME
                     if stored := self.multibot.open_orders.get(market_key):
-                        order_info = self.get_order_by_id(market, stored[0])
-                        if order_info and order_info['factual_amount_coin']:
-                            own_ts = time.time()
-                            deal = {'side': order_info['side'],
-                                    'size': order_info['factual_amount_coin'],
-                                    'coin': coin,
-                                    'price': order_info['factual_price'],
-                                    'timestamp': order_info['ts_update'],
-                                    'ts_ms': own_ts,
-                                    'order_id': stored[0],
-                                    'type': 'maker'}
-                            loop = asyncio.get_event_loop()
-                            loop.create_task(self.multibot.hedge_maker_position(deal))
+                        if stored[0]:
+                            order_info = self.get_order_by_id(market, stored[0])
+                            if order_info and order_info['factual_amount_coin']:
+                                own_ts = time.time()
+                                deal = {'side': order_info['side'],
+                                        'size': order_info['factual_amount_coin'],
+                                        'coin': coin,
+                                        'price': order_info['factual_price'],
+                                        'timestamp': order_info['ts_update'],
+                                        'ts_ms': own_ts,
+                                        'order_id': stored[0],
+                                        'type': 'maker'}
+                                loop = asyncio.get_event_loop()
+                                loop.create_task(self.multibot.hedge_maker_position(deal))
                 if self.sent_taker_order == market:
                     if len(data['data'][0]):
                         print(f"TRADES CHANGE {self.EXCHANGE_NAME} GOT {time.time()}:")
