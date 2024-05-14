@@ -662,7 +662,7 @@ class BitKubClient:
                     coin = market.split('_')[1]
                     market_key = coin + '-' + self.EXCHANGE_NAME
                     if stored := self.multibot.open_orders.get(market_key):
-                        order_info = self.get_order_by_id(stored[0])
+                        order_info = self.get_order_by_id(market, stored[0])
                         if order_info['factual_amount_coin']:
                             own_ts = time.time()
                             deal = {'side': order_info['side'],
@@ -702,6 +702,9 @@ class BitKubClient:
             if self.finder and side:  # and ts_ms - ts_ob < self.top_ws_ping:
                 coin = market.split('_')[1]
                 await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, 'ob')
+            if self.market_finder:
+                coin = market.split('_')[1]
+                await self.market_finder.count_one_coin(coin, self.EXCHANGE_NAME)
 
     @staticmethod
     async def _ping(ws: aiohttp.ClientSession.ws_connect):
