@@ -663,7 +663,7 @@ class BitKubClient:
                     market_key = coin + '-' + self.EXCHANGE_NAME
                     if stored := self.multibot.open_orders.get(market_key):
                         order_info = self.get_order_by_id(market, stored[0])
-                        if order_info['factual_amount_coin']:
+                        if order_info and order_info['factual_amount_coin']:
                             own_ts = time.time()
                             deal = {'side': order_info['side'],
                                     'size': order_info['factual_amount_coin'],
