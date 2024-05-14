@@ -799,6 +799,9 @@ class OkxClient(BaseClient):
     async def create_order(self, symbol, side, price, size, session, expire=10000, client_id=None, expiration=None):
         way = '/api/v5/trade/order'
         contract_value = self.instruments[symbol]['contract_value']
+        contract_size = int(size * contract_value)
+        if not contract_size:
+            contract_size = int(size / contract_value)
         body = {"instId": symbol,
                 "tdMode": "cross",
                 "side": side,
