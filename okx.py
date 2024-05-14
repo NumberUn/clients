@@ -805,7 +805,7 @@ class OkxClient(BaseClient):
                 "ordType": "limit",
                 "px": price,
                 "sz": int(size * contract_value)}
-        print(body)
+        print(f"{self.EXCHANGE_NAME} {contract_value=}\n{body=}")
         json_body = json.dumps(body)
         headers = self.get_private_headers('POST', way, json_body)
         resp = requests.post(url=self.BASE_URL + way, headers=headers, data=json_body).json()
