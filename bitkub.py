@@ -535,6 +535,14 @@ class BitKubClient:
             if position:
                 market = self.markets[coin]
                 change_ob = self.get_orderbook(market)
+                if not self.instruments.get(market):
+                    self.instruments.update({market: {'coin': coin,
+                                                      'quantity_precision': 0.0000000001,
+                                                      'tick_size': 0.0000000001,
+                                                      'step_size': 0.00000000001,
+                                                      'min_size': 20 / change_ob['asks'][0][0],
+                                                      'price_precision': 0.00000000001}})
+
                 change_rate = (change_ob['asks'][0][0] + change_ob['bids'][0][0]) / 2
                 self.positions.update({market: {'side': 'LONG',
                                                 'amount_usd': position * change_rate,
