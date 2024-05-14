@@ -66,7 +66,7 @@ class BitKubClient:
         self.async_tasks = []
         self.responses = {}
         self.orders = {}
-        self.rate_limit_orders = 200
+        self.rate_limit_orders = 150
         self.cancel_responses = {}
         self.deleted_orders = []
         self.top_ws_ping = 5
