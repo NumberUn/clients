@@ -365,7 +365,7 @@ class BitKubClient:
         resp = response.json()
         # print('GET ORDER BY ID RESPONSE', self.EXCHANGE_NAME, resp)
         if resp['error']:
-            print(f"GET ORDER BY ID ERROR {self.EXCHANGE_NAME}: {resp}")
+            print(f"GET ORDER BY ID ERROR {self.EXCHANGE_NAME}: {query=}\n{resp=}")
         else:
             timestamp = float(resp['result']['history'][0]['timestamp']) / 1000 if len(
                 resp['result']['history']) else time.time()
