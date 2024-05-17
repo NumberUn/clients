@@ -405,8 +405,8 @@ class OkxClient(BaseClient):
         if self.finder and side and ts_ms - ts_ob < self.top_ws_ping:
             coin = market.split('-')[0]
             await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, 'ob')
-        if self.market_finder:
-            await self.market_finder.count_one_coin(market.split('-')[0], self.EXCHANGE_NAME)
+            if self.market_finder:
+                await self.market_finder.count_one_coin(market.split('-')[0], self.EXCHANGE_NAME)
 
     @try_exc_async
     async def _update_account(self, obj):

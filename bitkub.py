@@ -231,6 +231,7 @@ class BitKubClient:
                     'timestamp': int(round((datetime.utcnow().timestamp()) * 1000)),
                     'status': ResponseStatus.ERROR}
         else:
+            print(self.EXCHANGE_NAME, 'CREATE ORDER RESPONSE', resp)
             exchange_order_id = resp['result']['hash']
             self.LAST_ORDER_ID = exchange_order_id
             return {'exchange_name': self.EXCHANGE_NAME,
@@ -666,6 +667,7 @@ class BitKubClient:
                             order_info = self.get_order_by_id(market, stored[0])
                             if order_info and order_info['factual_amount_coin']:
                                 own_ts = time.time()
+
                                 deal = {'side': order_info['side'],
                                         'size': order_info['factual_amount_coin'],
                                         'coin': coin,
