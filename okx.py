@@ -68,6 +68,7 @@ class OkxClient(BaseClient):
         if multibot:
             self.cancel_all_orders()
 
+    @try_exc_regular
     def change_leverage(self):
         for symbol in self.markets_list:
             self.set_leverage(self.markets[symbol])
@@ -630,6 +631,7 @@ class OkxClient(BaseClient):
         #                         'imr': '', 'isoEq': '0', 'mgnRatio': '', 'mmr': '', 'notionalUsd': '', 'ordFroz': '',
         #                         'totalEq': '500.25821050503714', 'uTime': '1698245152624'}], 'msg': ''}
 
+    @try_exc_regular
     def set_leverage(self, symbol):
         way = '/api/v5/account/set-leverage'
         body = {"instId": symbol,
