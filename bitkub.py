@@ -202,8 +202,6 @@ class BitKubClient:
         ob = self.orderbook.get(market)
         if not ob:
             ob = self.get_orderbook_by_symbol_reg(market)
-        if not ob:
-            print(f"BLANK ORDERBOOK: {market=}")
         return ob
 
     @try_exc_async
@@ -833,7 +831,7 @@ class BitKubClient:
             else:
                 print(f"RATE LIMIT REACHED")
                 time.sleep(30)
-                self.get_orderbook_by_symbol_reg(market)
+                return self.get_orderbook_by_symbol_reg(market)
         else:
             if market != 'THB_USDT':
                 change_rate = self.get_thb_rate()
