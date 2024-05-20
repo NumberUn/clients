@@ -202,6 +202,8 @@ class BitKubClient:
         ob = self.orderbook.get(market)
         if not ob:
             ob = self.get_orderbook_by_symbol_reg(market)
+        if not ob:
+            print(f"BLANK ORDERBOOK: {market=}")
         return ob
 
     @try_exc_async
