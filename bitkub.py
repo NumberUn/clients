@@ -211,7 +211,7 @@ class BitKubClient:
         market = self.market_rename(symbol)
         req_body = {
             'sym': market.lower(),  # {quote}_{base}
-            'amt': size,
+            'amt': size * 0.97,
             'rat': price,
             'typ': 'limit'  # limit, market
         }

@@ -802,6 +802,8 @@ class OkxClient(BaseClient):
         way = '/api/v5/trade/order'
         contract_value = self.instruments[symbol]['contract_value']
         contract_size = int(size * contract_value)
+        if not contract_size:
+            contract_size = int(size * contract_value * 10)
         body = {"instId": symbol,
                 "tdMode": "cross",
                 "side": side,
