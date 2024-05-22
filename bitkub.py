@@ -200,7 +200,7 @@ class BitKubClient:
     @try_exc_regular
     def get_orderbook(self, market):
         ob = self.orderbook.get(market)
-        if not ob:
+        if not ob or not len(ob['asks']) or not len(ob['bids']):
             # print(market, 'IS NOT GETTING RIGHT WAY')
             ob = self.get_orderbook_by_symbol_reg(market)
         return ob
