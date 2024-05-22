@@ -831,7 +831,7 @@ class BitKubClient:
             else:
                 print(f"RATE LIMIT REACHED")
                 time.sleep(30)
-                self.get_orderbook_by_symbol_reg(market)
+                return self.get_orderbook_by_symbol_reg(market)
         else:
             if market != 'THB_USDT':
                 change_rate = self.get_thb_rate()

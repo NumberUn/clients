@@ -65,6 +65,7 @@ class OkxClient(BaseClient):
         self.clients_ids = dict()
         self.top_ws_ping = 0.07
         self.public_trades = dict()
+        self.restart_ws = False
         if multibot:
             self.cancel_all_orders()
 
@@ -131,6 +132,10 @@ class OkxClient(BaseClient):
                             market = task[1]['market']
                             loop.create_task(self.amend_order(price, size, order_id, market))
                         self.async_tasks.remove(task)
+                    if self.restart_ws:
+                        await ws.close()
+                        self.restart_ws = False
+                        return
                     await asyncio.sleep(0.00001)
 
     @try_exc_async
@@ -337,6 +342,8 @@ class OkxClient(BaseClient):
             try:
                 await ws.ping()
             except:
+                if ws == self.orders_ws:
+                    self.restart_ws = True
                 return
             await asyncio.sleep(5)  # Adjust the ping interval as needed
 
