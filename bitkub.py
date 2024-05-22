@@ -201,6 +201,7 @@ class BitKubClient:
     def get_orderbook(self, market):
         ob = self.orderbook.get(market)
         if not ob:
+            print(market, 'IS NOT GETTING RIGHT WAY')
             ob = self.get_orderbook_by_symbol_reg(market)
         return ob
 
@@ -618,17 +619,17 @@ class BitKubClient:
         data = json.loads(msg.data)
         if market_id := data.get('pairing_id'):
             market = self.market_id_list[market_id]
-            if not self.orderbook.get(market):
-                self.orderbook[market] = {}
             event = data['event']
-            # print(market, event)
             side = None
             top_bid = None
             top_ask = None
-            if len(self.orderbook[market]['bids']):
-                top_bid = self.orderbook[market]['bids'][0][0]
-            if len(self.orderbook[market]['asks']):
-                top_ask = self.orderbook[market]['asks'][0][0]
+            if not self.orderbook.get(market):
+                self.orderbook[market] = {}
+            else:
+                if len(self.orderbook[market]['bids']):
+                    top_bid = self.orderbook[market]['bids'][0][0]
+                if len(self.orderbook[market]['asks']):
+                    top_ask = self.orderbook[market]['asks'][0][0]
             ts = time.time()
             if event == 'bidschanged':
                 if market != 'THB_USDT':
@@ -779,7 +780,13 @@ class BitKubClient:
     @try_exc_regular
     def get_thb_rate(self):
         ob = self.get_orderbook('THB_USDT')
-        change_rate = (ob['asks'][0][0] + ob['bids'][0][0]) / 2
+        change_rate = 36.6
+        if len(ob['asks']) and len(ob['bids']):
+            change_rate = (ob['asks'][0][0] + ob['bids'][0][0]) / 2
+        elif len(ob['asks']):
+            change_rate = ob['asks'][0][0]
+        elif len(ob['bids']):
+            change_rate = ob['bids'][0][0]
         return change_rate
 
     @try_exc_async
