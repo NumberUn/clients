@@ -201,7 +201,7 @@ class BitKubClient:
     def get_orderbook(self, market):
         ob = self.orderbook.get(market)
         if not ob:
-            print(market, 'IS NOT GETTING RIGHT WAY')
+            # print(market, 'IS NOT GETTING RIGHT WAY')
             ob = self.get_orderbook_by_symbol_reg(market)
         return ob
 
@@ -511,22 +511,29 @@ class BitKubClient:
         balance = {}
         for coin, amounts in resp['result'].items():
             if amounts['available'] or amounts['reserved']:
-                if coin == 'USDT':
-                    total_balance_usdt += amounts['available'] + amounts['reserved']
-                elif coin == 'THB':
-                    change_rate = self.get_thb_rate()
-                    total_balance_usdt += (amounts['available'] + amounts['reserved']) / change_rate
-                else:
-                    change_ob = self.get_orderbook(self.markets[coin])
-                    change_rate = (change_ob['asks'][0][0] + change_ob['bids'][0][0]) / 2
-                    total_balance_usdt += (amounts['available'] + amounts['reserved']) * change_rate
-                balance[coin] = amounts['available'] + amounts['reserved']
+                balance_usdt = self.count_total_balance(coin, amounts)
+                if balance_usdt:
+                    total_balance_usdt += balance_usdt
+                    balance[coin] = amounts['available'] + amounts['reserved']
         balance.update({'total': total_balance_usdt,
                         'timestamp': round(datetime.utcnow().timestamp())})
         if balance != self.balance and self.state == 'Bot' and self.multibot:
             self.order_loop.create_task(self.multibot.update_all_av_balances())
         self.balance = balance
         self.update_positions()
+
+    @try_exc_regular
+    def count_total_balance(self, coin, amounts):
+        if coin == 'USDT':
+            balance_usdt = amounts['available'] + amounts['reserved']
+        elif coin == 'THB':
+            change_rate = self.get_thb_rate()
+            balance_usdt = (amounts['available'] + amounts['reserved']) / change_rate
+        else:
+            change_ob = self.get_orderbook(self.markets[coin])
+            change_rate = (change_ob['asks'][0][0] + change_ob['bids'][0][0]) / 2
+            balance_usdt = (amounts['available'] + amounts['reserved']) * change_rate
+        return balance_usdt
 
     @try_exc_regular
     def update_positions(self):
