@@ -635,7 +635,7 @@ class BitKubClient:
             elif event == 'tradeschanged':
                 loop = asyncio.get_event_loop()
                 loop.create_task(self.check_trade_for_mm(market))
-                self.check_if_trade_actual_for_taker(market)
+                self.check_if_trade_actual_for_taker(market, data)
                 # side = self.update_on_trades_ws_msg(market, data, top_ask, top_bid, ts)
             if self.finder and side:  # and ts_ms - ts_ob < self.top_ws_ping:
                 coin = market.split('_')[1]
