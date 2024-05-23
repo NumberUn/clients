@@ -44,6 +44,7 @@ class BitKubClient:
         self.markets = {}
         self.market_id_list = {}
         self.orderbook = {}
+        self.genuine_orderbook = {}
         self.positions = {}
         self.balance = {'total': 0,
                         'free': 0}
@@ -256,10 +257,13 @@ class BitKubClient:
         path = f'/api/v3/market/place-{bid_ask}'
         # top_rate_ob = self.get_orderbook_by_symbol_reg(market)
         # top_rate = top_rate_ob['asks'][0][0] if side == 'buy' else top_rate_ob['bids'][0][0]
-        body_price = price
-        change = self.get_thb_rate()
-        if market != 'THB_USDT':
-            body_price = price * change
+        if 'taker' in client_id:
+            body_price = self.genuine_orderbook[market][bid_ask][0]
+        else:
+            body_price = price
+            change = self.get_thb_rate()
+            if market != 'THB_USDT':
+                body_price = price * change
         #     if side == 'buy' and body_price < top_rate:
         #         print(f"{self.EXCHANGE_NAME} body price changed due to changed ob!")
         #         body_price = top_rate * 1.001 * change
@@ -305,7 +309,7 @@ class BitKubClient:
                                                    }})
             else:
                 order_id = response['result'].get('hash', 'default')
-                time.sleep(1)
+                time.sleep(0.4)
                 result = self.get_order_by_id(market, order_id)
                 status = OrderStatus.PROCESSING
                 executed_amount_coin = 0
@@ -642,10 +646,12 @@ class BitKubClient:
                 if market != 'THB_USDT':
                     change = self.get_thb_rate()
                     new_bids = [[x[1] / change, x[2]] for x in data['data'][:self.ob_len]]
+
                 else:
                     new_bids = [[x[1], x[2]] for x in data['data'][:self.ob_len]]
                 new_bids = self.merge_similar_orders(new_bids)
                 self.orderbook[market].update({'ts_ms': ts, 'timestamp': ts})
+                self.genuine_orderbook[market]['bids'] = [data['data'][0][1], data['data'][0][2]]
                 if len(new_bids):
                     self.orderbook[market].update({'bids': new_bids})
                 if top_ask and top_ask > self.orderbook[market]['asks'][0][0]:
@@ -660,6 +666,7 @@ class BitKubClient:
                     new_asks = [[x[1], x[2]] for x in data['data'][:self.ob_len]]
                 new_asks = self.merge_similar_orders(new_asks)
                 self.orderbook[market].update({'ts_ms': ts, 'timestamp': ts})
+                self.genuine_orderbook[market]['asks'] = [data['data'][0][1], data['data'][0][2]]
                 if len(new_asks):
                     self.orderbook[market].update({'asks': new_asks})
                 if top_ask and top_ask > self.orderbook[market]['asks'][0][0]:
@@ -667,7 +674,7 @@ class BitKubClient:
                 elif top_bid and top_bid < self.orderbook[market]['bids'][0][0]:
                     side = 'sell'
             elif event == 'tradeschanged':
-                if self.multibot.market_maker and self.multibot.mm_exchange == self.EXCHANGE_NAME:
+                if self.multibot and self.multibot.market_maker and self.multibot.mm_exchange == self.EXCHANGE_NAME:
                     coin = market.split('_')[1]
                     market_key = coin + '-' + self.EXCHANGE_NAME
                     if stored := self.multibot.open_orders.get(market_key):
@@ -704,8 +711,10 @@ class BitKubClient:
                 self.orderbook[market].update({'ts_ms': ts, 'timestamp': timestamp})
                 if len(new_asks):
                     self.orderbook[market].update({'asks': new_asks})
+                    self.genuine_orderbook[market]['asks'] = [data['data'][2][1], data['data'][2][2]]
                 if len(new_bids):
                     self.orderbook[market].update({'bids': new_bids})
+                    self.genuine_orderbook[market]['bids'] = [data['data'][1][1], data['data'][1][2]]
                 if top_ask and top_ask > self.orderbook[market]['asks'][0][0]:
                     side = 'buy'
                 elif top_bid and top_bid < self.orderbook[market]['asks'][0][0]:
@@ -754,7 +763,7 @@ class BitKubClient:
                                                   'step_size': 0.00000000001,
                                                   'min_size': 20 / px,
                                                   'price_precision': 0.00000000001}})
-                time.sleep(0.2)
+                time.sleep(0.3)
             else:
                 for market in self.positions.keys():
                     px = self.get_orderbook(market)['asks'][0][0]
@@ -917,6 +926,8 @@ if __name__ == '__main__':
                   'side': 'buy'}
     client.async_tasks.append(['create_order', order_data])
     while True:
+        client.get_server_time()
+        # print(time.time())
         time.sleep(3)
     # ord_id = order_data['exchange_order_id']
 
