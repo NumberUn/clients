@@ -636,7 +636,7 @@ class BitKubClient:
                 loop = asyncio.get_event_loop()
                 loop.create_task(self.check_trade_for_mm(market))
                 self.check_if_trade_actual_for_taker(market, data)
-                # side = self.update_on_trades_ws_msg(market, data, top_ask, top_bid, ts)
+                side = self.update_on_trades_ws_msg(market, data, top_ask, top_bid, ts)
             if self.finder and side:  # and ts_ms - ts_ob < self.top_ws_ping:
                 coin = market.split('_')[1]
                 await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, 'ob')
@@ -691,9 +691,9 @@ class BitKubClient:
             new_asks = [[x[1], x[2]] for x in data['data'][:self.ob_len]]
         new_asks = self.merge_similar_orders(new_asks)
         self.orderbook[market].update({'ts_ms': ts, 'timestamp': ts})
-        self.genuine_orderbook[market].update({'asks': [data['data'][0][1], data['data'][0][2]]})
         if len(new_asks):
             self.orderbook[market].update({'asks': new_asks})
+            self.genuine_orderbook[market].update({'asks': [data['data'][0][1], data['data'][0][2]]})
         if top_ask and top_ask > self.orderbook[market]['asks'][0][0]:
             return 'buy'
         elif top_bid and top_bid < self.orderbook[market]['bids'][0][0]:
@@ -708,8 +708,8 @@ class BitKubClient:
             new_bids = [[x[1], x[2]] for x in data['data'][:self.ob_len]]
         new_bids = self.merge_similar_orders(new_bids)
         self.orderbook[market].update({'ts_ms': ts, 'timestamp': ts})
-        self.genuine_orderbook[market].update({'bids': [data['data'][0][1], data['data'][0][2]]})
         if len(new_bids):
+            self.genuine_orderbook[market].update({'bids': [data['data'][0][1], data['data'][0][2]]})
             self.orderbook[market].update({'bids': new_bids})
         if top_ask and top_ask > self.orderbook[market]['asks'][0][0]:
             return 'buy'
