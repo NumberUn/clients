@@ -636,6 +636,7 @@ class BitKubClient:
             top_ask = None
             if not self.orderbook.get(market):
                 self.orderbook.update({market: {}})
+            if not self.genuine_orderbook.get(market):
                 self.genuine_orderbook.update({market: {}})
             else:
                 if self.orderbook[market].get('bids'):
