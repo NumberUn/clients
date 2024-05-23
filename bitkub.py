@@ -258,7 +258,7 @@ class BitKubClient:
         # top_rate_ob = self.get_orderbook_by_symbol_reg(market)
         # top_rate = top_rate_ob['asks'][0][0] if side == 'buy' else top_rate_ob['bids'][0][0]
         if 'taker' in client_id:
-            body_price = self.genuine_orderbook[market][bid_ask][0]
+            body_price = self.genuine_orderbook[market][bid_ask + 's'][0]
         else:
             body_price = price
             change = self.get_thb_rate()
