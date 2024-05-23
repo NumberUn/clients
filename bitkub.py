@@ -650,7 +650,6 @@ class BitKubClient:
                 if market != 'THB_USDT':
                     change = self.get_thb_rate()
                     new_bids = [[x[1] / change, x[2]] for x in data['data'][:self.ob_len]]
-
                 else:
                     new_bids = [[x[1], x[2]] for x in data['data'][:self.ob_len]]
                 new_bids = self.merge_similar_orders(new_bids)
