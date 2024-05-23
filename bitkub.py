@@ -259,8 +259,8 @@ class BitKubClient:
         # top_rate = top_rate_ob['asks'][0][0] if side == 'buy' else top_rate_ob['bids'][0][0]
         change = self.get_thb_rate()
         if 'taker' in client_id:
-            bid_ask = 'ask' if side == 'buy' else 'bid'
-            body_price = self.genuine_orderbook[market][bid_ask + 's'][0]
+            bid_ask = 'asks' if side == 'buy' else 'bids'
+            body_price = self.genuine_orderbook[market][bid_ask][0]
         else:
             body_price = price
             if market != 'THB_USDT':
@@ -551,13 +551,7 @@ class BitKubClient:
                 market = self.markets[coin]
                 change_ob = self.get_orderbook(market)
                 if not self.instruments.get(market):
-                    self.instruments.update({market: {'coin': coin,
-                                                      'quantity_precision': 0.0000000001,
-                                                      'tick_size': 0.0000000001,
-                                                      'step_size': 0.00000000001,
-                                                      'min_size': 20 / change_ob['asks'][0][0],
-                                                      'price_precision': 0.00000000001}})
-
+                    self.update_instrument(change_ob['asks'][0][0], coin, market)
                 change_rate = (change_ob['asks'][0][0] + change_ob['bids'][0][0]) / 2
                 self.positions.update({market: {'side': 'LONG',
                                                 'amount_usd': position * change_rate,
@@ -597,13 +591,11 @@ class BitKubClient:
                 for id, market_name in self.market_id_list.items():
                     if market in market_name:
                         try:
-                            # print(f"+{self.EXCHANGE_NAME} MARKET {market_name} WEBSOCKET CONNECTED")
                             async with session.ws_connect(endpoint + str(id)) as ws:
                                 self._ws_public = ws
                                 loop.create_task(self._ping(ws))
                                 async for msg in ws:
                                     await self.process_ws_msg(msg)
-                            # print(f"-{self.EXCHANGE_NAME} MARKET {market_name} WEBSOCKET BROKEN")
                             await ws.close()
                             time.sleep(5)
                             break
@@ -634,100 +626,123 @@ class BitKubClient:
             market = self.market_id_list[market_id]
             event = data['event']
             side = None
-            top_bid = None
-            top_ask = None
-            if not self.orderbook.get(market):
-                self.orderbook.update({market: {}})
-            if not self.genuine_orderbook.get(market):
-                self.genuine_orderbook.update({market: {}})
-            else:
-                if self.orderbook[market].get('bids'):
-                    top_bid = self.orderbook[market]['bids'][0][0]
-                if self.orderbook[market].get('asks'):
-                    top_ask = self.orderbook[market]['asks'][0][0]
+            top_bid, top_ask = self.get_top_bid_top_ask(market)
             ts = time.time()
             if event == 'bidschanged':
-                if market != 'THB_USDT':
-                    change = self.get_thb_rate()
-                    new_bids = [[x[1] / change, x[2]] for x in data['data'][:self.ob_len]]
-                else:
-                    new_bids = [[x[1], x[2]] for x in data['data'][:self.ob_len]]
-                new_bids = self.merge_similar_orders(new_bids)
-                self.orderbook[market].update({'ts_ms': ts, 'timestamp': ts})
-                self.genuine_orderbook[market].update({'bids': [data['data'][0][1], data['data'][0][2]]})
-                if len(new_bids):
-                    self.orderbook[market].update({'bids': new_bids})
-                if top_ask and top_ask > self.orderbook[market]['asks'][0][0]:
-                    side = 'buy'
-                elif top_bid and top_bid < self.orderbook[market]['bids'][0][0]:
-                    side = 'sell'
+                side = self.update_on_bids_ws_msg(market, data, top_ask, top_bid, ts)
             elif event == 'askschanged':
-                if market != 'THB_USDT':
-                    change = self.get_thb_rate()
-                    new_asks = [[x[1] / change, x[2]] for x in data['data'][:self.ob_len]]
-                else:
-                    new_asks = [[x[1], x[2]] for x in data['data'][:self.ob_len]]
-                new_asks = self.merge_similar_orders(new_asks)
-                self.orderbook[market].update({'ts_ms': ts, 'timestamp': ts})
-                self.genuine_orderbook[market].update({'asks': [data['data'][0][1], data['data'][0][2]]})
-                if len(new_asks):
-                    self.orderbook[market].update({'asks': new_asks})
-                if top_ask and top_ask > self.orderbook[market]['asks'][0][0]:
-                    side = 'buy'
-                elif top_bid and top_bid < self.orderbook[market]['bids'][0][0]:
-                    side = 'sell'
+                side = self.update_on_asks_ws_msg(market, data, top_ask, top_bid, ts)
             elif event == 'tradeschanged':
-                if self.multibot and self.multibot.market_maker and self.multibot.mm_exchange == self.EXCHANGE_NAME:
-                    coin = market.split('_')[1]
-                    market_key = coin + '-' + self.EXCHANGE_NAME
-                    if stored := self.multibot.open_orders.get(market_key):
-                        if stored[0]:
-                            order_info = self.get_order_by_id(market, stored[0])
-                            if order_info and order_info['factual_amount_coin']:
-                                own_ts = time.time()
-
-                                deal = {'side': order_info['side'],
-                                        'size': order_info['factual_amount_coin'],
-                                        'coin': coin,
-                                        'price': order_info['factual_price'],
-                                        'timestamp': order_info['ts_update'],
-                                        'ts_ms': own_ts,
-                                        'order_id': stored[0],
-                                        'type': 'maker'}
-                                loop = asyncio.get_event_loop()
-                                loop.create_task(self.multibot.hedge_maker_position(deal))
-                if self.sent_taker_order == market:
-                    if len(data['data'][0]):
-                        print(f"TRADES CHANGE {self.EXCHANGE_NAME} GOT {time.time()}:")
-                        print(f"{data['data'][0][0]} {data['data'][0][1]}")
-                    self.sent_taker_order = None
-                timestamp = time.time()
-                if market != 'THB_USDT':
-                    change = self.get_thb_rate()
-                    new_asks = [[x[1] / change, x[2]] for x in data['data'][2][:self.ob_len]]
-                    new_bids = [[x[1] / change, x[2]] for x in data['data'][1][:self.ob_len]]
-                else:
-                    new_asks = [[x[1], x[2]] for x in data['data'][2][:self.ob_len]]
-                    new_bids = [[x[1], x[2]] for x in data['data'][1][:self.ob_len]]
-                new_asks = self.merge_similar_orders(new_asks)
-                new_bids = self.merge_similar_orders(new_bids)
-                self.orderbook[market].update({'ts_ms': ts, 'timestamp': timestamp})
-                if len(new_asks):
-                    self.orderbook[market].update({'asks': new_asks})
-                    self.genuine_orderbook[market].update({'asks': [data['data'][2][0][1], data['data'][2][0][2]]})
-                if len(new_bids):
-                    self.orderbook[market].update({'bids': new_bids})
-                    self.genuine_orderbook[market].update({'bids': [data['data'][2][0][1], data['data'][2][0][2]]})
-                if top_ask and top_ask > self.orderbook[market]['asks'][0][0]:
-                    side = 'buy'
-                elif top_bid and top_bid < self.orderbook[market]['asks'][0][0]:
-                    side = 'sell'
+                loop = asyncio.get_event_loop()
+                loop.create_task(self.check_trade_for_mm(market))
+                self.check_if_trade_actual_for_taker(market)
+                # side = self.update_on_trades_ws_msg(market, data, top_ask, top_bid, ts)
             if self.finder and side:  # and ts_ms - ts_ob < self.top_ws_ping:
                 coin = market.split('_')[1]
                 await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, 'ob')
             if self.market_finder:
                 coin = market.split('_')[1]
                 await self.market_finder.count_one_coin(coin, self.EXCHANGE_NAME)
+
+    @try_exc_regular
+    def get_top_bid_top_ask(self, market):
+        top_bid = None
+        top_ask = None
+        if not self.orderbook.get(market):
+            self.orderbook.update({market: {}})
+        else:
+            if self.orderbook[market].get('bids'):
+                top_bid = self.orderbook[market]['bids'][0][0]
+            if self.orderbook[market].get('asks'):
+                top_ask = self.orderbook[market]['asks'][0][0]
+        if not self.genuine_orderbook.get(market):
+            self.genuine_orderbook.update({market: {}})
+        return top_bid, top_ask
+
+    @try_exc_regular
+    def update_on_trades_ws_msg(self, market, data, top_ask, top_bid, ts):
+        if market != 'THB_USDT':
+            change = self.get_thb_rate()
+            new_asks = [[x[1] / change, x[2]] for x in data['data'][2][:self.ob_len]]
+            new_bids = [[x[1] / change, x[2]] for x in data['data'][1][:self.ob_len]]
+        else:
+            new_asks = [[x[1], x[2]] for x in data['data'][2][:self.ob_len]]
+            new_bids = [[x[1], x[2]] for x in data['data'][1][:self.ob_len]]
+        new_asks = self.merge_similar_orders(new_asks)
+        new_bids = self.merge_similar_orders(new_bids)
+        self.orderbook[market].update({'ts_ms': ts, 'timestamp': ts})
+        if len(new_asks):
+            self.orderbook[market].update({'asks': new_asks})
+            self.genuine_orderbook[market].update({'asks': [data['data'][2][0][1], data['data'][2][0][2]]})
+        if len(new_bids):
+            self.orderbook[market].update({'bids': new_bids})
+            self.genuine_orderbook[market].update({'bids': [data['data'][2][0][1], data['data'][2][0][2]]})
+        if top_ask and top_ask > self.orderbook[market]['asks'][0][0]:
+            return 'buy'
+        elif top_bid and top_bid < self.orderbook[market]['asks'][0][0]:
+            return 'sell'
+
+    @try_exc_regular
+    def update_on_asks_ws_msg(self, market, data, top_ask, top_bid, ts):
+        if market != 'THB_USDT':
+            change = self.get_thb_rate()
+            new_asks = [[x[1] / change, x[2]] for x in data['data'][:self.ob_len]]
+        else:
+            new_asks = [[x[1], x[2]] for x in data['data'][:self.ob_len]]
+        new_asks = self.merge_similar_orders(new_asks)
+        self.orderbook[market].update({'ts_ms': ts, 'timestamp': ts})
+        self.genuine_orderbook[market].update({'asks': [data['data'][0][1], data['data'][0][2]]})
+        if len(new_asks):
+            self.orderbook[market].update({'asks': new_asks})
+        if top_ask and top_ask > self.orderbook[market]['asks'][0][0]:
+            return 'buy'
+        elif top_bid and top_bid < self.orderbook[market]['bids'][0][0]:
+            return 'sell'
+
+    @try_exc_regular
+    def update_on_bids_ws_msg(self, market, data, top_ask, top_bid, ts):
+        if market != 'THB_USDT':
+            change = self.get_thb_rate()
+            new_bids = [[x[1] / change, x[2]] for x in data['data'][:self.ob_len]]
+        else:
+            new_bids = [[x[1], x[2]] for x in data['data'][:self.ob_len]]
+        new_bids = self.merge_similar_orders(new_bids)
+        self.orderbook[market].update({'ts_ms': ts, 'timestamp': ts})
+        self.genuine_orderbook[market].update({'bids': [data['data'][0][1], data['data'][0][2]]})
+        if len(new_bids):
+            self.orderbook[market].update({'bids': new_bids})
+        if top_ask and top_ask > self.orderbook[market]['asks'][0][0]:
+            return 'buy'
+        elif top_bid and top_bid < self.orderbook[market]['bids'][0][0]:
+            return 'sell'
+
+    @try_exc_regular
+    def check_if_trade_actual_for_taker(self, market, data):
+        if self.sent_taker_order == market:
+            if len(data['data'][0]):
+                print(f"TRADES CHANGE {self.EXCHANGE_NAME} GOT {time.time()}:")
+                print(f"{data['data'][0][0]} {data['data'][0][1]}")
+            self.sent_taker_order = None
+
+    @try_exc_async
+    async def check_trade_for_mm(self, market):
+        if self.multibot and self.multibot.market_maker and self.multibot.mm_exchange == self.EXCHANGE_NAME:
+            coin = market.split('_')[1]
+            market_key = coin + '-' + self.EXCHANGE_NAME
+            if stored := self.multibot.open_orders.get(market_key):
+                if stored[0]:
+                    order_info = self.get_order_by_id(market, stored[0])
+                    if order_info and order_info['factual_amount_coin']:
+                        own_ts = time.time()
+                        deal = {'side': order_info['side'],
+                                'size': order_info['factual_amount_coin'],
+                                'coin': coin,
+                                'price': order_info['factual_price'],
+                                'timestamp': order_info['ts_update'],
+                                'ts_ms': own_ts,
+                                'order_id': stored[0],
+                                'type': 'maker'}
+                        await self.multibot.hedge_maker_position(deal)
 
     @staticmethod
     async def _ping(ws: aiohttp.ClientSession.ws_connect):
@@ -752,6 +767,15 @@ class BitKubClient:
                 self.markets.update({coin: market['symbol']})
 
     @try_exc_regular
+    def update_instrument(self, px, coin, market):
+        self.instruments.update({market: {'coin': coin,
+                                          'quantity_precision': 0.0000000001,
+                                          'tick_size': 0.0000000001,
+                                          'step_size': 0.00000000001,
+                                          'min_size': 20 / px,
+                                          'price_precision': 0.00000000001}})
+
+    @try_exc_regular
     def fill_instruments(self):
         for coin, market in self.markets.items():
             if self.state == 'Bot':
@@ -760,22 +784,12 @@ class BitKubClient:
                     px = ob['asks'][0][0]
                 else:
                     continue
-                self.instruments.update({market: {'coin': coin,
-                                                  'quantity_precision': 0.0000000001,
-                                                  'tick_size': 0.0000000001,
-                                                  'step_size': 0.00000000001,
-                                                  'min_size': 20 / px,
-                                                  'price_precision': 0.00000000001}})
+                self.update_instrument(px, coin, market)
                 time.sleep(0.3)
             else:
                 for market in self.positions.keys():
                     px = self.get_orderbook(market)['asks'][0][0]
-                    self.instruments.update({market: {'coin': coin,
-                                                      'quantity_precision': 0.0000000001,
-                                                      'tick_size': 0.0000000001,
-                                                      'step_size': 0.00000000001,
-                                                      'min_size': 20 / px,
-                                                      'price_precision': 0.00000000001}})
+                    self.update_instrument(px, coin, market)
         with open('min_sizes_bitkub.txt', 'r') as file:
             data = file.read()
             data = data.split('\n')
