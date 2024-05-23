@@ -257,14 +257,15 @@ class BitKubClient:
         path = f'/api/v3/market/place-{bid_ask}'
         # top_rate_ob = self.get_orderbook_by_symbol_reg(market)
         # top_rate = top_rate_ob['asks'][0][0] if side == 'buy' else top_rate_ob['bids'][0][0]
+        change = self.get_thb_rate()
         if 'taker' in client_id:
             bid_ask = 'ask' if side == 'buy' else 'bid'
             body_price = self.genuine_orderbook[market][bid_ask + 's'][0]
         else:
             body_price = price
-            change = self.get_thb_rate()
             if market != 'THB_USDT':
                 body_price = price * change
+
         #     if side == 'buy' and body_price < top_rate:
         #         print(f"{self.EXCHANGE_NAME} body price changed due to changed ob!")
         #         body_price = top_rate * 1.001 * change
@@ -714,10 +715,10 @@ class BitKubClient:
                 self.orderbook[market].update({'ts_ms': ts, 'timestamp': timestamp})
                 if len(new_asks):
                     self.orderbook[market].update({'asks': new_asks})
-                    self.genuine_orderbook[market].update({'asks': [data['data'][2][1], data['data'][2][2]]})
+                    self.genuine_orderbook[market].update({'asks': [data['data'][2][0][1], data['data'][2][0][2]]})
                 if len(new_bids):
                     self.orderbook[market].update({'bids': new_bids})
-                    self.genuine_orderbook[market].update({'bids': [data['data'][2][1], data['data'][2][2]]})
+                    self.genuine_orderbook[market].update({'bids': [data['data'][2][0][1], data['data'][2][0][2]]})
                 if top_ask and top_ask > self.orderbook[market]['asks'][0][0]:
                     side = 'buy'
                 elif top_bid and top_bid < self.orderbook[market]['asks'][0][0]:
