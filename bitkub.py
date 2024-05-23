@@ -633,9 +633,9 @@ class BitKubClient:
             if not self.orderbook.get(market):
                 self.orderbook[market] = {}
             else:
-                if len(self.orderbook[market]['bids']):
+                if self.orderbook[market].get('bids'):
                     top_bid = self.orderbook[market]['bids'][0][0]
-                if len(self.orderbook[market]['asks']):
+                if self.orderbook[market].get('asks'):
                     top_ask = self.orderbook[market]['asks'][0][0]
             ts = time.time()
             if event == 'bidschanged':
