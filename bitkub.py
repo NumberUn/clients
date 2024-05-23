@@ -635,8 +635,8 @@ class BitKubClient:
             top_bid = None
             top_ask = None
             if not self.orderbook.get(market):
-                self.orderbook[market] = {}
-                self.genuine_orderbook[market] = {'asks': [], 'bids': {}}
+                self.orderbook.update({market: {}})
+                self.genuine_orderbook.update({market: {}})
             else:
                 if self.orderbook[market].get('bids'):
                     top_bid = self.orderbook[market]['bids'][0][0]
@@ -652,7 +652,7 @@ class BitKubClient:
                     new_bids = [[x[1], x[2]] for x in data['data'][:self.ob_len]]
                 new_bids = self.merge_similar_orders(new_bids)
                 self.orderbook[market].update({'ts_ms': ts, 'timestamp': ts})
-                self.genuine_orderbook[market]['bids'] = [data['data'][0][1], data['data'][0][2]]
+                self.genuine_orderbook[market].update({'bids': [data['data'][0][1], data['data'][0][2]]})
                 if len(new_bids):
                     self.orderbook[market].update({'bids': new_bids})
                 if top_ask and top_ask > self.orderbook[market]['asks'][0][0]:
@@ -667,7 +667,7 @@ class BitKubClient:
                     new_asks = [[x[1], x[2]] for x in data['data'][:self.ob_len]]
                 new_asks = self.merge_similar_orders(new_asks)
                 self.orderbook[market].update({'ts_ms': ts, 'timestamp': ts})
-                self.genuine_orderbook[market]['asks'] = [data['data'][0][1], data['data'][0][2]]
+                self.genuine_orderbook[market].update({'asks': [data['data'][0][1], data['data'][0][2]]})
                 if len(new_asks):
                     self.orderbook[market].update({'asks': new_asks})
                 if top_ask and top_ask > self.orderbook[market]['asks'][0][0]:
@@ -712,10 +712,10 @@ class BitKubClient:
                 self.orderbook[market].update({'ts_ms': ts, 'timestamp': timestamp})
                 if len(new_asks):
                     self.orderbook[market].update({'asks': new_asks})
-                    self.genuine_orderbook[market]['asks'] = [data['data'][2][1], data['data'][2][2]]
+                    self.genuine_orderbook[market].update({'asks': [data['data'][2][1], data['data'][2][2]]})
                 if len(new_bids):
                     self.orderbook[market].update({'bids': new_bids})
-                    self.genuine_orderbook[market]['bids'] = [data['data'][1][1], data['data'][1][2]]
+                    self.genuine_orderbook[market].update({'bids': [data['data'][2][1], data['data'][2][2]]})
                 if top_ask and top_ask > self.orderbook[market]['asks'][0][0]:
                     side = 'buy'
                 elif top_bid and top_bid < self.orderbook[market]['asks'][0][0]:
