@@ -676,7 +676,7 @@ class BitKubClient:
             self.genuine_orderbook[market].update({'asks': [data['data'][2][0][1], data['data'][2][0][2]]})
         if len(new_bids):
             self.orderbook[market].update({'bids': new_bids})
-            self.genuine_orderbook[market].update({'bids': [data['data'][2][0][1], data['data'][2][0][2]]})
+            self.genuine_orderbook[market].update({'bids': [data['data'][1][0][1], data['data'][1][0][2]]})
         if top_ask and top_ask > self.orderbook[market]['asks'][0][0]:
             return 'buy'
         elif top_bid and top_bid < self.orderbook[market]['asks'][0][0]:
