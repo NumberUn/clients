@@ -1,15 +1,15 @@
-from clients.apollox import ApolloxClient
-from clients.binance import BinanceClient
-from clients.bitmex import BitmexClient
-from clients.dydx import DydxClient
-from clients.kraken import KrakenClient
+# from clients.apollox import ApolloxClient
+# from clients.binance import BinanceClient
+# from clients.bitmex import BitmexClient
+# from clients.dydx import DydxClient
+# from clients.kraken import KrakenClient
 from clients.okx import OkxClient
-from clients.hitbtc import HitbtcClient
-from clients.bitmake import BitmakeClient
-from clients.globederivative import GlobeClient
-from clients.bit import BitClient
-from clients.btse import BtseClient
-from clients.whitebit import WhiteBitClient
+# from clients.hitbtc import HitbtcClient
+# from clients.bitmake import BitmakeClient
+# from clients.globederivative import GlobeClient
+# from clients.bit import BitClient
+# from clients.btse import BtseClient
+# from clients.whitebit import WhiteBitClient
 from clients.bitkub import BitKubClient
 
 ALL_CLIENTS = {
