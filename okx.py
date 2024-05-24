@@ -548,7 +548,7 @@ class OkxClient(BaseClient):
                                                        'step_size': step_size,
                                                        'contract_value': contract_value,
                                                        'quantity_precision': quantity_precision,
-                                                       'min_size': ,
+                                                       'min_size': min_size,
                                                        'price_precision': price_precision}})
         return instruments
 
