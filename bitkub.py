@@ -258,13 +258,13 @@ class BitKubClient:
         # top_rate_ob = self.get_orderbook_by_symbol_reg(market)
         # top_rate = top_rate_ob['asks'][0][0] if side == 'buy' else top_rate_ob['bids'][0][0]
         change = self.get_thb_rate()
-        if 'taker' in client_id:
-            bid_ask = 'asks' if side == 'buy' else 'bids'
-            body_price = self.genuine_orderbook[market][bid_ask][0]
-        else:
-            body_price = price
-            if market != 'THB_USDT':
-                body_price = price * change
+        # if 'taker' in client_id:
+        #     bid_ask = 'asks' if side == 'buy' else 'bids'
+        #     body_price = self.genuine_orderbook[market][bid_ask][0]
+        # else:
+        body_price = price
+        if market != 'THB_USDT':
+            body_price = price * change
 
         #     if side == 'buy' and body_price < top_rate:
         #         print(f"{self.EXCHANGE_NAME} body price changed due to changed ob!")
@@ -297,6 +297,7 @@ class BitKubClient:
                 print(f"THB_RATE: {change}")
                 print(f'{self.EXCHANGE_NAME} order response: {response}')
                 print(f"{self.EXCHANGE_NAME} create order time: {time.time() - time_start}")
+
             if response['error']:
                 print(f'{self.EXCHANGE_NAME} create order {market} error: {response}')
                 self.responses.update({client_id: {'exchange_name': self.EXCHANGE_NAME,
@@ -311,6 +312,7 @@ class BitKubClient:
                                                    }})
             else:
                 order_id = response['result'].get('hash', 'default')
+                resp_cancel = await self.cancel_order(order_id)
                 time.sleep(0.4)
                 result = self.get_order_by_id(market, order_id)
                 status = OrderStatus.PROCESSING
