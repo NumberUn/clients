@@ -625,10 +625,10 @@ class BitKubClient:
     @try_exc_async
     async def check_if_mm_active(self, market):
         if self.multibot and self.multibot.market_maker and self.multibot.mm_exchange == self.EXCHANGE_NAME:
-            coin = market.split('')
+            coin = market.split('_')[1]
             if coin == 'THB':
                 print(f"COIN EXTRACT MARKET ERROR FUNC CHECK_IF_MM_ACTIVE: {market}")
-            market_id = market.split('_')[1] + '-' + self.EXCHANGE_NAME
+            market_id = coin + '-' + self.EXCHANGE_NAME
             if self.multibot.open_orders.get(market_id):
                 print(self.orderbook[market])
 
