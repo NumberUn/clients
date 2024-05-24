@@ -312,7 +312,8 @@ class BitKubClient:
                                                    }})
             else:
                 order_id = response['result'].get('hash', 'default')
-                resp_cancel = await self.cancel_order(order_id)
+                if client_id and 'taker' in client_id:
+                    resp_cancel = await self.cancel_order(order_id)
                 time.sleep(0.4)
                 result = self.get_order_by_id(market, order_id)
                 status = OrderStatus.PROCESSING
@@ -622,6 +623,16 @@ class BitKubClient:
         return ob
 
     @try_exc_async
+    async def check_if_mm_active(self, market):
+        if self.multibot and self.multibot.market_maker and self.multibot.mm_exchange == self.EXCHANGE_NAME:
+            coin = market.split('')
+            if coin == 'THB':
+                print(f"COIN EXTRACT MARKET ERROR FUNC CHECK_IF_MM_ACTIVE: {market}")
+            market_id = market.split('_')[1] + '-' + self.EXCHANGE_NAME
+            if self.multibot.open_orders.get(market_id):
+                print(self.orderbook[market])
+
+    @try_exc_async
     async def process_ws_msg(self, msg: aiohttp.WSMessage):
         data = json.loads(msg.data)
         if market_id := data.get('pairing_id'):
@@ -632,13 +643,16 @@ class BitKubClient:
             ts = time.time()
             if event == 'bidschanged':
                 side = self.update_on_bids_ws_msg(market, data, top_ask, top_bid, ts)
+                await self.check_if_mm_active(market)
             elif event == 'askschanged':
                 side = self.update_on_asks_ws_msg(market, data, top_ask, top_bid, ts)
+                await self.check_if_mm_active(market)
             elif event == 'tradeschanged':
                 loop = asyncio.get_event_loop()
                 loop.create_task(self.check_trade_for_mm(market))
                 self.check_if_trade_actual_for_taker(market, data)
                 side = self.update_on_trades_ws_msg(market, data, top_ask, top_bid, ts)
+                await self.check_if_mm_active(market)
             if self.finder and side:  # and ts_ms - ts_ob < self.top_ws_ping:
                 coin = market.split('_')[1]
                 await self.finder.count_one_coin(coin, self.EXCHANGE_NAME, side, 'ob')
