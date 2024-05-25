@@ -705,18 +705,24 @@ class BitKubClient:
         new_asks = []
         index_price = 1 if upd_type == 'ws' else 0
         index_size = 2 if upd_type == 'ws' else 1
-        for ask in asks:
-            if not len(new_asks):
-                new_asks.append([ask[index_price], ask[index_size]])
-            else:
-                for ex_ask in new_asks:
-                    if ex_ask[0] == ask[index_price]:
-                        ex_ask[1] += ask[index_size]
-                    elif ex_ask[0] < ask[index_price]:
-                        continue
-                    elif ex_ask[0] > ask[index_price]:
-                        new_asks.append([ask[index_price], ask[index_size]])
+        if len(asks):
+            new_asks.append([asks[0][index_price], asks[0][index_size]])
+        for ask in asks[1:]:
+            index = -1
+            for ex_ask in new_asks:
+                index += 1
+                if ex_ask[0] == ask[index_price]:
+                    ex_ask[1] += ask[index_size]
+                    break
+                elif ex_ask[0] < ask[index_price]:
+                    if index + 1 == len(new_asks):
+                        new_asks.insert(index + 1, [ask[index_price], ask[index_size]])
                         break
+                    else:
+                        continue
+                elif ex_ask[0] > ask[index_price]:
+                    new_asks.insert(index, [ask[index_price], bid[index_size]])
+                    break
         return new_asks
 
     @try_exc_regular
@@ -742,18 +748,24 @@ class BitKubClient:
         new_bids = []
         index_price = 1 if upd_type == 'ws' else 0
         index_size = 2 if upd_type == 'ws' else 1
+        if len(bids):
+            new_bids.append([bids[0][index_price], bids[0][index_size]])
         for bid in bids:
-            if not len(new_bids):
-                new_bids.append([bid[index_price], bid[index_size]])
-            else:
-                for ex_bid in new_bids:
-                    if ex_bid[0] == bid[index_price]:
-                        ex_bid[1] += bid[index_size]
-                    elif ex_bid[0] > bid[index_price]:
-                        continue
-                    elif ex_bid[0] < bid[index_price]:
-                        new_bids.append([bid[index_price], bid[index_size]])
+            index = -1
+            for ex_bid in new_bids[1:]:
+                index += 1
+                if ex_bid[0] == bid[index_price]:
+                    ex_bid[1] += bid[index_size]
+                    break
+                elif ex_bid[0] > bid[index_price]:
+                    if index + 1 == len(new_bids):
+                        new_bids.insert(index + 1, [bid[index_price], bid[index_size]])
                         break
+                    else:
+                        continue
+                elif ex_bid[0] < bid[index_price]:
+                    new_bids.insert(index, [bid[index_price], bid[index_size]])
+                    break
         return new_bids
 
     @try_exc_regular
