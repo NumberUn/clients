@@ -671,61 +671,103 @@ class BitKubClient:
                 top_bid = self.orderbook[market]['bids'][0][0]
             if self.orderbook[market].get('asks'):
                 top_ask = self.orderbook[market]['asks'][0][0]
-        if not self.genuine_orderbook.get(market):
-            self.genuine_orderbook.update({market: {}})
+        # if not self.genuine_orderbook.get(market):
+        #     self.genuine_orderbook.update({market: {}})
         return top_bid, top_ask
 
     @try_exc_regular
     def update_on_trades_ws_msg(self, market, data, top_ask, top_bid, ts):
+        sorted_asks = self.sort_asks_ob(data['data'][2], 'ws')
+        sorted_bids = self.sort_bids_ob(data['data'][1], 'ws')
         if market != 'THB_USDT':
             change = self.get_thb_rate()
-            new_asks = [[x[1] / change, x[2]] for x in data['data'][2][:self.ob_len]]
-            new_bids = [[x[1] / change, x[2]] for x in data['data'][1][:self.ob_len]]
+            new_asks = [[x[0] / change, x[1]] for x in sorted_asks[:self.ob_len]]
+            new_bids = [[x[0] / change, x[1]] for x in sorted_bids[:self.ob_len]]
         else:
-            new_asks = [[x[1], x[2]] for x in data['data'][2][:self.ob_len]]
-            new_bids = [[x[1], x[2]] for x in data['data'][1][:self.ob_len]]
-        new_asks = self.merge_similar_orders(new_asks)
-        new_bids = self.merge_similar_orders(new_bids)
+            new_asks = [[x[0], x[1]] for x in sorted_asks[:self.ob_len]]
+            new_bids = [[x[0], x[1]] for x in sorted_bids[:self.ob_len]]
+        # new_asks = self.merge_similar_orders(new_asks)
+        # new_bids = self.merge_similar_orders(new_bids)
         self.orderbook[market].update({'ts_ms': ts, 'timestamp': ts})
         if len(new_asks):
             self.orderbook[market].update({'asks': new_asks})
-            self.genuine_orderbook[market].update({'asks': [data['data'][2][0][1], data['data'][2][0][2]]})
+            # self.genuine_orderbook[market].update({'asks': [sorted_asks[0][1], sorted_asks[0][2]]})
         if len(new_bids):
             self.orderbook[market].update({'bids': new_bids})
-            self.genuine_orderbook[market].update({'bids': [data['data'][1][0][1], data['data'][1][0][2]]})
+            # self.genuine_orderbook[market].update({'bids': [sorted_bids[0][1], sorted_bids[0][2]]})
         if top_ask and top_ask > self.orderbook[market]['asks'][0][0]:
             return 'buy'
         elif top_bid and top_bid < self.orderbook[market]['asks'][0][0]:
             return 'sell'
 
     @try_exc_regular
-    def update_on_asks_ws_msg(self, market, data, top_ask, top_bid, ts):
+    def sort_asks_ob(self, asks: list, upd_type: str):
+        new_asks = []
+        index_price = 1 if upd_type == 'ws' else 0
+        index_size = 2 if upd_type == 'ws' else 1
+        for ask in asks:
+            if not len(new_asks):
+                new_asks.append([ask[index_price], ask[index_size]])
+            else:
+                for ex_ask in new_asks:
+                    if ex_ask[0] == ask[index_price]:
+                        ex_ask[1] += ask[index_size]
+                    elif ex_ask[0] < ask[index_price]:
+                        continue
+                    elif ex_ask[0] > ask[index_price]:
+                        new_asks.append([ask[index_price], ask[index_size]])
+                        break
+        return new_asks
+
+    @try_exc_regular
+    def update_on_asks_ws_msg(self, market: str, data, top_ask: float, top_bid: float, ts: float):
+        sorted_ob = self.sort_asks_ob(data['data'], 'ws')
         if market != 'THB_USDT':
             change = self.get_thb_rate()
-            new_asks = [[x[1] / change, x[2]] for x in data['data'][:self.ob_len]]
+            new_asks = [[x[0] / change, x[1]] for x in sorted_ob[:self.ob_len]]
         else:
-            new_asks = [[x[1], x[2]] for x in data['data'][:self.ob_len]]
-        new_asks = self.merge_similar_orders(new_asks)
+            new_asks = [[x[0], x[1]] for x in sorted_ob[:self.ob_len]]
+        # new_asks = self.merge_similar_orders(new_asks)
         self.orderbook[market].update({'ts_ms': ts, 'timestamp': ts})
         if len(new_asks):
             self.orderbook[market].update({'asks': new_asks})
-            self.genuine_orderbook[market].update({'asks': [data['data'][0][1], data['data'][0][2]]})
+            # self.genuine_orderbook[market].update({'asks': [sorted_ob[0][0], sorted_ob[0][1]]})
         if top_ask and top_ask > self.orderbook[market]['asks'][0][0]:
             return 'buy'
         elif top_bid and top_bid < self.orderbook[market]['bids'][0][0]:
             return 'sell'
 
     @try_exc_regular
+    def sort_bids_ob(self, bids: list, upd_type: str):
+        new_bids = []
+        index_price = 1 if upd_type == 'ws' else 0
+        index_size = 2 if upd_type == 'ws' else 1
+        for bid in bids:
+            if not len(new_bids):
+                new_bids.append([bid[index_price], bid[index_size]])
+            else:
+                for ex_bid in new_bids:
+                    if ex_bid[0] == bid[index_price]:
+                        ex_bid[1] += bid[index_size]
+                    elif ex_bid[0] > bid[index_price]:
+                        continue
+                    elif ex_bid[0] < bid[index_price]:
+                        new_bids.append([bid[index_price], bid[index_size]])
+                        break
+        return new_bids
+
+    @try_exc_regular
     def update_on_bids_ws_msg(self, market, data, top_ask, top_bid, ts):
+        sorted_ob = self.sort_bids_ob(data['data'], 'ws')
         if market != 'THB_USDT':
             change = self.get_thb_rate()
-            new_bids = [[x[1] / change, x[2]] for x in data['data'][:self.ob_len]]
+            new_bids = [[x[0] / change, x[1]] for x in sorted_ob[:self.ob_len]]
         else:
-            new_bids = [[x[1], x[2]] for x in data['data'][:self.ob_len]]
-        new_bids = self.merge_similar_orders(new_bids)
+            new_bids = [[x[0], x[1]] for x in sorted_ob[:self.ob_len]]
+        # new_bids = self.merge_similar_orders(new_bids)
         self.orderbook[market].update({'ts_ms': ts, 'timestamp': ts})
         if len(new_bids):
-            self.genuine_orderbook[market].update({'bids': [data['data'][0][1], data['data'][0][2]]})
+            # self.genuine_orderbook[market].update({'bids': [sorted_ob[0][0], sorted_ob[0][1]]})
             self.orderbook[market].update({'bids': new_bids})
         if top_ask and top_ask > self.orderbook[market]['asks'][0][0]:
             return 'buy'
@@ -860,12 +902,16 @@ class BitKubClient:
                 else:
                     if market != 'THB_USDT':
                         change_rate = self.get_thb_rate()
-                        for ask in response['asks']:
+                        sorted_asks = self.sort_asks_ob(response['asks'], 'http')
+                        sorted_bids = self.sort_bids_ob(response['bids'], 'http')
+                        for ask in sorted_asks:
                             ask[0] = ask[0] / change_rate
-                        for bid in response['bids']:
+                        for bid in sorted_bids:
                             bid[0] = bid[0] / change_rate
                     response.update({'ts_ms': ts,
-                                     'timestamp': ts})
+                                     'timestamp': ts,
+                                     'asks': sorted_asks,
+                                     'bids': sorted_bids})
                     self.orderbook.update({market: response})
                     return response
 
@@ -891,12 +937,16 @@ class BitKubClient:
         else:
             if market != 'THB_USDT':
                 change_rate = self.get_thb_rate()
-                for ask in response['asks']:
+                sorted_asks = self.sort_asks_ob(response['asks'], 'http')
+                sorted_bids = self.sort_bids_ob(response['bids'], 'http')
+                for ask in sorted_asks:
                     ask[0] = ask[0] / change_rate
-                for bid in response['bids']:
+                for bid in sorted_bids:
                     bid[0] = bid[0] / change_rate
-            response.update({'ts_ms': ts,
-                             'timestamp': ts})
+                response.update({'ts_ms': ts,
+                                 'timestamp': ts,
+                                 'asks': sorted_asks,
+                                 'bids': sorted_bids})
             self.orderbook.update({market: response})
             return response
 
