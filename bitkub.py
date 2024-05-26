@@ -679,9 +679,9 @@ class BitKubClient:
     def update_on_trades_ws_msg(self, market, data, top_ask, top_bid, ts):
         sorted_asks = self.sort_asks_ob(data['data'][2], 'ws')
         sorted_bids = self.sort_bids_ob(data['data'][1], 'ws')
-        print(f"{market} TRADES UPD:\n {sorted_asks=}\n {sorted_bids=}\n")
-        if self.orderbook[market].get('ts_ms'):
-            print(f"LAST UPD: {ts - self.orderbook[market]['ts_ms']}\n\n")
+        # print(f"{market} TRADES UPD:\n {sorted_asks=}\n {sorted_bids=}\n")
+        # if self.orderbook[market].get('ts_ms'):
+        #     print(f"LAST UPD: {ts - self.orderbook[market]['ts_ms']}\n\n")
         if market != 'THB_USDT':
             change = self.get_thb_rate()
             new_asks = [[x[0] / change, x[1]] for x in sorted_asks[:self.ob_len]]
@@ -728,9 +728,9 @@ class BitKubClient:
     @try_exc_regular
     def update_on_bids_ws_msg(self, market, data, top_ask, top_bid, ts):
         sorted_ob = self.sort_bids_ob(data['data'], 'ws')
-        print(f"{market} BIDS UPD:\nsorted_bids={sorted_ob}\n")
-        if self.orderbook[market].get('ts_ms'):
-            print(f"LAST UPD: {ts - self.orderbook[market]['ts_ms']}\n\n")
+        # print(f"{market} BIDS UPD:\nsorted_bids={sorted_ob}\n")
+        # if self.orderbook[market].get('ts_ms'):
+        #     print(f"LAST UPD: {ts - self.orderbook[market]['ts_ms']}\n\n")
         if market != 'THB_USDT':
             change = self.get_thb_rate()
             new_bids = [[x[0] / change, x[1]] for x in sorted_ob[:self.ob_len]]
