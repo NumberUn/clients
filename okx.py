@@ -176,12 +176,15 @@ class OkxClient(BaseClient):
         self.time_sent = time.time()
         contract_value = self.instruments[market]['contract_value']
         rand_id = self.id_generator()
+        sz_body = int(size * contract_value)
+        if not sz_body:
+            sz_body = int(size * contract_value * 10)
         msg = {"id": rand_id,
                "op": "order",
                "args": [{"side": side,
                          "instId": market,
                          "tdMode": "cross",
-                         "sz": int(size * contract_value)}]}
+                         "sz": sz_body}]}
         # if 'taker' in client_id:
         #     msg['args'][0].update({"ordType": 'market'})
         # else:
@@ -810,8 +813,8 @@ class OkxClient(BaseClient):
         way = '/api/v5/trade/order'
         contract_value = self.instruments[symbol]['contract_value']
         contract_size = int(size * contract_value)
-        # if not contract_size:
-        #     contract_size = int(size * contract_value * 10)
+        if not contract_size:
+            contract_size = int(size * contract_value * 10)
         body = {"instId": symbol,
                 "tdMode": "cross",
                 "side": side,
