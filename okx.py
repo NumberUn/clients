@@ -178,7 +178,9 @@ class OkxClient(BaseClient):
         rand_id = self.id_generator()
         sz_body = int(size * contract_value)
         if not sz_body:
-            sz_body = int(size * contract_value * 10)
+            # contract_size = int(size * contract_value * 10)
+            self.instruments[market]['min_size'] *= 10
+            return
         msg = {"id": rand_id,
                "op": "order",
                "args": [{"side": side,
@@ -814,7 +816,9 @@ class OkxClient(BaseClient):
         contract_value = self.instruments[symbol]['contract_value']
         contract_size = int(size * contract_value)
         if not contract_size:
-            contract_size = int(size * contract_value * 10)
+            # contract_size = int(size * contract_value * 10)
+            self.instruments[symbol]['min_size'] *= 10
+            return
         body = {"instId": symbol,
                 "tdMode": "cross",
                 "side": side,
