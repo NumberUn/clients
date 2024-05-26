@@ -679,6 +679,9 @@ class BitKubClient:
     def update_on_trades_ws_msg(self, market, data, top_ask, top_bid, ts):
         sorted_asks = self.sort_asks_ob(data['data'][2], 'ws')
         sorted_bids = self.sort_bids_ob(data['data'][1], 'ws')
+        print(f"{market} TRADES UPD:\n {sorted_asks=}\n {sorted_bids=}\n")
+        if self.orderbook[market].get('ts_ms'):
+            print(f"LAST UPD: {ts - self.orderbook[market]['ts_ms']}\n\n")
         if market != 'THB_USDT':
             change = self.get_thb_rate()
             new_asks = [[x[0] / change, x[1]] for x in sorted_asks[:self.ob_len]]
@@ -698,6 +701,49 @@ class BitKubClient:
         if top_ask and top_ask > self.orderbook[market]['asks'][0][0]:
             return 'buy'
         elif top_bid and top_bid < self.orderbook[market]['asks'][0][0]:
+            return 'sell'
+
+    @try_exc_regular
+    def update_on_asks_ws_msg(self, market: str, data, top_ask: float, top_bid: float, ts: float):
+        sorted_ob = self.sort_asks_ob(data['data'], 'ws')
+        # print(f"{market} ASKS UPD:\nsorted_asks={sorted_ob}\n")
+        # if self.orderbook[market].get('ts_ms'):
+        #     print(f"LAST UPD: {ts - self.orderbook[market]['ts_ms']}\n\n")
+        # if len(sorted_ob) == 1:
+        #     print(f"{self.get_orderbook_by_symbol_reg(market)}")
+        if market != 'THB_USDT':
+            change = self.get_thb_rate()
+            new_asks = [[x[0] / change, x[1]] for x in sorted_ob[:self.ob_len]]
+        else:
+            new_asks = [[x[0], x[1]] for x in sorted_ob[:self.ob_len]]
+        # new_asks = self.merge_similar_orders(new_asks)
+        self.orderbook[market].update({'ts_ms': ts, 'timestamp': ts, 'asks': new_asks})
+        # self.orderbook[market].update({})
+            # self.genuine_orderbook[market].update({'asks': [sorted_ob[0][0], sorted_ob[0][1]]})
+        if top_ask and top_ask > self.orderbook[market]['asks'][0][0]:
+            return 'buy'
+        elif top_bid and top_bid < self.orderbook[market]['bids'][0][0]:
+            return 'sell'
+
+    @try_exc_regular
+    def update_on_bids_ws_msg(self, market, data, top_ask, top_bid, ts):
+        sorted_ob = self.sort_bids_ob(data['data'], 'ws')
+        print(f"{market} BIDS UPD:\nsorted_bids={sorted_ob}\n")
+        if self.orderbook[market].get('ts_ms'):
+            print(f"LAST UPD: {ts - self.orderbook[market]['ts_ms']}\n\n")
+        if market != 'THB_USDT':
+            change = self.get_thb_rate()
+            new_bids = [[x[0] / change, x[1]] for x in sorted_ob[:self.ob_len]]
+        else:
+            new_bids = [[x[0], x[1]] for x in sorted_ob[:self.ob_len]]
+        # new_bids = self.merge_similar_orders(new_bids)
+        self.orderbook[market].update({'ts_ms': ts, 'timestamp': ts, 'bids': new_bids})
+        # if len(new_bids):
+            # self.genuine_orderbook[market].update({'bids': [sorted_ob[0][0], sorted_ob[0][1]]})
+        # self.orderbook[market].update({})
+        if top_ask and top_ask > self.orderbook[market]['asks'][0][0]:
+            return 'buy'
+        elif top_bid and top_bid < self.orderbook[market]['bids'][0][0]:
             return 'sell'
 
     @try_exc_regular
@@ -726,33 +772,15 @@ class BitKubClient:
         return new_asks
 
     @try_exc_regular
-    def update_on_asks_ws_msg(self, market: str, data, top_ask: float, top_bid: float, ts: float):
-        sorted_ob = self.sort_asks_ob(data['data'], 'ws')
-        if market != 'THB_USDT':
-            change = self.get_thb_rate()
-            new_asks = [[x[0] / change, x[1]] for x in sorted_ob[:self.ob_len]]
-        else:
-            new_asks = [[x[0], x[1]] for x in sorted_ob[:self.ob_len]]
-        # new_asks = self.merge_similar_orders(new_asks)
-        self.orderbook[market].update({'ts_ms': ts, 'timestamp': ts})
-        if len(new_asks):
-            self.orderbook[market].update({'asks': new_asks})
-            # self.genuine_orderbook[market].update({'asks': [sorted_ob[0][0], sorted_ob[0][1]]})
-        if top_ask and top_ask > self.orderbook[market]['asks'][0][0]:
-            return 'buy'
-        elif top_bid and top_bid < self.orderbook[market]['bids'][0][0]:
-            return 'sell'
-
-    @try_exc_regular
     def sort_bids_ob(self, bids: list, upd_type: str):
         new_bids = []
         index_price = 1 if upd_type == 'ws' else 0
         index_size = 2 if upd_type == 'ws' else 1
         if len(bids):
             new_bids.append([bids[0][index_price], bids[0][index_size]])
-        for bid in bids:
+        for bid in bids[1:]:
             index = -1
-            for ex_bid in new_bids[1:]:
+            for ex_bid in new_bids:
                 index += 1
                 if ex_bid[0] == bid[index_price]:
                     ex_bid[1] += bid[index_size]
@@ -767,24 +795,6 @@ class BitKubClient:
                     new_bids.insert(index, [bid[index_price], bid[index_size]])
                     break
         return new_bids
-
-    @try_exc_regular
-    def update_on_bids_ws_msg(self, market, data, top_ask, top_bid, ts):
-        sorted_ob = self.sort_bids_ob(data['data'], 'ws')
-        if market != 'THB_USDT':
-            change = self.get_thb_rate()
-            new_bids = [[x[0] / change, x[1]] for x in sorted_ob[:self.ob_len]]
-        else:
-            new_bids = [[x[0], x[1]] for x in sorted_ob[:self.ob_len]]
-        # new_bids = self.merge_similar_orders(new_bids)
-        self.orderbook[market].update({'ts_ms': ts, 'timestamp': ts})
-        if len(new_bids):
-            # self.genuine_orderbook[market].update({'bids': [sorted_ob[0][0], sorted_ob[0][1]]})
-            self.orderbook[market].update({'bids': new_bids})
-        if top_ask and top_ask > self.orderbook[market]['asks'][0][0]:
-            return 'buy'
-        elif top_bid and top_bid < self.orderbook[market]['bids'][0][0]:
-            return 'sell'
 
     @try_exc_regular
     def check_if_trade_actual_for_taker(self, market, data):
@@ -1011,17 +1021,17 @@ if __name__ == '__main__':
 
     time.sleep(2)
 
-    orderbook = client.get_orderbook('THB_USDT')
-    price_sell = orderbook['asks'][0][0]
-    client_id = f'takerxxx{client.EXCHANGE_NAME}xxx' + client.id_generator() + 'xxx' + 'THB'
-    order_data = {'market': 'THB_USDT',
-                  'client_id': client_id,
-                  'price': price_sell,
-                  'size': 1,
-                  'side': 'buy'}
-    client.async_tasks.append(['create_order', order_data])
+    # orderbook = client.get_orderbook('THB_USDT')
+    # price_sell = orderbook['asks'][0][0]
+    # client_id = f'takerxxx{client.EXCHANGE_NAME}xxx' + client.id_generator() + 'xxx' + 'THB'
+    # order_data = {'market': 'THB_USDT',
+    #               'client_id': client_id,
+    #               'price': price_sell,
+    #               'size': 1,
+    #               'side': 'buy'}
+    # client.async_tasks.append(['create_order', order_data])
     while True:
-        client.get_server_time()
+        # client.get_server_time()
         # print(time.time())
         time.sleep(3)
     # ord_id = order_data['exchange_order_id']
