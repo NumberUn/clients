@@ -995,7 +995,7 @@ class BitKubClient:
     @try_exc_regular
     def get_auth_for_request(self, path: str, method: str, body: dict = {}, ts: str = ''):
         if not ts:
-            ts = str(int(round(time.time() * 1000)))
+            ts = str(int(round(time.time() - 0.3 * 1000)))
         signature = self.get_signature(ts, method, path, body)
         headers = {'Accept': 'application/json',
                    'Content-type': 'application/json',
