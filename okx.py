@@ -176,11 +176,7 @@ class OkxClient(BaseClient):
         self.time_sent = time.time()
         contract_value = self.instruments[market]['contract_value']
         rand_id = self.id_generator()
-        sz_body = int(size * contract_value)
-        if not sz_body:
-            # contract_size = int(size * contract_value * 10)
-            self.instruments[market]['min_size'] *= 10
-            return
+        sz_body = round(size * contract_value, 2)
         msg = {"id": rand_id,
                "op": "order",
                "args": [{"side": side,
@@ -536,13 +532,14 @@ class OkxClient(BaseClient):
         resp = self.request_instruments()
         instruments = {}
         for instrument in resp:
+            print(instrument)
             contract_value = float(instrument['ctVal'])
             if instrument['ctType'] == 'linear':
                 contract_value = 1 / contract_value
             step_size = float(instrument['lotSz']) / contract_value
+            min_size = float(instrument['minSz']) / contract_value
             quantity_precision = len(str(step_size).split('.')[1]) if '.' in str(step_size) else 1
             price_precision = self.get_price_precision(float(instrument['tickSz']))
-            min_size = float(instrument['minSz']) / contract_value
             instruments.update({instrument['instId']: {'coin': instrument['ctValCcy'],
                                                        'state': instrument['state'],
                                                        'settleCcy': instrument['settleCcy'],
@@ -814,11 +811,7 @@ class OkxClient(BaseClient):
     async def create_order(self, symbol, side, price, size, session, expire=10000, client_id=None, expiration=None):
         way = '/api/v5/trade/order'
         contract_value = self.instruments[symbol]['contract_value']
-        contract_size = int(size * contract_value)
-        if not contract_size:
-            # contract_size = int(size * contract_value * 10)
-            self.instruments[symbol]['min_size'] *= 10
-            return
+        contract_size = round(size * contract_value, 2)
         body = {"instId": symbol,
                 "tdMode": "cross",
                 "side": side,
