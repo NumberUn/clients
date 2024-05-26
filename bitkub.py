@@ -147,7 +147,8 @@ class BitKubClient:
             # self.get_server_time()
             if size_usdt := self.balance.get('USDT') >= 1:
                 price = self.get_orderbook(market)['asks'][0][0] * 1.001
-                await self.create_fast_order(price, size_usdt, "sell", market, "keep-alive")
+                print(size_usdt)
+                await self.create_fast_order(price, float(size_usdt), "sell", market, "keep-alive")
             else:
                 price = self.get_orderbook(market)['bids'][0][0] * .9
                 await self.create_fast_order(price, 1, "buy", market, "keep-alive")
