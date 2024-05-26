@@ -145,8 +145,8 @@ class BitKubClient:
             # market = self.markets[self.markets_list[random.randint(0, len(self.markets_list) - 1)]]
             market = 'THB_USDT'
             # self.get_server_time()
-            if self.balance.get('USDT') >= 1:
-                price = self.get_orderbook(market)['asks'][0][0] * 1.001
+            if self.balance.get('USDT') and self.balance.get('USDT') >= 1:
+                price = self.get_orderbook(market)['asks'][0][0] * 0.999
                 await self.create_fast_order(price, self.balance.get('USDT'), "sell", market, "keep-alive")
             else:
                 price = self.get_orderbook(market)['bids'][0][0] * .9
@@ -217,7 +217,7 @@ class BitKubClient:
         market = self.market_rename(symbol)
         req_body = {
             'sym': market.lower(),  # {quote}_{base}
-            'amt': size * 0.97,
+            'amt': size,
             'rat': price,
             'typ': 'limit'  # limit, market
         }
