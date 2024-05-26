@@ -176,8 +176,8 @@ class BitKubClient:
             if position.get('amount_usd'):
                 # position_value += position['amount_usd']
                 position_value_abs += position['amount_usd']
-                available_balances.update({symbol: {'buy': avl_margin_per_market - position['amount_usd'],
-                                                    'sell': position['amount_usd']}})
+                available_balances.update({symbol: {'buy': avl_margin_per_market - position['amount_usd'] * 0.99,
+                                                    'sell': position['amount_usd'] * 0.99}})
         if position_value_abs <= available_margin:
             max_new_pose = available_margin - position_value_abs
             for symbol, sizes in available_balances.items():
@@ -190,9 +190,9 @@ class BitKubClient:
             for symbol, position in positions.items():
                 if position.get('amount_usd'):
                     if position['amount_usd'] < 0:
-                        available_balances.update({symbol: {'buy': abs(position['amount_usd']), 'sell': 0}})
+                        available_balances.update({symbol: {'buy': abs(position['amount_usd'] * 0.99), 'sell': 0}})
                     else:
-                        available_balances.update({symbol: {'buy': 0, 'sell': abs(position['amount_usd'])}})
+                        available_balances.update({symbol: {'buy': 0, 'sell': abs(position['amount_usd'] * 0.99)}})
             available_balances['buy'] = 0
             available_balances['sell'] = 0
         available_balances['balance'] = balance['total']
