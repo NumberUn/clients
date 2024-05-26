@@ -721,7 +721,10 @@ class BitKubClient:
         else:
             new_asks = [[x[0], x[1]] for x in sorted_ob[:self.ob_len]]
         # new_asks = self.merge_similar_orders(new_asks)
-        self.orderbook[market].update({'ts_ms': ts, 'timestamp': ts, 'asks': new_asks})
+        if len(new_asks):
+            self.orderbook[market].update({'ts_ms': ts, 'timestamp': ts, 'asks': new_asks})
+        else:
+            print(data['data'])
         # self.orderbook[market].update({})
             # self.genuine_orderbook[market].update({'asks': [sorted_ob[0][0], sorted_ob[0][1]]})
         if top_ask and top_ask > self.orderbook[market]['asks'][0][0]:
@@ -741,8 +744,10 @@ class BitKubClient:
         else:
             new_bids = [[x[0], x[1]] for x in sorted_ob[:self.ob_len]]
         # new_bids = self.merge_similar_orders(new_bids)
-        self.orderbook[market].update({'ts_ms': ts, 'timestamp': ts, 'bids': new_bids})
-        # if len(new_bids):
+        if len(new_bids):
+            self.orderbook[market].update({'ts_ms': ts, 'timestamp': ts, 'bids': new_bids})
+        else:
+            print(data['data'])
             # self.genuine_orderbook[market].update({'bids': [sorted_ob[0][0], sorted_ob[0][1]]})
         # self.orderbook[market].update({})
         if top_ask and top_ask > self.orderbook[market]['asks'][0][0]:
