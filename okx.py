@@ -537,10 +537,7 @@ class OkxClient(BaseClient):
             step_size = float(instrument['lotSz']) / contract_value
             quantity_precision = len(str(step_size).split('.')[1]) if '.' in str(step_size) else 1
             price_precision = self.get_price_precision(float(instrument['tickSz']))
-            if 'DOGE' in instrument['instId']:
-                min_size = float(instrument['minSz']) / contract_value * 10
-            else:
-                min_size = float(instrument['minSz']) / contract_value
+            min_size = float(instrument['minSz']) / contract_value
             instruments.update({instrument['instId']: {'coin': instrument['ctValCcy'],
                                                        'state': instrument['state'],
                                                        'settleCcy': instrument['settleCcy'],
