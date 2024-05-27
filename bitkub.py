@@ -99,38 +99,37 @@ class BitKubClient:
         async with aiohttp.ClientSession(connector=connector) as self.async_session:
             self.async_session.headers.update(self.headers)
             loop.create_task(self.keep_alive_order())
-            if self.multibot and self.multibot.market_maker:
-                while True:
-                    for task in self.async_tasks:
-                        if task[0] == 'create_order':
-                            price = task[1]['price']
-                            size = task[1]['size']
-                            side = task[1]['side']
-                            market = task[1]['market']
-                            client_id = task[1].get('client_id')
-                            if task[1].get('hedge'):
-                                await self.create_fast_order(price, size, side, market, client_id)
-                            else:
-                                loop.create_task(self.create_fast_order(price, size, side, market, client_id))
+            while True:
+                for task in self.async_tasks:
+                    if task[0] == 'create_order':
+                        price = task[1]['price']
+                        size = task[1]['size']
+                        side = task[1]['side']
+                        market = task[1]['market']
+                        client_id = task[1].get('client_id')
+                        if task[1].get('hedge'):
+                            await self.create_fast_order(price, size, side, market, client_id)
+                        else:
+                            loop.create_task(self.create_fast_order(price, size, side, market, client_id))
+                        await asyncio.sleep(request_pause)
+                    elif task[0] == 'cancel_order':
+                        if task[1]['order_id'] not in self.deleted_orders:
+                            if len(self.deleted_orders) > 100:
+                                self.deleted_orders = []
+                            self.deleted_orders.append(task[1]['order_id'])
+                            loop.create_task(self.cancel_order(task[1]['order_id']))
                             await asyncio.sleep(request_pause)
-                        elif task[0] == 'cancel_order':
-                            if task[1]['order_id'] not in self.deleted_orders:
-                                if len(self.deleted_orders) > 100:
-                                    self.deleted_orders = []
-                                self.deleted_orders.append(task[1]['order_id'])
-                                loop.create_task(self.cancel_order(task[1]['order_id']))
-                                await asyncio.sleep(request_pause)
-                        elif task[0] == 'amend_order':
-                            if task[1]['order_id'] not in self.deleted_orders:
-                                market = task[1]['market']
-                                self.deleted_orders.append(task[1]['order_id'])
-                                loop.create_task(self.cancel_order(task[1]['order_id']))
-                                loop.create_task(
-                                    self.create_fast_order(task[1]['price'], task[1]['size'], task[1]['side'],
-                                                           market, task[1]['client_id']))
-                                await asyncio.sleep(request_pause)
-                        self.async_tasks.remove(task)
-                    await asyncio.sleep(0.00001)
+                    elif task[0] == 'amend_order':
+                        if task[1]['order_id'] not in self.deleted_orders:
+                            market = task[1]['market']
+                            self.deleted_orders.append(task[1]['order_id'])
+                            loop.create_task(self.cancel_order(task[1]['order_id']))
+                            loop.create_task(
+                                self.create_fast_order(task[1]['price'], task[1]['size'], task[1]['side'],
+                                                       market, task[1]['client_id']))
+                            await asyncio.sleep(request_pause)
+                    self.async_tasks.remove(task)
+                await asyncio.sleep(0.00001)
 
     @try_exc_async
     async def keep_alive_order(self):
