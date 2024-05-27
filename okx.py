@@ -111,32 +111,33 @@ class OkxClient(BaseClient):
                 await loop.create_task(self.login_ws_message(loop, ws, 'orders_processing'))
                 self.orders_ws = ws
                 loop.create_task(self._ping(ws))
-                while True:
-                    for task in self.async_tasks:
-                        if task[0] == 'create_order':
-                            price = task[1]['price']
-                            size = task[1]['size']
-                            side = task[1]['side']
-                            market = task[1]['market']
-                            client_id = task[1].get('client_id')
-                            if task[1].get('hedge'):
-                                await self.create_fast_order(price, size, side, market, client_id)
-                            else:
-                                loop.create_task(self.create_fast_order(price, size, side, market, client_id))
-                        elif task[0] == 'cancel_order':
-                            loop.create_task(self.cancel_order(task[1]['market'], task[1]['order_id'], ws))
-                        elif task[0] == 'amend_order':
-                            price = task[1]['price']
-                            size = task[1]['size']
-                            order_id = task[1]['order_id']
-                            market = task[1]['market']
-                            loop.create_task(self.amend_order(price, size, order_id, market))
-                        self.async_tasks.remove(task)
-                    if self.restart_ws:
-                        await ws.close()
-                        self.restart_ws = False
-                        return
-                    await asyncio.sleep(0.00001)
+                if self.multibot and self.multibot.market_maker:
+                    while True:
+                        for task in self.async_tasks:
+                            if task[0] == 'create_order':
+                                price = task[1]['price']
+                                size = task[1]['size']
+                                side = task[1]['side']
+                                market = task[1]['market']
+                                client_id = task[1].get('client_id')
+                                if task[1].get('hedge'):
+                                    await self.create_fast_order(price, size, side, market, client_id)
+                                else:
+                                    loop.create_task(self.create_fast_order(price, size, side, market, client_id))
+                            elif task[0] == 'cancel_order':
+                                loop.create_task(self.cancel_order(task[1]['market'], task[1]['order_id'], ws))
+                            elif task[0] == 'amend_order':
+                                price = task[1]['price']
+                                size = task[1]['size']
+                                order_id = task[1]['order_id']
+                                market = task[1]['market']
+                                loop.create_task(self.amend_order(price, size, order_id, market))
+                            self.async_tasks.remove(task)
+                        if self.restart_ws:
+                            await ws.close()
+                            self.restart_ws = False
+                            return
+                        await asyncio.sleep(0.00001)
 
     @try_exc_async
     async def cancel_order(self, market, order_id, ws):
