@@ -330,10 +330,10 @@ class BitKubClient:
                                                    }})
             else:
                 order_id = response['result'].get('hash', 'default')
-                # if client_id and 'taker' in client_id:
+                if client_id and 'taker' in client_id:
                 #     await self.cancel_order(order_id)
-                self.get_orderbook_by_symbol_reg(market)
-                await asyncio.sleep(10)
+                    self.get_orderbook_by_symbol_reg(market)
+                    await asyncio.sleep(9)
                 result = self.get_order_by_id(market, order_id)
                 status = OrderStatus.PROCESSING
                 executed_amount_coin = 0
