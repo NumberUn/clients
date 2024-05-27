@@ -294,7 +294,8 @@ class BitKubClient:
                 self.sent_taker_order = market
                 print('ORDER SENT', time.time())
             response = await resp.json()
-            order_create_time = (time.time() - time_start) / 2
+            timestamp = time.time()
+            order_create_time = (timestamp - time_start) / 2
             # self.av_ping.append(time.time() - time_start)
             # print(f"{self.EXCHANGE_NAME} av create order time: {sum(self.av_ping) / len(self.av_ping)} sec")
             if client_id != 'keep-alive':
@@ -318,7 +319,6 @@ class BitKubClient:
                 order_id = response['result'].get('hash', 'default')
                 # if client_id and 'taker' in client_id:
                 #     await self.cancel_order(order_id)
-                timestamp = time.time() - order_create_time
                 time.sleep(10)
                 result = self.get_order_by_id(market, order_id)
                 status = OrderStatus.PROCESSING
