@@ -876,13 +876,13 @@ class BitKubClient:
                 for market in self.positions.keys():
                     px = self.get_orderbook(market)['asks'][0][0]
                     self.update_instrument(px, coin, market)
-        with open('min_sizes_bitkub.txt', 'r') as file:
-            data = file.read()
-            data = data.split('\n')
-            for market__size in data:
-                params = market__size.split(' | ')
-                if self.instruments.get(params[0]):
-                    self.instruments[params[0]].update({'min_size': float(params[1])})
+        # with open('min_sizes_bitkub.txt', 'r') as file:
+        #     data = file.read()
+        #     data = data.split('\n')
+        #     for market__size in data:
+        #         params = market__size.split(' | ')
+        #         if self.instruments.get(params[0]):
+        #             self.instruments[params[0]].update({'min_size': float(params[1])})
 
     @try_exc_regular
     def clean_empty_markets(self):
