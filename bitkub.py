@@ -256,15 +256,13 @@ class BitKubClient:
 
     @try_exc_regular
     def convert_usd_price_to_thb(self, market, client_id, side, change, price):
-        if 'taker' in client_id:
+        if client_id and 'taker' in client_id:
             top_rate_ob = self.get_orderbook_by_symbol_reg(market, genuine=True)
             if top_rate_ob:
                 body_price = top_rate_ob['asks'][0][0] if side == 'buy' else top_rate_ob['bids'][0][0]
-            else:
-                body_price = self.regular_usd_to_thb_convert(market, change, price)
-        else:
-            body_price = self.regular_usd_to_thb_convert(market, change, price)
-        return body_price
+                return body_price, top_rate_ob
+        body_price = self.regular_usd_to_thb_convert(market, change, price)
+        return body_price, None
 
     @try_exc_regular
     def regular_usd_to_thb_convert(self, market, change, price):
@@ -278,7 +276,8 @@ class BitKubClient:
         bid_ask = 'bid' if side == 'buy' else 'ask'
         path = f'/api/v3/market/place-{bid_ask}'
         change = self.get_thb_rate()
-        body_price = self.convert_usd_price_to_thb(market, client_id, side, change, price)
+        actual_ob = self.get_orderbook(market)
+        body_price, http_ob = self.convert_usd_price_to_thb(market, client_id, side, change, price)
         #     bid_ask = 'asks' if side == 'buy' else 'bids'
         #     body_price = self.genuine_orderbook[market][bid_ask][0]
         # else:
@@ -305,7 +304,8 @@ class BitKubClient:
         async with self.async_session.post(self.BASE_URL + path, data=json.dumps(req_body), headers=headers) as resp:
             if client_id and client_id != 'keep-alive':
                 print(self.EXCHANGE_NAME, side, req_body)
-                print(f'ACTUAL OB {self.EXCHANGE_NAME}: {self.get_orderbook(market)}')
+                print(f'ACTUAL OB {self.EXCHANGE_NAME}: {actual_ob}')
+                print(f"GOT HTTP OB: {http_ob}")
                 self.sent_taker_order = market
                 print('ORDER SENT', time.time())
             response = await resp.json()
