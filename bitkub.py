@@ -858,7 +858,7 @@ class BitKubClient:
                                           'quantity_precision': 0.0000000001,
                                           'tick_size': 0.0000000001,
                                           'step_size': 0.00000000001,
-                                          'min_size': 20 / px,
+                                          'min_size': 2 / px,
                                           'price_precision': 0.00000000001}})
 
     @try_exc_regular
