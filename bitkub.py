@@ -254,21 +254,35 @@ class BitKubClient:
             return market.split('_')[1] + '_THB'
         return market
 
+    @try_exc_regular
+    def convert_usd_price_to_thb(self, market, client_id, side, change, price):
+        if 'taker' in client_id:
+            top_rate_ob = self.get_orderbook_by_symbol_reg(market, genuine=True)
+            if top_rate_ob:
+                body_price = top_rate_ob['asks'][0][0] if side == 'buy' else top_rate_ob['bids'][0][0]
+            else:
+                body_price = self.regular_usd_to_thb_convert(market, change, price)
+        else:
+            body_price = self.regular_usd_to_thb_convert(market, change, price)
+        return body_price
+
+    @try_exc_regular
+    def regular_usd_to_thb_convert(self, market, change, price):
+        if market != 'THB_USDT':
+            return price * change
+        return price
+
     @try_exc_async
     async def create_fast_order(self, price: float, size: float, side: str, market: str, client_id: str = None):
         time_start = time.time()
         bid_ask = 'bid' if side == 'buy' else 'ask'
         path = f'/api/v3/market/place-{bid_ask}'
-        # top_rate_ob = self.get_orderbook_by_symbol_reg(market)
-        # top_rate = top_rate_ob['asks'][0][0] if side == 'buy' else top_rate_ob['bids'][0][0]
         change = self.get_thb_rate()
-        # if 'taker' in client_id:
+        body_price = self.convert_usd_price_to_thb(market, client_id, side, change, price)
         #     bid_ask = 'asks' if side == 'buy' else 'bids'
         #     body_price = self.genuine_orderbook[market][bid_ask][0]
         # else:
-        body_price = price
-        if market != 'THB_USDT':
-            body_price = price * change
+
 
         #     if side == 'buy' and body_price < top_rate:
         #         print(f"{self.EXCHANGE_NAME} body price changed due to changed ob!")
@@ -291,6 +305,7 @@ class BitKubClient:
         async with self.async_session.post(self.BASE_URL + path, data=json.dumps(req_body), headers=headers) as resp:
             if client_id and client_id != 'keep-alive':
                 print(self.EXCHANGE_NAME, side, req_body)
+                print(f'ACTUAL OB {self.EXCHANGE_NAME}: {self.get_orderbook(market)}')
                 self.sent_taker_order = market
                 print('ORDER SENT', time.time())
             response = await resp.json()
@@ -944,7 +959,7 @@ class BitKubClient:
                     return response
 
     @try_exc_regular
-    def get_orderbook_by_symbol_reg(self, market: str, limit: int = 10):
+    def get_orderbook_by_symbol_reg(self, market: str, limit: int = 10, genuine: bool = False):
         path = '/api/market/depth'
         params = {'sym': market,
                   'lmt': limit}
@@ -953,6 +968,8 @@ class BitKubClient:
         response = resp.json()
         ts = time.time()
         if error_code := response.get('error'):
+            if genuine:
+                return None
             print(market, response)
             if error_code == 11:
                 market = self.market_rename(market)
@@ -964,9 +981,14 @@ class BitKubClient:
                 return self.get_orderbook_by_symbol_reg(market)
         else:
             if market != 'THB_USDT':
-                change_rate = self.get_thb_rate()
                 sorted_asks = self.sort_asks_ob(response['asks'], 'http')
                 sorted_bids = self.sort_bids_ob(response['bids'], 'http')
+                if genuine:
+                    return {'ts_ms': ts,
+                            'timestamp': ts,
+                            'asks': sorted_asks,
+                            'bids': sorted_bids}
+                change_rate = self.get_thb_rate()
                 for ask in sorted_asks:
                     ask[0] = ask[0] / change_rate
                 for bid in sorted_bids:
